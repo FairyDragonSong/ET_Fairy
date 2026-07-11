@@ -5,9 +5,10 @@ namespace ET
 {
     public class OpcodeType: Singleton<OpcodeType>, ISingletonAwake
     {
-        // 初始化后不变，所以主线程，网络线程都可以读
+        // 消息类型 <-> opcode 双向映射，初始化后不变，所以主线程、网络线程都可以读
         private readonly DoubleMap<Type, ushort> typeOpcode = new();
-        
+
+        // Request类型 -> 对应的Response类型
         private readonly Dictionary<Type, Type> requestResponse = new();
         
         public void Awake()

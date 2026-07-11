@@ -1,0 +1,56 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"dotnet.defaultSolution": "ET.sln",
+		"files.exclude": {
+			"Bin": true,
+			"Unity/Library": true,
+			"Unity/Logs": true,
+			"Unity/obj": true,
+			"Unity/Temp": true,
+			"Unity/UserSettings": true,
+			"Unity/Packages": true,
+			"Unity/ProjectSettings": true,
+			"Unity/Assets/Bundles": true,
+			"Unity/Assets/GameRes": true,
+			"Unity/Assets/Res": true,
+			"Unity/Assets/Resources": true,
+			"Unity/Assets/Scenes": true,
+			"Unity/Assets/StreamingAssets": true,
+			"Unity/Assets/Settings": true,
+			"**/*.meta": true
+		},
+		"search.exclude": {
+			"Bin": true,
+			"Unity/Library": true,
+			"Unity/Logs": true,
+			"Unity/obj": true,
+			"Unity/Temp": true,
+			"Unity/Assets/Bundles": true,
+			"Unity/Assets/GameRes": true,
+			"Unity/Assets/Res": true,
+			"Unity/Assets/Resources": true,
+			"Unity/Assets/Scenes": true,
+			"Unity/Assets/StreamingAssets": true,
+			"**/*.meta": true
+		},
+		"files.watcherExclude": {
+			"**/Bin/**": true,
+			"**/Unity/Library/**": true,
+			"**/Unity/Logs/**": true,
+			"**/Unity/obj/**": true,
+			"**/Unity/Temp/**": true,
+			"**/Unity/Assets/Bundles/**": true,
+			"**/Unity/Assets/GameRes/**": true,
+			"**/Unity/Assets/Res/**": true,
+			"**/Unity/Assets/Resources/**": true,
+			"**/Unity/Assets/Scenes/**": true,
+			"**/Unity/Assets/StreamingAssets/**": true,
+			"**/Unity/Packages/**": true
+		}
+	}
+}

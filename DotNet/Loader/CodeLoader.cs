@@ -6,6 +6,8 @@ using System.Runtime.Loader;
 
 namespace ET
 {
+    // CodeTypes 扫描的就是 ET 服务器自身业务相关的全部4个程序集（Core + Loader + Model + Hotfix）
+    // 刚好覆盖了除 App 和 ThirdParty 之外的所有服务器项目。
     public class CodeLoader: Singleton<CodeLoader>, ISingletonAwake
     {
         private AssemblyLoadContext assemblyLoadContext;

@@ -7,6 +7,8 @@ namespace ET
     public class CodeTypes: Singleton<CodeTypes>, ISingletonAwake<Assembly[]>
     {
         private readonly Dictionary<string, Type> allTypes = new();
+        // key: 特性类型, value: 标记了该特性的所有类型 如果该类型没有直接打上特性
+        // 但是父类打了特性，那么这个类型也算打了这个特性
         private readonly UnOrderMultiMapSet<Type, Type> types = new();
         
         public void Awake(Assembly[] assemblies)

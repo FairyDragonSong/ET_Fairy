@@ -9,8 +9,10 @@ namespace ET
         public MessageObject MessageObject;
     }
     
+    // 同进程内 Fiber 之间的 Actor 消息投递队列
     public class MessageQueue: Singleton<MessageQueue>, ISingletonAwake
     {
+        // key: 目标FiberId, value: 该Fiber的待处理消息队列
         private readonly ConcurrentDictionary<int, ConcurrentQueue<MessageInfo>> messages = new();
         
         public void Awake()
