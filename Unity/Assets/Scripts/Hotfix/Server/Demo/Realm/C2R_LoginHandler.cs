@@ -16,8 +16,16 @@ namespace ET.Server
 			// 向gate请求一个key,客户端可以拿着这个key连接gate
 			R2G_GetLoginKey r2GGetLoginKey = R2G_GetLoginKey.Create();
 			r2GGetLoginKey.Account = request.Account;
-			G2R_GetLoginKey g2RGetLoginKey = (G2R_GetLoginKey) await session.Fiber().Root.GetComponent<MessageSender>().Call(
-				config.ActorId, r2GGetLoginKey);
+			RpcCallResult<G2R_GetLoginKey> loginKeyResult = await session.Root().CallService<G2R_GetLoginKey>(
+				ServiceAddress.From(config.ActorId), r2GGetLoginKey);
+			if (!loginKeyResult.IsSuccess)
+			{
+				response.Error = loginKeyResult.Error == 0 ? ErrorCore.ERR_RpcFail : loginKeyResult.Error;
+				response.Message = loginKeyResult.Message;
+				return;
+			}
+
+			using G2R_GetLoginKey g2RGetLoginKey = loginKeyResult.Response;
 
 			response.Address = config.InnerIPPort.ToString();
 			response.Key = g2RGetLoginKey.Key;

@@ -19,7 +19,8 @@ namespace ET.Server
 
                 Room2C_AdjustUpdateTime room2CAdjustUpdateTime = Room2C_AdjustUpdateTime.Create();
                 room2CAdjustUpdateTime.DiffTime = diffTime;
-                room.Root().GetComponent<MessageLocationSenderComponent>().Get(LocationType.GateSession).Send(message.PlayerId, room2CAdjustUpdateTime);
+                room.Root().NotifyEntity(
+                    EntityAddress.From(LocationType.GateSession, message.PlayerId), room2CAdjustUpdateTime);
             }
 
             if (message.Frame < room.AuthorityFrame)  // 小于AuthorityFrame，丢弃

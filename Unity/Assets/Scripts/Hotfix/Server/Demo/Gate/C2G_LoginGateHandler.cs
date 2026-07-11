@@ -61,9 +61,9 @@ namespace ET.Server
 
             G2Room_Reconnect g2RoomReconnect = G2Room_Reconnect.Create();
             g2RoomReconnect.PlayerId = player.Id;
-            using Room2G_Reconnect room2GateReconnect = await fiber.Root.GetComponent<MessageSender>().Call(
-                player.GetComponent<PlayerRoomComponent>().RoomActorId,
-                g2RoomReconnect) as Room2G_Reconnect;
+            using Room2G_Reconnect room2GateReconnect = (await fiber.Root.CallService<Room2G_Reconnect>(
+                ServiceAddress.From(player.GetComponent<PlayerRoomComponent>().RoomActorId),
+                g2RoomReconnect)).ResponseOrThrow();
             G2C_Reconnect g2CReconnect = G2C_Reconnect.Create();
             g2CReconnect.StartTime = room2GateReconnect.StartTime;
             g2CReconnect.Frame = room2GateReconnect.Frame;

@@ -26,16 +26,15 @@ namespace ET.Server
             (message as MessageObject).IsFromPool = false;
             Dictionary<long, EntityRef<AOIEntity>> dict = unit.GetBeSeePlayers();
             // 网络底层做了优化，同一个消息不会多次序列化
-            MessageLocationSenderOneType oneTypeMessageLocationType = unit.Root().GetComponent<MessageLocationSenderComponent>().Get(LocationType.GateSession);
             foreach (AOIEntity u in dict.Values)
             {
-                oneTypeMessageLocationType.Send(u.Unit.Id, message);
+                unit.Root().NotifyEntity(EntityAddress.From(LocationType.GateSession, u.Unit.Id), message);
             }
         }
         
         public static void SendToClient(Unit unit, IMessage message)
         {
-            unit.Root().GetComponent<MessageLocationSenderComponent>().Get(LocationType.GateSession).Send(unit.Id, message);
+            unit.Root().NotifyEntity(EntityAddress.From(LocationType.GateSession, unit.Id), message);
         }
         
         /// <summary>
@@ -43,7 +42,7 @@ namespace ET.Server
         /// </summary>
         public static void Send(Scene root, ActorId actorId, IMessage message)
         {
-            root.GetComponent<MessageSender>().Send(actorId, message);
+            root.NotifyService(ServiceAddress.From(actorId), message);
         }
     }
 }

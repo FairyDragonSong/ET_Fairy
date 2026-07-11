@@ -11,7 +11,8 @@
 
 			G2Match_Match g2MatchMatch = G2Match_Match.Create();
 			g2MatchMatch.Id = player.Id;
-			await session.Root().GetComponent<MessageSender>().Call(startSceneConfig.ActorId, g2MatchMatch);
+			using Match2G_Match _ = (await session.Root().CallService<Match2G_Match>(
+				ServiceAddress.From(startSceneConfig.ActorId), g2MatchMatch)).ResponseOrThrow();
 		}
 	}
 }

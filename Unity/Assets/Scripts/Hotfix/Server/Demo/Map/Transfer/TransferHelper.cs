@@ -33,7 +33,8 @@ namespace ET.Server
             unit.Dispose();
             
             await root.GetComponent<LocationProxyComponent>().Lock(LocationType.Unit, unitId, request.OldActorId);
-            await root.GetComponent<MessageSender>().Call(sceneInstanceId, request);
+            using M2M_UnitTransferResponse _ = (await root.CallService<M2M_UnitTransferResponse>(
+                ServiceAddress.From(sceneInstanceId), request)).ResponseOrThrow();
         }
     }
 }
