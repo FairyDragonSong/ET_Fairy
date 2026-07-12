@@ -430,10 +430,13 @@ namespace I2.Loc
 
 		public static IEnumerable<GameObject> SceneRoots()
 		{
-			var prop = new HierarchyProperty(HierarchyType.GameObjects);
-			var expanded = new int[0];
-			while (prop.Next(expanded)) {
-				yield return prop.pptrValue as GameObject;
+			for (var sceneIndex = 0; sceneIndex < SceneManager.sceneCount; ++sceneIndex) {
+				var scene = SceneManager.GetSceneAt(sceneIndex);
+				if (!scene.isLoaded)
+					continue;
+
+				foreach (var root in scene.GetRootGameObjects())
+					yield return root;
 			}
 		}
 		

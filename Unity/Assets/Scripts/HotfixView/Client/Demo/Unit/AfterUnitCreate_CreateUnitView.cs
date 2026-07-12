@@ -15,7 +15,7 @@ namespace ET.Client
 
             GlobalComponent globalComponent = scene.Root().GetComponent<GlobalComponent>();
             GameObject go = UnityEngine.Object.Instantiate(prefab, globalComponent.Unit, true);
-            go.transform.position = unit.Position;
+            go.transform.position = new Vector3(unit.Position.x, unit.Position.y, unit.Position.z);
             unit.AddComponent<GameObjectComponent>().GameObject = go;
             unit.AddComponent<AnimatorComponent>();
             await ETTask.CompletedTask;

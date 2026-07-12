@@ -222,9 +222,9 @@ namespace Coffee.UIEffects
                 return k_InvalidHash;
 
             var shaderVariantId = (uint) ((int) m_EffectMode << 6);
-            var resourceId = (uint) transitionTexture.GetInstanceID();
+            var resourceId = (uint) transitionTexture.GetEntityId().GetHashCode();
             return new Hash128(
-                (uint) material.GetInstanceID(),
+                (uint) material.GetEntityId().GetHashCode(),
                 k_ShaderId + shaderVariantId,
                 resourceId,
                 0

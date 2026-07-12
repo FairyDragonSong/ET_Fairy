@@ -118,7 +118,7 @@ namespace Coffee.UIEffects
                 return k_InvalidHash;
 
             return new Hash128(
-                (uint) material.GetInstanceID(),
+                (uint) material.GetEntityId().GetHashCode(),
                 k_ShaderId,
                 0,
                 0

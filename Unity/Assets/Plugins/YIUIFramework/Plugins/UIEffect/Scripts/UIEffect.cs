@@ -183,7 +183,7 @@ namespace Coffee.UIEffects
             var shaderVariantId = (uint) (((int) m_EffectMode << 6) + ((int) m_ColorMode << 9) +
                                           ((int) m_BlurMode << 11) + ((m_AdvancedBlur ? 1 : 0) << 13));
             return new Hash128(
-                (uint) material.GetInstanceID(),
+                (uint) material.GetEntityId().GetHashCode(),
                 k_ShaderId + shaderVariantId,
                 0,
                 0

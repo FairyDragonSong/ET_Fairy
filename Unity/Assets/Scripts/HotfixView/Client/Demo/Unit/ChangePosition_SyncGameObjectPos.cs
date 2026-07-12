@@ -15,7 +15,7 @@ namespace ET.Client
             }
 
             Transform transform = gameObjectComponent.Transform;
-            transform.position = unit.Position;
+            transform.position = new Vector3(unit.Position.x, unit.Position.y, unit.Position.z);
             await ETTask.CompletedTask;
         }
     }

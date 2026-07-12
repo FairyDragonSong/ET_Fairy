@@ -15,8 +15,9 @@ namespace ET
 
         public object DrawAndGetNewValue(Type memberType, string memberName, object value, object target)
         {
-            Vector3 v = (float3)value;
-            return new float3(EditorGUILayout.Vector3Field(memberName, v));
+            float3 floatValue = (float3)value;
+            Vector3 vectorValue = EditorGUILayout.Vector3Field(memberName, new Vector3(floatValue.x, floatValue.y, floatValue.z));
+            return new float3(vectorValue.x, vectorValue.y, vectorValue.z);
         }
     }
 }
