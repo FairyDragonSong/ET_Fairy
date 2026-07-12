@@ -19,9 +19,18 @@ Unity/Library
 Unity/Logs
 Unity/UserSettings
 Unity/*.csproj
+Unity/*.sln
+Unity/*.slnx
+Unity/*.userprefs
 Unity/*.vsconfig
+Unity/*.DotSettings.user
 Unity/ProjectSettings/RiderScriptEditorPersistedState.asset
 Unity/HybridCLRData
+Unity/obj/
+Unity/Temp/
+Unity/sysinfo.txt
+Unity/MemoryCaptures/
+Unity/Recordings/
 
 #Unity/Assets
 Unity/Assets/Bundles/Code/*
