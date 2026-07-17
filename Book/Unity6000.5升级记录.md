@@ -188,7 +188,15 @@ Exception while executing InitializeOnLoad for GUITimeHelper.Init
 Exception while executing InitializeOnLoad for ImguiElementUtils.Init
 ```
 
-这是旧版 Odin 与 Unity 6000.5 的二进制兼容问题，不是项目业务代码错误。Unity API Updater 无法完整修复预编译 DLL，需要使用有授权且明确支持 Unity 6000.5 的新版 Odin Inspector 替换 `Assets/Plugins/Sirenix`。
+这是旧版 Odin 与 Unity 6000.5 的二进制兼容问题，不是项目业务代码错误。Unity API Updater 无法完整修复预编译 DLL。
+
+当前项目已对 `Sirenix.Reflection.Editor.dll` 应用临时兼容补丁，禁用了旧版 Odin 对 UI Toolkit Begin/End Container 内部回调的注册，以避免编辑器启动和程序集重载时重复弹出上述异常。补丁可通过以下脚本重新应用：
+
+```powershell
+.\Tools\Patch-Odin-Unity6000.5.ps1
+```
+
+该补丁只用于过渡，不代表当前 Odin 已正式支持 Unity 6000.5。后续必须使用有授权且明确支持 Unity 6000.5 的新版 Odin Inspector，整体替换 `Assets/Plugins/Sirenix`；升级完成并验证无误后，应移除二进制兼容补丁及其脚本。升级时需要重点回归 Odin Inspector、自定义 Odin 编辑器窗口、序列化数据读写和 UI Toolkit Inspector 显示。
 
 ### 6.2 Unity Services 网络错误
 
@@ -207,4 +215,3 @@ UnityConnectWebRequestException: Token Exchange failed
 3. HybridCLR 8.12.0 升级后，正式 IL2CPP 出包前应重新执行 Installer、桥接函数生成、AOT 泛型引用和补充元数据生成。
 4. 正式发布前仍需分别验证 Windows、Android 等实际目标平台的 IL2CPP 构建和真机运行。
 5. 不要直接修改 `Library/PackageCache`；该目录是可重建缓存。
-

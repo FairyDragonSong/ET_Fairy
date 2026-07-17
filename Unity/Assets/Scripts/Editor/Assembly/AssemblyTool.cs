@@ -1,8 +1,6 @@
 using System.IO;
-using System.Linq;
 using System.Threading;
 using UnityEditor;
-using UnityEditor.Build;
 using UnityEditor.Build.Player;
 using UnityEngine;
 
@@ -138,37 +136,16 @@ namespace ET
                 Directory.CreateDirectory(Define.BuildOutputDir);
                 BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
                 BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(target);
-                NamedBuildTarget namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(group);
-                string[] previousCompilerArguments = PlayerSettings.GetAdditionalCompilerArguments(namedBuildTarget);
-                string playerManagedPath = Path.Combine(EditorApplication.applicationContentsPath,
-                    "PlaybackEngines", "WindowsStandaloneSupport", "Variations", "mono", "Managed");
-                string[] requiredReferences =
-                {
-                    Path.Combine(playerManagedPath, "Unity.Scripting.dll"),
-                    Path.Combine(playerManagedPath, "UnityEngine.dll")
-                };
-                string[] compilerArguments = previousCompilerArguments
-                    .Concat(requiredReferences.Select(path => $"-reference:\"{path}\""))
-                    .Distinct()
-                    .ToArray();
                 ScriptCompilationSettings scriptCompilationSettings = new()
                 {
                     group = group,
                     target = target,
-                    extraScriptingDefines = new[] { "UNITY_COMPILE", "ENABLE_UNITY_COLLECTIONS_CHECKS" },
+                    extraScriptingDefines = new[] { "UNITY_COMPILE" },
                     options = EditorUserBuildSettings.development ? ScriptCompilationOptions.DevelopmentBuild : ScriptCompilationOptions.None
                 };
-                try
-                {
-                    PlayerSettings.SetAdditionalCompilerArguments(namedBuildTarget, compilerArguments);
-                    ScriptCompilationResult result = PlayerBuildInterface.CompilePlayerScripts(scriptCompilationSettings, Define.BuildOutputDir);
-                    isCompileOk = result.assemblies.Count > 0;
-                    EditorUtility.ClearProgressBar();
-                }
-                finally
-                {
-                    PlayerSettings.SetAdditionalCompilerArguments(namedBuildTarget, previousCompilerArguments);
-                }
+                ScriptCompilationResult result = PlayerBuildInterface.CompilePlayerScripts(scriptCompilationSettings, Define.BuildOutputDir);
+                isCompileOk = result.assemblies.Count > 0;
+                EditorUtility.ClearProgressBar();
             }
             finally
             {

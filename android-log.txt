@@ -1,0 +1,54 @@
+﻿--------- beginning of system
+07-16 01:00:10.208  8645  8645 I AndroidRuntime: RuntimeInit: Starting application from zygote
+07-16 01:00:10.208  8645  8645 D AndroidRuntime: Entered RuntimeInit!
+07-16 01:00:10.211  8645  8645 I AndroidRuntime: MethodAndArgsCaller run()
+--------- beginning of main
+07-16 01:00:10.276  8645  8645 V Unity   : Context Type: ActivityOrService
+07-16 01:00:10.325  8645 27151 I Unity   : MemoryManager: Using 'Dynamic Heap' Allocator.
+07-16 01:00:10.334  8645 27151 I Unity   : SystemInfo CPU = ARM64, Cores = 8, Memory = 11605mb
+07-16 01:00:10.334  8645 27151 I Unity   : SystemInfo ARM big.LITTLE configuration: 4 big (mask: 0xf0), 4 little (mask: 0xf)
+07-16 01:00:10.334  8645 27151 I Unity   : ApplicationInfo 'com.test.ET', Version '1.0', Min API Level '26', Target API Level '35'
+07-16 01:00:10.334  8645 27151 I Unity   : Built from '6000.3/staging' branch, Version '6000.3.19f1 (7689f4515d75)', Build type 'Release', Scripting Backend 'il2cpp', CPU 'arm64-v8a', Stripping 'Disabled'
+07-16 01:00:10.334  8645 27151 I Unity   : Device Model 'HUAWEI PLR-AL30', OS 'Android OS 12 (API 31)'
+07-16 01:00:10.553  8645 27151 I Unity   : Company Name: test
+07-16 01:00:10.553  8645 27151 I Unity   : Product Name: ET
+07-16 01:00:12.917  8645 27151 I Unity   : Odin Serializer ArchitectureInfo initialization with defaults (all unaligned read/writes disabled).
+07-16 01:00:12.917  8645 27151 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+07-16 01:00:12.917  8645 27151 I Unity   : Sirenix.Serialization.UnitySerializationInitializer:Initialize()
+07-16 01:00:12.917  8645 27151 I Unity   : 
+07-16 01:00:12.918  8645 27151 I Unity   : Odin Serializer detected non-white-listed runtime platform Android; disabling all unaligned memory read/writes.
+07-16 01:00:12.918  8645 27151 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+07-16 01:00:12.918  8645 27151 I Unity   : Sirenix.Serialization.ArchitectureInfo:SetRuntimePlatform(RuntimePlatform)
+07-16 01:00:12.918  8645 27151 I Unity   : Sirenix.Serialization.UnitySerializationInitializer:Initialize()
+07-16 01:00:12.918  8645 27151 I Unity   : 
+07-16 01:00:12.927  8645 27151 I Unity   : Scene Init is loaded
+07-16 01:00:12.927  8645 27151 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+07-16 01:00:12.927  8645 27151 I Unity   : Reporter:_OnLevelWasLoaded(Scene, LoadSceneMode)
+07-16 01:00:12.927  8645 27151 I Unity   : 
+07-16 01:00:14.833  8645 27151 I Unity   : scene create: Main -1 1
+07-16 01:00:14.833  8645 27151 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+07-16 01:00:14.833  8645 27151 I Unity   : ET.<StartAsync>d__2:MoveNext() (at E:\github\ET\YIUI\Unity\Assets\Scripts\Model\Share\Entry.cs:52)
+07-16 01:00:14.833  8645 27151 I Unity   : ET.Scene:.ctor(Fiber, Int64, Int64, SceneType, String)
+07-16 01:00:14.833  8645 27151 I Unity   : ET.Fiber:.ctor(Int32, Int32, SceneType, String)
+07-16 01:00:14.833  8645 27151 I Unity   : ET.<Create>d__8:MoveNext()
+07-16 01:00:14.833  8645 27151 I Unity   : ET.FiberManager:Create(SchedulerType, Int32, Int32, SceneType, String)
+07-16 01:00:14.833  8645 27151 I Unity   : ET.StateMachineWrap`1:Run()
+07-16 01:00:14.833  8645 27151 I Unity   : ET.<LoadAsync>d__5:MoveNext()
+07-16 01:00:14.833  8645 27151 I Unity   : ET.<Handle>d__0:MoveNext()
+07-16 01:00:14.833  8645 27151 I Unity   : ET.<LoadAssetAsync>d__5`1:MoveNext()
+07-16 01:00:14.833  8645 27151 I Unity   : System.Threading.Tasks.AwaitTaskContinuation:RunCallback(ContextCallback, Object, Task&)
+07-16 01:00:14.833  8645 27151 I Unity   : System.Threading.Tasks.Task:FinishContinuations()
+07-16 01:00:14.833  8645 27151 I Unity   : System.Threading.Tasks.Task`1:TrySetResult(TResult)
+07-16 01:00:14.833  8645 27151 I Unity   : System.Threading.Tasks.TaskCompletionSource`1:TrySetResult(TResult)
+07-16 01:00:14.833  8645 27151 I Unity   : YooAsset.OperationSystem:Update()
+07-16 01:00:14.833  8645 27151 I Unity   : YooAsset.YooAssets:Update()
+07-16 01:00:14.833  8645 27151 I Unity   : 
+07-16 01:00:14.844  8645 27151 E Unity   : init fiber fail: Main System.MissingMethodException: MethodNotFind ET.EventSystem+<PublishAsync>d__4`2[ET.Scene,ET.EntryEvent1]::.ctor
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.FiberInit_Main.Handle (ET.FiberInit fiberInit) [0x00056] in E:\github\ET\YIUI\Unity\Assets\Scripts\Hotfix\Share\FiberInit_Main.cs:10 
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.FiberInit_Main.Handle (ET.FiberInit fiberInit) [0x0002d] in <00000000000000000000000000000000>:0 
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.ETAsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.EventSystem.Invoke[A,T] (System.Int64 type, A args) [0x00000] in <00000000000000000000000000000000>:0 
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.FiberManager+<>c__DisplayClass8_0.<Create>b__0 () [0x00000] in <00000000000000000000000000000000>:0 
+07-16 01:00:14.844  8645 27151 E Unity   :   at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.FiberManager+<>c__DisplayClass8_0.<Create>b__0 () [0x00000] in <00000000000000000000000000000000>:0 
+07-16 01:00:14.844  8645 27151 E Unity   :   at ET.Thread
