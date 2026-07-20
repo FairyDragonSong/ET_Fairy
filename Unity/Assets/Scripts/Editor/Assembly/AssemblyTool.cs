@@ -30,9 +30,6 @@ namespace ET
         [MenuItem("ET/Compile _F6", false, ETMenuItemPriority.Compile)]
         static void MenuItemOfCompile()
         {
-            // 强制刷新一下，防止关闭auto refresh，文件修改时间不准确
-            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-
             DoCompile();
         }
 
@@ -140,6 +137,7 @@ namespace ET
                 {
                     group = group,
                     target = target,
+                    // 相当于本次编译期间定义了：#define UNITY_COMPILE
                     extraScriptingDefines = new[] { "UNITY_COMPILE" },
                     options = EditorUserBuildSettings.development ? ScriptCompilationOptions.DevelopmentBuild : ScriptCompilationOptions.None
                 };

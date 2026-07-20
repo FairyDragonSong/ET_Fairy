@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Loader::ET.BuildinFileManifest
   BuildinFiles:
   - PackageName: DefaultPackage
-    FileName: 19bf984436e209f9b1e28db1b93ed194.bundle
-    FileCRC32: c57e1062
+    FileName: 0ddf5c2db02ac34c1a6875ab7c80e37c.bundle
+    FileCRC32: 1cfcb897
   - PackageName: DefaultPackage
     FileName: 24e20e05e4b7eb1dede3322656f1dd68.bundle
     FileCRC32: 2766aaeb
@@ -26,17 +26,11 @@ MonoBehaviour:
     FileName: 3c4bb9d34bea9301c66a21b3c90ff58b.bundle
     FileCRC32: 25cf6e7d
   - PackageName: DefaultPackage
-    FileName: 519b3f3dc739992e297c1fbddb26a426.bundle
-    FileCRC32: 8188f6d1
-  - PackageName: DefaultPackage
     FileName: 54a2497b06836b7563b54b6fe040bde8.bundle
     FileCRC32: a76e31ac
   - PackageName: DefaultPackage
     FileName: 5eb200ef4ad2f59466821c79face1fc9.bundle
     FileCRC32: 9d5ce2ba
-  - PackageName: DefaultPackage
-    FileName: 635a7b4dc21ea6657b96aecab75b08d0.bundle
-    FileCRC32: 61ef457c
   - PackageName: DefaultPackage
     FileName: 6f9ea47c82761d4b8e24c705905a594f.bundle
     FileCRC32: c41e6616
@@ -110,11 +104,17 @@ MonoBehaviour:
     FileName: e306a1aca97fdb71d0c4bf1b8af45466.bundle
     FileCRC32: aaac7e67
   - PackageName: DefaultPackage
+    FileName: f1665eb0fb69ccabc7051c8d6663c838.bundle
+    FileCRC32: e3a04166
+  - PackageName: DefaultPackage
     FileName: f3126fd69af70ecc6c83fcd327dc99f4.bundle
     FileCRC32: d7305cb5
   - PackageName: DefaultPackage
     FileName: f755e8a2d611cc9f47192c16e0a5ebf6.bundle
     FileCRC32: d6f823d6
+  - PackageName: DefaultPackage
+    FileName: fac5ded98d95cee80264628f8f490b06.bundle
+    FileCRC32: f2e73466
   - PackageName: DefaultPackage
     FileName: fc59d28941b0e2b1aa738d61a27fc3c0.bundle
     FileCRC32: 15a1716e
