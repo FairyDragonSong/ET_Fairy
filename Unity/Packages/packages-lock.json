@@ -12,6 +12,12 @@
       "source": "embedded",
       "dependencies": {}
     },
+    "com.qq.weixin.minigame": {
+      "version": "file:com.qq.weixin.minigame",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.tuyoogame.yooasset": {
       "version": "file:com.tuyoogame.yooasset",
       "depth": 0,

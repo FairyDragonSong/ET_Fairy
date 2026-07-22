@@ -5,9 +5,13 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Init.unity
     guid: e0d691ac8c1d0454ba07089ea820e18a
+  - enabled: 1
+    path: Assets/Scenes/WXSmokeTest.unity
+    guid: 4d281f815fce0274094ea843138cc111
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: f989b2ba24890344e858b377390e01f5,
       type: 2}
+  m_UseUCBPForAssetBundles: 0
