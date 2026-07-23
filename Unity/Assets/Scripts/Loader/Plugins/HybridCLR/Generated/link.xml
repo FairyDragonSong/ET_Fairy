@@ -184,6 +184,9 @@
     <type fullname="ET.UpdateSystem`1" preserve="all" />
     <type fullname="ET.WinPeriod" preserve="all" />
     <type fullname="ET.World" preserve="all" />
+    <type fullname="ET.YIUIInvokeCoroutineLock" preserve="all" />
+    <type fullname="ET.YIUIInvokeWaitAsync" preserve="all" />
+    <type fullname="ET.YIUIInvokeWaitFrameAsync" preserve="all" />
   </assembly>
   <assembly fullname="Unity.Loader">
     <type fullname="ET.CodeLoader" preserve="all" />
@@ -392,11 +395,8 @@
     <type fullname="System.Console" preserve="all" />
     <type fullname="System.Diagnostics.DebuggableAttribute" preserve="all" />
     <type fullname="System.Diagnostics.DebuggableAttribute/DebuggingModes" preserve="all" />
-    <type fullname="System.Diagnostics.DebuggerBrowsableAttribute" preserve="all" />
-    <type fullname="System.Diagnostics.DebuggerBrowsableState" preserve="all" />
     <type fullname="System.Diagnostics.DebuggerDisplayAttribute" preserve="all" />
     <type fullname="System.Diagnostics.DebuggerHiddenAttribute" preserve="all" />
-    <type fullname="System.Diagnostics.DebuggerStepThroughAttribute" preserve="all" />
     <type fullname="System.Enum" preserve="all" />
     <type fullname="System.Exception" preserve="all" />
     <type fullname="System.Func`1" preserve="all" />

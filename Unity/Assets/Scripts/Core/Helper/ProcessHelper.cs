@@ -53,14 +53,15 @@ namespace ET
         private static async ETTask WaitExitAsync(System.Diagnostics.Process process)
         {
             await process.WaitForExitAsync();
-#if UNITY
+#if UNITY_5_3_OR_NEWER
             Log.Info($"process exit, exitcode: {process.ExitCode} {process.StandardOutput.ReadToEnd()} {process.StandardError.ReadToEnd()}");
 #endif
         }
-        
-#if UNITY
+
+#if UNITY_5_3_OR_NEWER
         private static async Task WaitForExitAsync(this System.Diagnostics.Process self)
         {
+            // 条件写反了。它会在进程仍运行时直接结束等待 是这样吗？
             if (!self.HasExited)
             {
                 return;
