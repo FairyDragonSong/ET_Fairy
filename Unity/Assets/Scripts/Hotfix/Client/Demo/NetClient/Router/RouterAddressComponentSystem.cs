@@ -18,13 +18,21 @@ namespace ET.Client
         
         public static async ETTask Init(this RouterAddressComponent self)
         {
+#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+            self.RouterManagerIPAddress = IPAddress.Loopback;
+#else
             self.RouterManagerIPAddress = NetworkHelper.GetHostAddress(self.RouterManagerHost);
+#endif
             await self.GetAllRouter();
         }
 
         private static async ETTask GetAllRouter(this RouterAddressComponent self)
         {
+#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+            string url = $"{MiniGameNetworkSettings.RouterHttpUrl}?v={RandomGenerator.RandUInt32()}";
+#else
             string url = $"http://{self.RouterManagerHost}:{self.RouterManagerPort}/get_router?v={RandomGenerator.RandUInt32()}";
+#endif
             Log.Debug($"start get router info: {url}");
             string routerInfo = await HttpClientHelper.Get(url);
             Log.Debug($"recv router info: {routerInfo}");

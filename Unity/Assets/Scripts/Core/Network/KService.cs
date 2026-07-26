@@ -48,6 +48,14 @@ namespace ET
         
         public NetworkProtocol Protocol { get; set; }
 
+        public KService(IKcpTransport transport, NetworkProtocol protocol, ServiceType serviceType)
+        {
+            this.ServiceType = serviceType;
+            this.startTime = TimeInfo.Instance.ClientFrameTime();
+            this.Protocol = protocol;
+            this.Transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        }
+
         public KService(IPEndPoint ipEndPoint, NetworkProtocol protocol, ServiceType serviceType)
         {
             this.ServiceType = serviceType;

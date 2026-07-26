@@ -52,6 +52,7 @@ namespace ET
 
             GlobalConfig globalConfig = Resources.Load<GlobalConfig>("GlobalConfig");
             EPlayMode ePlayMode = globalConfig.EPlayMode;
+            InitializationOperation initializationOperation;
 
             // 编辑器下的模拟模式
             switch (ePlayMode)
@@ -60,67 +61,107 @@ namespace ET
                 {
                     EditorSimulateModeParameters createParameters = new();
                     createParameters.SimulateManifestFilePath = EditorSimulateModeHelper.SimulateBuild("ScriptableBuildPipeline", packageName);
-                    await package.InitializeAsync(createParameters).Task;
+                    initializationOperation = package.InitializeAsync(createParameters);
                     break;
                 }
                 case EPlayMode.OfflinePlayMode:
                 {
                     OfflinePlayModeParameters createParameters = new();
-                    await package.InitializeAsync(createParameters).Task;
+                    initializationOperation = package.InitializeAsync(createParameters);
                     break;
                 }
                 case EPlayMode.HostPlayMode:
                 {
-                    string defaultHostServer = GetHostServerURL();
-                    string fallbackHostServer = GetHostServerURL();
+                    string defaultHostServer = GetHostServerURL(globalConfig.ResourceHostServer, globalConfig.ResourceAppVersion);
+                    string fallbackHostServer = GetHostServerURL(GetFallbackHostServer(globalConfig), globalConfig.ResourceAppVersion);
                     HostPlayModeParameters createParameters = new();
                     createParameters.BuildinQueryServices = new GameQueryServices();
                     createParameters.RemoteServices = new RemoteServices(defaultHostServer, fallbackHostServer);
-                    await package.InitializeAsync(createParameters).Task;
+                    initializationOperation = package.InitializeAsync(createParameters);
+                    break;
+                }
+                case EPlayMode.WebPlayMode:
+                {
+                    string defaultHostServer = GetHostServerURL(globalConfig.ResourceHostServer, globalConfig.ResourceAppVersion);
+                    string fallbackHostServer = GetHostServerURL(GetFallbackHostServer(globalConfig), globalConfig.ResourceAppVersion);
+                    WebPlayModeParameters createParameters = new();
+                    createParameters.BuildinQueryServices = new GameQueryServices();
+                    createParameters.RemoteServices = new RemoteServices(defaultHostServer, fallbackHostServer);
+                    initializationOperation = package.InitializeAsync(createParameters);
                     break;
                 }
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+
+            await initializationOperation.Task;
+            if (initializationOperation.Status != EOperationStatus.Succeed)
+            {
+                throw new Exception($"YooAsset package initialize failed: package={packageName}, playMode={ePlayMode}, error={initializationOperation.Error}");
+            }
+
+            Log.Info($"YooAsset package initialized: package={packageName}, playMode={ePlayMode}, version={initializationOperation.PackageVersion}");
         }
 
-        static string GetHostServerURL()
+        private static string GetFallbackHostServer(GlobalConfig globalConfig)
         {
-            //string hostServerIP = "http://10.0.2.2"; //安卓模拟器地址
-            string hostServerIP = "http://127.0.0.1";
-            string appVersion = "v1.0";
+            return string.IsNullOrWhiteSpace(globalConfig.ResourceFallbackHostServer)
+                    ? globalConfig.ResourceHostServer
+                    : globalConfig.ResourceFallbackHostServer;
+        }
 
+        private static string GetHostServerURL(string hostServer, string appVersion)
+        {
+            if (string.IsNullOrWhiteSpace(hostServer))
+            {
+                throw new InvalidOperationException("GlobalConfig.ResourceHostServer is empty.");
+            }
+
+            string platform;
 #if UNITY_EDITOR
             if (UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.Android)
             {
-                return $"{hostServerIP}/CDN/Android/{appVersion}";
+                platform = "Android";
             }
             else if (UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.iOS)
             {
-                return $"{hostServerIP}/CDN/IPhone/{appVersion}";
+                platform = "IPhone";
             }
             else if (UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.WebGL)
             {
-                return $"{hostServerIP}/CDN/WebGL/{appVersion}";
+                platform = "WebGL";
             }
-
-            return $"{hostServerIP}/CDN/PC/{appVersion}";
+            else if (UnityEditor.EditorUserBuildSettings.activeBuildTarget.ToString() == "MiniGame")
+            {
+                platform = "MiniGame";
+            }
+            else
+            {
+                platform = "PC";
+            }
 #else
             if (Application.platform == RuntimePlatform.Android)
             {
-                return $"{hostServerIP}/CDN/Android/{appVersion}";
+                platform = "Android";
             }
             else if (Application.platform == RuntimePlatform.IPhonePlayer)
             {
-                return $"{hostServerIP}/CDN/IPhone/{appVersion}";
+                platform = "IPhone";
             }
             else if (Application.platform == RuntimePlatform.WebGLPlayer)
             {
-                return $"{hostServerIP}/CDN/WebGL/{appVersion}";
+                #if UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME
+                platform = "MiniGame";
+                #else
+                platform = "WebGL";
+                #endif
             }
-
-            return $"{hostServerIP}/CDN/PC/{appVersion}";
+            else
+            {
+                platform = "PC";
+            }
 #endif
+            return $"{hostServer.TrimEnd('/')}/CDN/{platform}/{appVersion.Trim('/')}";
         }
 
         public void DestroyPackage(string packageName)

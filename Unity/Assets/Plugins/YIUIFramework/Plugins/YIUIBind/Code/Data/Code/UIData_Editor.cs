@@ -64,14 +64,6 @@ namespace YIUIFramework
         private bool ShowIfBindsTips => m_Binds.Count <= 0;
         private bool ShowIfBinds     => m_Binds.Count >= 1;
 
-        [SerializeField]
-        [HideReferenceObjectPicker]
-        [LabelText("所有绑定关联")]
-        [ReadOnly]
-        [PropertyOrder(101)]
-        [ShowIf("ShowIfBinds")]
-        private List<UIDataBind> m_Binds = new List<UIDataBind>();
-
         public int GetBindCount()
         {
             return m_Binds?.Count ?? 0;

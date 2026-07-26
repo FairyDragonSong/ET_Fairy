@@ -9,6 +9,9 @@ namespace ET.Client
     {
         public static async ETTask<string> Get(string link)
         {
+#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+            return await CoroutineHelper.HttpGet(link);
+#else
             try
             {
                 using HttpClient httpClient = new();
@@ -20,6 +23,7 @@ namespace ET.Client
             {
                 throw new Exception($"http request fail: {link.Substring(0,link.IndexOf('?'))}\n{e}");
             }
+#endif
         }
     }
 }

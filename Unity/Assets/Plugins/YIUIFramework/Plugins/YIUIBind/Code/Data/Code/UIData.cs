@@ -51,6 +51,16 @@ namespace YIUIFramework
 
         public UIDataValue DataValue => m_DataValue;
 
+        #if UNITY_EDITOR
+        [SerializeField]
+        [HideReferenceObjectPicker]
+        [LabelText("所有绑定关联")]
+        [ReadOnly]
+        [PropertyOrder(101)]
+        [ShowIf("ShowIfBinds")]
+        private List<UIDataBind> m_Binds = new();
+        #endif
+
         private UIData()
         {
         }

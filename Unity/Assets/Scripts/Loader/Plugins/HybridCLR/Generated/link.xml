@@ -55,11 +55,6 @@
     <type fullname="System.Collections.Generic.HashSet`1/Enumerator" preserve="all" />
     <type fullname="System.Linq.Enumerable" preserve="all" />
   </assembly>
-  <assembly fullname="System.Net.Http">
-    <type fullname="System.Net.Http.HttpClient" preserve="all" />
-    <type fullname="System.Net.Http.HttpContent" preserve="all" />
-    <type fullname="System.Net.Http.HttpResponseMessage" preserve="all" />
-  </assembly>
   <assembly fullname="System.Runtime.CompilerServices.Unsafe">
     <type fullname="System.Runtime.CompilerServices.Unsafe" preserve="all" />
   </assembly>
@@ -150,6 +145,8 @@
     <type fullname="ET.MessageObject" preserve="all" />
     <type fullname="ET.MessageQueue" preserve="all" />
     <type fullname="ET.MessageSerializeHelper" preserve="all" />
+    <type fullname="ET.MiniGameNetworkSettings" preserve="all" />
+    <type fullname="ET.MiniGameWebSocketTransport" preserve="all" />
     <type fullname="ET.MongoHelper" preserve="all" />
     <type fullname="ET.NavmeshComponent" preserve="all" />
     <type fullname="ET.NetServices" preserve="all" />
@@ -190,6 +187,7 @@
   </assembly>
   <assembly fullname="Unity.Loader">
     <type fullname="ET.CodeLoader" preserve="all" />
+    <type fullname="ET.CoroutineHelper" preserve="all" />
     <type fullname="ET.GlobalComponent" preserve="all" />
     <type fullname="ET.GlobalConfig" preserve="all" />
     <type fullname="ET.UILayer" preserve="all" />
@@ -395,8 +393,11 @@
     <type fullname="System.Console" preserve="all" />
     <type fullname="System.Diagnostics.DebuggableAttribute" preserve="all" />
     <type fullname="System.Diagnostics.DebuggableAttribute/DebuggingModes" preserve="all" />
+    <type fullname="System.Diagnostics.DebuggerBrowsableAttribute" preserve="all" />
+    <type fullname="System.Diagnostics.DebuggerBrowsableState" preserve="all" />
     <type fullname="System.Diagnostics.DebuggerDisplayAttribute" preserve="all" />
     <type fullname="System.Diagnostics.DebuggerHiddenAttribute" preserve="all" />
+    <type fullname="System.Diagnostics.DebuggerStepThroughAttribute" preserve="all" />
     <type fullname="System.Enum" preserve="all" />
     <type fullname="System.Exception" preserve="all" />
     <type fullname="System.Func`1" preserve="all" />

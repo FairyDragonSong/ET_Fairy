@@ -9,6 +9,7 @@ namespace ET.Client
         public YIUILoopScroll<RedDotData, RedDotDataItemComponent>   m_SearchScroll;
         public List<RedDotData>                                      m_CurrentDataList      = new List<RedDotData>();
         public Dictionary<int, ERedDotKeyType>                       m_AllDropdownSearchDic = new Dictionary<int, ERedDotKeyType>();
+        [System.NonSerialized]
         public List<TMP_Dropdown.OptionData>                         m_DropdownOptionData   = new List<TMP_Dropdown.OptionData>();
         public RedDotData                                            m_InfoData;
         public YIUILoopScroll<RedDotStack, RedDotStackItemComponent> m_StackScroll;

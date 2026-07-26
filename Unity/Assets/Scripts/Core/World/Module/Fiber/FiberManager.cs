@@ -27,7 +27,9 @@ namespace ET
             this.mainThreadScheduler = new MainThreadScheduler(this);
             this.schedulers[(int)SchedulerType.Main] = this.mainThreadScheduler;
             
-#if ENABLE_VIEW && UNITY_EDITOR
+#if UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME || (ENABLE_VIEW && UNITY_EDITOR)
+            // WebGL/微信小游戏没有可供 ET 后台调度器使用的托管线程。
+            // 保留 Fiber 的逻辑隔离，但统一在 Unity 主线程逐帧调度。
             this.schedulers[(int)SchedulerType.Thread] = this.mainThreadScheduler;
             this.schedulers[(int)SchedulerType.ThreadPool] = this.mainThreadScheduler;
 #else
@@ -48,9 +50,13 @@ namespace ET
 
         protected override void Destroy()
         {
+            HashSet<IScheduler> disposedSchedulers = new();
             foreach (IScheduler scheduler in this.schedulers)
             {
-                scheduler.Dispose();
+                if (scheduler != null && disposedSchedulers.Add(scheduler))
+                {
+                    scheduler.Dispose();
+                }
             }
             
             foreach (var kv in this.fibers)

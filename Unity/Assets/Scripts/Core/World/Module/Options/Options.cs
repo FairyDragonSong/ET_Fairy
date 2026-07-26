@@ -37,5 +37,11 @@ namespace ET
         
         [Option("Console", Required = false, Default = 0)]
         public int Console { get; set; }
+
+        [Option("RouterWebSocket", Required = false, Default = 0, HelpText = "enable Router WebSocket listener, 0 off 1 on")]
+        public int RouterWebSocket { get; set; }
+
+        [Option("RouterWebSocketPortOffset", Required = false, Default = 1000)]
+        public int RouterWebSocketPortOffset { get; set; }
     }
 }

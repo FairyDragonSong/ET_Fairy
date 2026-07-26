@@ -24,11 +24,16 @@ namespace ET
         private string[] startConfigs;
         private string startConfig;
         private DevelopMode developMode;
+        private bool routerWebSocket;
+        private int routerWebSocketPortOffset = 1000;
 
         public void OnEnable()
         {
             DirectoryInfo directoryInfo = new DirectoryInfo("../Config/Excel/cs/StartConfig");
             this.startConfigs = directoryInfo.GetDirectories().Select(x => x.Name).ToArray();
+            this.routerWebSocket = EditorPrefs.GetBool("ET.ServerTools.RouterWebSocket", false);
+            this.routerWebSocketPortOffset =
+                    EditorPrefs.GetInt("ET.ServerTools.RouterWebSocketPortOffset", 1000);
         }
 
         public void OnGUI()
@@ -36,6 +41,18 @@ namespace ET
             selectStartConfigIndex = EditorGUILayout.Popup(selectStartConfigIndex, this.startConfigs);
             this.startConfig = this.startConfigs[this.selectStartConfigIndex];
             this.developMode = (DevelopMode)EditorGUILayout.EnumPopup("起服模式：", this.developMode);
+            this.routerWebSocket = EditorGUILayout.Toggle("Router WebSocket：", this.routerWebSocket);
+
+            using (new EditorGUI.DisabledScope(!this.routerWebSocket))
+            {
+                this.routerWebSocketPortOffset =
+                        EditorGUILayout.IntField("WebSocket 端口偏移：", this.routerWebSocketPortOffset);
+            }
+
+            EditorPrefs.SetBool("ET.ServerTools.RouterWebSocket", this.routerWebSocket);
+            EditorPrefs.SetInt(
+                "ET.ServerTools.RouterWebSocketPortOffset",
+                this.routerWebSocketPortOffset);
 
             string dotnet = "dotnet.exe";
 
@@ -45,13 +62,25 @@ namespace ET
 
             if (GUILayout.Button("Start Server(Single Process)"))
             {
-                string arguments = $"App.dll --Process=1 --StartConfig=StartConfig/{this.startConfig} --Console=1";
+                string arguments =
+                        $"App.dll --Process=1 --AppType=Server" +
+                        $" --StartConfig=StartConfig/{this.startConfig}" +
+                        $" --Develop={(int)this.developMode}" +
+                        $" --Console=1" +
+                        $" --RouterWebSocket={(this.routerWebSocket ? 1 : 0)}" +
+                        $" --RouterWebSocketPortOffset={this.routerWebSocketPortOffset}";
                 ProcessHelper.Run(dotnet, arguments, "../Bin/");
             }
 
             if (GUILayout.Button("Start Watcher"))
             {
-                string arguments = $"App.dll --AppType=Watcher --StartConfig=StartConfig/{this.startConfig} --Console=1";
+                string arguments =
+                        $"App.dll --AppType=Watcher" +
+                        $" --StartConfig=StartConfig/{this.startConfig}" +
+                        $" --Develop={(int)this.developMode}" +
+                        $" --Console=1" +
+                        $" --RouterWebSocket={(this.routerWebSocket ? 1 : 0)}" +
+                        $" --RouterWebSocketPortOffset={this.routerWebSocketPortOffset}";
                 ProcessHelper.Run(dotnet, arguments, "../Bin/");
             }
 

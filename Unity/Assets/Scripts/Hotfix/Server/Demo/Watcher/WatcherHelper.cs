@@ -47,7 +47,9 @@ namespace ET.Server
                     $" --StartConfig={Options.Instance.StartConfig}" +
                     $" --Develop={Options.Instance.Develop}" +
                     $" --LogLevel={Options.Instance.LogLevel}" +
-                    $" --Console={Options.Instance.Console}";
+                    $" --Console={Options.Instance.Console}" +
+                    $" --RouterWebSocket={Options.Instance.RouterWebSocket}" +
+                    $" --RouterWebSocketPortOffset={Options.Instance.RouterWebSocketPortOffset}";
             Log.Debug($"{exe} {arguments}");
             System.Diagnostics.Process process = ProcessHelper.Run(exe, arguments);
             return process;

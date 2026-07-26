@@ -83,16 +83,16 @@ namespace ET
             }
         }
         
-        public async ETTask PublishAsync<S, T>(S scene, T a) where S: class, IScene where T : struct
+        public ETTask PublishAsync<S, T>(S scene, T a) where S: class, IScene where T : struct
         {
+            ListComponent<ETTask> list = ListComponent<ETTask>.Create();
+
             List<EventInfo> iEvents;
             if (!this.allEvents.TryGetValue(typeof(T), out iEvents))
             {
-                return;
+                return WaitAll(list);
             }
 
-            using ListComponent<ETTask> list = ListComponent<ETTask>.Create();
-            
             foreach (EventInfo eventInfo in iEvents)
             {
                 if (!scene.SceneType.HasSameFlag(eventInfo.SceneType))
@@ -109,9 +109,29 @@ namespace ET
                 list.Add(aEvent.Handle(scene, a));
             }
 
+            return WaitAll(list);
+        }
+
+        private static async ETTask WaitAll(ListComponent<ETTask> list)
+        {
+            using (list)
+            {
+                try
+                {
+                    await ETTaskHelper.WaitAll(list);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e);
+                }
+            }
+        }
+
+        internal static async ETTask HandleEvent(ETTask task)
+        {
             try
             {
-                await ETTaskHelper.WaitAll(list);
+                await task;
             }
             catch (Exception e)
             {
@@ -128,6 +148,7 @@ namespace ET
             }
 
             SceneType sceneType = scene.SceneType;
+
             foreach (EventInfo eventInfo in iEvents)
             {
                 if (!sceneType.HasSameFlag(eventInfo.SceneType))
@@ -135,17 +156,16 @@ namespace ET
                     continue;
                 }
 
-                
                 if (!(eventInfo.IEvent is AEvent<S, T> aEvent))
                 {
                     Log.Error($"event error: {eventInfo.IEvent.GetType().FullName}");
                     continue;
                 }
-                
+
                 aEvent.Handle(scene, a).Coroutine();
             }
         }
-        
+
         // Invoke跟Publish的区别(特别注意)
         // Invoke类似函数，必须有被调用方，否则异常，调用者跟被调用者属于同一模块，比如MoveComponent中的Timer计时器，调用跟被调用的代码均属于移动模块
         // 既然Invoke跟函数一样，那么为什么不使用函数呢? 因为有时候不方便直接调用，比如Config加载，在客户端跟服务端加载方式不一样。比如TimerComponent需要根据Id分发

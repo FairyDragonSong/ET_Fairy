@@ -19,16 +19,12 @@ namespace ET
 
 		protected abstract ETTask Run(S scene, A a);
 
-		public async ETTask Handle(S scene, A a)
+		public ETTask Handle(S scene, A a)
 		{
-			try
-			{
-				await Run(scene, a);
-			}
-			catch (Exception e)
-			{
-				Log.Error(e);
-			}
+			// Do not make this generic method async. IL2CPP may not generate the
+			// constructor for AEvent<S, A>.<Handle>d__*, which makes HybridCLR
+			// fail when a hot-update event first invokes it.
+			return EventSystem.HandleEvent(Run(scene, a));
 		}
 	}
 }

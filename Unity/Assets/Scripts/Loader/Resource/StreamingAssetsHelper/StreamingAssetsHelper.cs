@@ -118,17 +118,11 @@ namespace ET
 #endif
 
 #if UNITY_EDITOR
-    internal class PreprocessBuild : UnityEditor.Build.IPreprocessBuildWithReport
+    public static class BuildinFileManifestBuilder
     {
-        public int callbackOrder => 0;
-
-        /// <summary>
-        /// 在构建应用程序前处理
-        /// 原理：在构建APP之前，搜索StreamingAssets目录下的所有资源文件，然后将这些文件信息写入内置清单，内置清单存储在Resources文件夹下。
-        /// </summary>
-        public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
+        public static int Build()
         {
-            string saveFilePath = "Assets/Resources/BuildinFileManifest.asset";
+            const string saveFilePath = "Assets/Resources/BuildinFileManifest.asset";
             if (File.Exists(saveFilePath))
             {
                 File.Delete(saveFilePath);
@@ -137,28 +131,28 @@ namespace ET
             }
 
             string folderPath = $"{Application.dataPath}/StreamingAssets/{StreamingAssetsDefine.RootFolderName}";
-            DirectoryInfo root = new DirectoryInfo(folderPath);
+            DirectoryInfo root = new(folderPath);
             if (!root.Exists)
             {
                 Debug.LogWarning($"没有发现YooAsset内置目录 : {folderPath}");
-                return;
+                return 0;
             }
 
-            var manifest = ScriptableObject.CreateInstance<BuildinFileManifest>();
+            BuildinFileManifest manifest = ScriptableObject.CreateInstance<BuildinFileManifest>();
             FileInfo[] files = root.GetFiles("*", SearchOption.AllDirectories);
-            foreach (var fileInfo in files)
+            foreach (FileInfo fileInfo in files)
             {
-                if (fileInfo.Extension == ".meta")
+                if (fileInfo.Extension == ".meta" || fileInfo.Name.StartsWith("PackageManifest_"))
                 {
                     continue;
                 }
 
-                if (fileInfo.Name.StartsWith("PackageManifest_"))
+                BuildinFileManifest.Element element = new()
                 {
-                    continue;
-                }
-
-                BuildinFileManifest.Element element = new() { PackageName = fileInfo.Directory.Name, FileCRC32 = YooAsset.Editor.EditorTools.GetFileCRC32(fileInfo.FullName), FileName = fileInfo.Name };
+                    PackageName = fileInfo.Directory.Name,
+                    FileCRC32 = YooAsset.Editor.EditorTools.GetFileCRC32(fileInfo.FullName),
+                    FileName = fileInfo.Name
+                };
                 manifest.BuildinFiles.Add(element);
             }
 
@@ -171,6 +165,21 @@ namespace ET
             UnityEditor.AssetDatabase.SaveAssets();
             UnityEditor.AssetDatabase.Refresh();
             Debug.Log($"一共{manifest.BuildinFiles.Count}个内置文件，内置资源清单保存成功 : {saveFilePath}");
+            return manifest.BuildinFiles.Count;
+        }
+    }
+
+    internal class PreprocessBuild : UnityEditor.Build.IPreprocessBuildWithReport
+    {
+        public int callbackOrder => 0;
+
+        /// <summary>
+        /// 在构建应用程序前处理
+        /// 原理：在构建APP之前，搜索StreamingAssets目录下的所有资源文件，然后将这些文件信息写入内置清单，内置清单存储在Resources文件夹下。
+        /// </summary>
+        public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
+        {
+            BuildinFileManifestBuilder.Build();
         }
     }
 #endif

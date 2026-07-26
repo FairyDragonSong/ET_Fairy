@@ -17,7 +17,14 @@ namespace ET.Client
             RouterAddressComponent routerAddressComponent =
                     root.AddComponent<RouterAddressComponent, string, int>(ConstValue.RouterHttpHost, ConstValue.RouterHttpPort);
             await routerAddressComponent.Init();
-            root.AddComponent<NetComponent, AddressFamily, NetworkProtocol>(routerAddressComponent.RouterManagerIPAddress.AddressFamily, NetworkProtocol.UDP);
+#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+            const NetworkProtocol clientProtocol = NetworkProtocol.Websocket;
+#else
+            const NetworkProtocol clientProtocol = NetworkProtocol.UDP;
+#endif
+            root.AddComponent<NetComponent, AddressFamily, NetworkProtocol>(
+                routerAddressComponent.RouterManagerIPAddress.AddressFamily,
+                clientProtocol);
             root.GetComponent<FiberParentComponent>().ParentFiberId = request.OwnerFiberId;
 
             NetComponent netComponent = root.GetComponent<NetComponent>();

@@ -19,7 +19,19 @@ namespace ET
         [EntitySystem]
         private static void Awake(this NetComponent self, AddressFamily addressFamily, NetworkProtocol protocol)
         {
-            self.AService = new KService(addressFamily, protocol, ServiceType.Outer);
+#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+            if (protocol == NetworkProtocol.Websocket)
+            {
+                self.AService = new KService(
+                    new MiniGameWebSocketTransport(),
+                    protocol,
+                    ServiceType.Outer);
+            }
+            else
+#endif
+            {
+                self.AService = new KService(addressFamily, protocol, ServiceType.Outer);
+            }
             self.AService.ReadCallback = self.OnRead;
             self.AService.ErrorCallback = self.OnError;
         }

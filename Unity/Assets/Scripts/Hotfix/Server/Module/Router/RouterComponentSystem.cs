@@ -15,6 +15,11 @@ namespace ET.Server
         {
             self.OuterUdp = new UdpTransport(outerAddress);
             self.OuterTcp = new TcpTransport(outerAddress);
+            if (Options.Instance.RouterWebSocket == 1)
+            {
+                self.OuterWebSocket = new WebSocketRouterTransport(
+                    outerAddress.Port + Options.Instance.RouterWebSocketPortOffset);
+            }
             self.InnerSocket = new UdpTransport(new IPEndPoint(IPAddress.Parse(innerIP), 0));
         }
         
@@ -23,6 +28,7 @@ namespace ET.Server
         {
             self.OuterUdp.Dispose();
             self.OuterTcp.Dispose();
+            self.OuterWebSocket?.Dispose();
             self.InnerSocket.Dispose();
             self.IPEndPoint = null;
         }
@@ -32,10 +38,12 @@ namespace ET.Server
         {
             self.OuterUdp.Update();
             self.OuterTcp.Update();
+            self.OuterWebSocket?.Update();
             self.InnerSocket.Update();
             long timeNow = TimeInfo.Instance.ClientNow();
             self.RecvOuterUdp(timeNow);
             self.RecvOuterTcp(timeNow);
+            self.RecvOuterWebSocket(timeNow);
             self.RecvInner(timeNow);
 
             // 每秒钟检查一次
@@ -61,6 +69,22 @@ namespace ET.Server
                 {
                     int messageLength = self.OuterTcp.Recv(self.Cache, ref self.IPEndPoint);
                     self.RecvOuterHandler(messageLength, timeNow, self.OuterTcp);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e);
+                }
+            }
+        }
+
+        private static void RecvOuterWebSocket(this RouterComponent self, long timeNow)
+        {
+            while (self.OuterWebSocket != null && self.OuterWebSocket.Available() > 0)
+            {
+                try
+                {
+                    int messageLength = self.OuterWebSocket.Recv(self.Cache, ref self.IPEndPoint);
+                    self.RecvOuterHandler(messageLength, timeNow, self.OuterWebSocket);
                 }
                 catch (Exception e)
                 {
