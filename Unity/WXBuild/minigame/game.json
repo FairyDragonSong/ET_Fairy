@@ -1,6 +1,6 @@
 
 {
-  "deviceOrientation" : "portrait",
+  "deviceOrientation" : "landscape",
   "iOSHighPerformance" : true,
   "iOSHighPerformance+" : false,
   "subpackages"         : [
