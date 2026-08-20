@@ -1,5 +1,13 @@
 ﻿namespace ET
 {
+    /// <summary>
+    /// 同一个 Actor 的消息必须等上一条完整处理完毕，下一条才能继续：
+    //  消息 A 开始
+    //         消息 A await 数据库
+    //         消息 B 等待
+    //  消息 A 完成
+    //         消息 B 开始
+    /// </summary>
     [Invoke((long)MailBoxType.OrderedMessage)]
     public class MailBoxType_OrderedMessageHandler: AInvokeHandler<MailBoxInvoker>
     {
