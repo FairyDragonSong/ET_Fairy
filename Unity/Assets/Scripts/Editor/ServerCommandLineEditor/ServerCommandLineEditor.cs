@@ -26,6 +26,7 @@ namespace ET
         private DevelopMode developMode;
         private bool routerWebSocket;
         private int routerWebSocketPortOffset = 1000;
+        private bool accountAutoRegister;
 
         public void OnEnable()
         {
@@ -34,6 +35,7 @@ namespace ET
             this.routerWebSocket = EditorPrefs.GetBool("ET.ServerTools.RouterWebSocket", false);
             this.routerWebSocketPortOffset =
                     EditorPrefs.GetInt("ET.ServerTools.RouterWebSocketPortOffset", 1000);
+            this.accountAutoRegister = EditorPrefs.GetBool("ET.ServerTools.AccountAutoRegister", false);
         }
 
         public void OnGUI()
@@ -42,6 +44,7 @@ namespace ET
             this.startConfig = this.startConfigs[this.selectStartConfigIndex];
             this.developMode = (DevelopMode)EditorGUILayout.EnumPopup("起服模式：", this.developMode);
             this.routerWebSocket = EditorGUILayout.Toggle("Router WebSocket：", this.routerWebSocket);
+            this.accountAutoRegister = EditorGUILayout.Toggle("账号首次登录自动注册：", this.accountAutoRegister);
 
             using (new EditorGUI.DisabledScope(!this.routerWebSocket))
             {
@@ -53,6 +56,7 @@ namespace ET
             EditorPrefs.SetInt(
                 "ET.ServerTools.RouterWebSocketPortOffset",
                 this.routerWebSocketPortOffset);
+            EditorPrefs.SetBool("ET.ServerTools.AccountAutoRegister", this.accountAutoRegister);
 
             string dotnet = "dotnet.exe";
 
@@ -68,7 +72,8 @@ namespace ET
                         $" --Develop={(int)this.developMode}" +
                         $" --Console=1" +
                         $" --RouterWebSocket={(this.routerWebSocket ? 1 : 0)}" +
-                        $" --RouterWebSocketPortOffset={this.routerWebSocketPortOffset}";
+                        $" --RouterWebSocketPortOffset={this.routerWebSocketPortOffset}" +
+                        $" --AccountAutoRegister={(this.accountAutoRegister ? 1 : 0)}";
                 ProcessHelper.Run(dotnet, arguments, "../Bin/");
             }
 
@@ -80,7 +85,8 @@ namespace ET
                         $" --Develop={(int)this.developMode}" +
                         $" --Console=1" +
                         $" --RouterWebSocket={(this.routerWebSocket ? 1 : 0)}" +
-                        $" --RouterWebSocketPortOffset={this.routerWebSocketPortOffset}";
+                        $" --RouterWebSocketPortOffset={this.routerWebSocketPortOffset}" +
+                        $" --AccountAutoRegister={(this.accountAutoRegister ? 1 : 0)}";
                 ProcessHelper.Run(dotnet, arguments, "../Bin/");
             }
 

@@ -43,5 +43,8 @@ namespace ET
 
         [Option("RouterWebSocketPortOffset", Required = false, Default = 1000)]
         public int RouterWebSocketPortOffset { get; set; }
+
+        [Option("AccountAutoRegister", Required = false, Default = 0, HelpText = "allow password account creation on first login, 0 off 1 on")]
+        public int AccountAutoRegister { get; set; }
     }
 }

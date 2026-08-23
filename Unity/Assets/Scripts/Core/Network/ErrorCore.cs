@@ -64,6 +64,11 @@
         public const int ERR_Cancel = 200001;
         public const int ERR_Timeout = 200002;
 
+        public const int ERR_AccountInputInvalid = 200101;
+        public const int ERR_InvalidAccountOrPassword = 200102;
+        public const int ERR_AccountDisabled = 200103;
+        public const int ERR_AccountStorageUnavailable = 200104;
+
         public static bool IsRpcNeedThrowException(int error)
         {
             if (error == 0)

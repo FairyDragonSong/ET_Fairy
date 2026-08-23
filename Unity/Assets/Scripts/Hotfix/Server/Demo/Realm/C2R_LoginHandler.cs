@@ -9,13 +9,23 @@ namespace ET.Server
 	{
 		protected override async ETTask Run(Session session, C2R_Login request, R2C_Login response)
 		{
+			AccountAuthenticationResult authenticationResult = await AccountAuthentication.Authenticate(
+				session.Root(),
+				AccountAuthenticationRequest.Password(request.Account, request.Password));
+			if (!authenticationResult.IsSuccess)
+			{
+				response.Error = authenticationResult.Error;
+				response.Message = authenticationResult.Message;
+				return;
+			}
+
 			// 随机分配一个Gate
-			StartSceneConfig config = RealmGateAddressHelper.GetGate(session.Zone(), request.Account);
+			StartSceneConfig config = RealmGateAddressHelper.GetGate(session.Zone(), authenticationResult.LoginName);
 			Log.Debug($"gate address: {config}");
 			
 			// 向gate请求一个key,客户端可以拿着这个key连接gate
 			R2G_GetLoginKey r2GGetLoginKey = R2G_GetLoginKey.Create();
-			r2GGetLoginKey.Account = request.Account;
+			r2GGetLoginKey.Account = authenticationResult.LoginName;
 			RpcCallResult<G2R_GetLoginKey> loginKeyResult = await session.Root().CallService<G2R_GetLoginKey>(
 				ServiceAddress.From(config.ActorId), r2GGetLoginKey);
 			if (!loginKeyResult.IsSuccess)

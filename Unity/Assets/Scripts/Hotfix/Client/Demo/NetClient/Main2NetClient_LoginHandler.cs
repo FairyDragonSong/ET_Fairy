@@ -40,6 +40,13 @@ namespace ET.Client
                 r2CLogin = (R2C_Login)await session.Call(c2RLogin);
             }
 
+            if (r2CLogin.Error != 0)
+            {
+                response.Error = r2CLogin.Error;
+                response.Message = r2CLogin.Message;
+                return;
+            }
+
             // 创建一个gate Session,并且保存到SessionComponent中
             Session gateSession = await netComponent.CreateRouterSession(NetworkHelper.ToIPEndPoint(r2CLogin.Address), account, password);
             gateSession.AddComponent<ClientSessionErrorComponent>();
@@ -48,6 +55,12 @@ namespace ET.Client
             c2GLoginGate.Key = r2CLogin.Key;
             c2GLoginGate.GateId = r2CLogin.GateId;
             G2C_LoginGate g2CLoginGate = (G2C_LoginGate)await gateSession.Call(c2GLoginGate);
+            if (g2CLoginGate.Error != 0)
+            {
+                response.Error = g2CLoginGate.Error;
+                response.Message = g2CLoginGate.Message;
+                return;
+            }
 
             Log.Debug("登陆gate成功!");
 
