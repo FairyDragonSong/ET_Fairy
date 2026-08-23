@@ -20,53 +20,75 @@ namespace ET.Server
             session.RemoveComponent<SessionAcceptTimeoutComponent>();
 
             PlayerComponent playerComponent = root.GetComponent<PlayerComponent>();
-            Player player = playerComponent.GetByAccount(account);
-            if (player == null)
+            using (await root.GetComponent<CoroutineLockComponent>().Wait(
+                       CoroutineLockType.PlayerSession,
+                       account.GetLongHashCode()))
             {
-                RoleLoadResult roleLoadResult = await RoleRepository.LoadOrCreate(root, account);
-                if (!roleLoadResult.IsSuccess)
+                Player player = playerComponent.GetByAccount(account);
+                if (player == null)
                 {
-                    response.Error = roleLoadResult.Error;
-                    response.Message = roleLoadResult.Message;
-                    return;
-                }
+                    RoleLoadResult roleLoadResult = await RoleRepository.LoadOrCreate(root, account);
+                    if (!roleLoadResult.IsSuccess)
+                    {
+                        response.Error = roleLoadResult.Error;
+                        response.Message = roleLoadResult.Message;
+                        return;
+                    }
 
-                RoleSnapshot role = roleLoadResult.Role;
-                player = playerComponent.AddChildWithId<Player, string>(role.Id, account);
-                player.RoleName = role.Name;
-                player.LastMapName = role.MapName;
-                player.PositionX = role.Position.x;
-                player.PositionY = role.Position.y;
-                player.PositionZ = role.Position.z;
-                playerComponent.Add(player);
-                PlayerSessionComponent playerSessionComponent = player.AddComponent<PlayerSessionComponent>();
-                playerSessionComponent.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.GateSession);
-                await playerSessionComponent.AddLocation(LocationType.GateSession);
-			
-                player.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.UnOrderedMessage);
-                await player.AddLocation(LocationType.Player);
-			
-                session.AddComponent<SessionPlayerComponent>().Player = player;
-                playerSessionComponent.Session = session;
-            }
-            else
-            {
-                player.RemoveComponent<PlayerOfflineComponent>();
-                // 判断是否在战斗
-                PlayerRoomComponent playerRoomComponent = player.GetComponent<PlayerRoomComponent>();
-                if (playerRoomComponent != null && playerRoomComponent.RoomActorId != default)
-                {
-                    CheckRoom(player, session).Coroutine();
+                    RoleSnapshot role = roleLoadResult.Role;
+                    player = playerComponent.AddChildWithId<Player, string>(role.Id, account);
+                    ApplyRoleSnapshot(player, role);
+                    playerComponent.Add(player);
+                    PlayerSessionComponent playerSessionComponent = player.AddComponent<PlayerSessionComponent>();
+                    playerSessionComponent.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.GateSession);
+                    await playerSessionComponent.AddLocation(LocationType.GateSession);
+
+                    player.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.UnOrderedMessage);
+                    await player.AddLocation(LocationType.Player);
+
+                    BindSession(player, session);
                 }
                 else
                 {
-                    PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();
-                    playerSessionComponent.Session = session;
-                }
-            }
+                    if (player.IsDisposed)
+                    {
+                        response.Error = ErrorCore.ERR_PlayerStateConflict;
+                        response.Message = "玩家状态已变化，请重新登录";
+                        return;
+                    }
 
-            response.PlayerId = player.Id;
-            await ETTask.CompletedTask;
+                    player.RemoveComponent<PlayerOfflineComponent>();
+                    PlayerRoomComponent playerRoomComponent = player.GetComponent<PlayerRoomComponent>();
+                    if (playerRoomComponent != null && playerRoomComponent.RoomActorId != default)
+                    {
+                        BindSession(player, session);
+                        await CheckRoom(player, session);
+                    }
+                    else
+                    {
+                        DetachOldSession(player);
+                        if (!await PlayerOfflineComponentSystem.TryReleaseMapState(root, player.Id))
+                        {
+                            response.Error = ErrorCore.ERR_RoleStorageUnavailable;
+                            response.Message = "角色保存尚未完成，请稍后重试";
+                            return;
+                        }
+
+                        RoleLoadResult roleLoadResult = await RoleRepository.LoadOrCreate(root, account);
+                        if (!roleLoadResult.IsSuccess)
+                        {
+                            response.Error = roleLoadResult.Error;
+                            response.Message = roleLoadResult.Message;
+                            return;
+                        }
+
+                        ApplyRoleSnapshot(player, roleLoadResult.Role);
+                        BindSession(player, session);
+                    }
+                }
+
+                response.PlayerId = player.Id;
+            }
         }
 
         private static async ETTask CheckRoom(Player player, Session session)
@@ -83,10 +105,49 @@ namespace ET.Server
             g2CReconnect.StartTime = room2GateReconnect.StartTime;
             g2CReconnect.Frame = room2GateReconnect.Frame;
             g2CReconnect.UnitInfos.AddRange(room2GateReconnect.UnitInfos);
-            session.Send(g2CReconnect);
-            
-            session.AddComponent<SessionPlayerComponent>().Player = player;
-            player.GetComponent<PlayerSessionComponent>().Session = session;
+            if (!session.IsDisposed && player.GetComponent<PlayerSessionComponent>().Session == session)
+            {
+                session.Send(g2CReconnect);
+            }
+        }
+
+        private static void ApplyRoleSnapshot(Player player, RoleSnapshot role)
+        {
+            player.RoleName = role.Name;
+            player.LastMapName = role.MapName;
+            player.PositionX = role.Position.x;
+            player.PositionY = role.Position.y;
+            player.PositionZ = role.Position.z;
+        }
+
+        private static void BindSession(Player player, Session session)
+        {
+            PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();
+            Session previousSession = playerSessionComponent.Session;
+            SessionPlayerComponent sessionPlayerComponent = session.GetComponent<SessionPlayerComponent>() ??
+                    session.AddComponent<SessionPlayerComponent>();
+            sessionPlayerComponent.Player = player;
+            playerSessionComponent.Session = session;
+
+            if (previousSession != null && previousSession != session && !previousSession.IsDisposed)
+            {
+                previousSession.RemoveComponent<SessionPlayerComponent>();
+                previousSession.Dispose();
+            }
+        }
+
+        private static void DetachOldSession(Player player)
+        {
+            PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();
+            Session previousSession = playerSessionComponent.Session;
+            playerSessionComponent.Session = null;
+            if (previousSession == null || previousSession.IsDisposed)
+            {
+                return;
+            }
+
+            previousSession.RemoveComponent<SessionPlayerComponent>();
+            previousSession.Dispose();
         }
     }
 }

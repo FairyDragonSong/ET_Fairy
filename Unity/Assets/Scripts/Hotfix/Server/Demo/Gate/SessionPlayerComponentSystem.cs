@@ -68,55 +68,82 @@
         {
             Player player = self.GetParent<Player>();
             long instanceId = player.InstanceId;
-            PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();
-            if (playerSessionComponent.Session != null)
+            Scene root = self.Root();
+            using (await root.GetComponent<CoroutineLockComponent>().Wait(
+                       CoroutineLockType.PlayerSession,
+                       player.Account.GetLongHashCode()))
             {
-                return;
-            }
+                if (self.IsDisposed || player.InstanceId != instanceId)
+                {
+                    return;
+                }
 
-            await playerSessionComponent.RemoveLocation(LocationType.GateSession);
-            if (player.InstanceId != instanceId || playerSessionComponent.Session != null)
-            {
-                return;
-            }
+                PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();
+                if (playerSessionComponent.Session != null)
+                {
+                    return;
+                }
 
-            await player.RemoveLocation(LocationType.Player);
-            if (player.InstanceId != instanceId || playerSessionComponent.Session != null)
-            {
-                return;
-            }
+                await playerSessionComponent.RemoveLocation(LocationType.GateSession);
+                if (player.InstanceId != instanceId || playerSessionComponent.Session != null)
+                {
+                    return;
+                }
 
-            player.GetParent<PlayerComponent>().Remove(player);
+                await player.RemoveLocation(LocationType.Player);
+                if (player.InstanceId != instanceId || playerSessionComponent.Session != null)
+                {
+                    return;
+                }
+
+                player.GetParent<PlayerComponent>().Remove(player);
+            }
         }
 
         public static async ETTask SaveAndRetainOfflinePlayer(Scene root, Player player, long playerInstanceId)
         {
+            using (await root.GetComponent<CoroutineLockComponent>().Wait(
+                       CoroutineLockType.PlayerSession,
+                       player.Account.GetLongHashCode()))
+            {
+                if (player.InstanceId != playerInstanceId || player.GetComponent<PlayerSessionComponent>().Session != null)
+                {
+                    return;
+                }
+
+                PlayerRoomComponent playerRoomComponent = player.GetComponent<PlayerRoomComponent>();
+                if (playerRoomComponent != null && playerRoomComponent.RoomActorId != default)
+                {
+                    return;
+                }
+
+                if (!await TryReleaseMapState(root, player.Id))
+                {
+                    return;
+                }
+
+                if (player.InstanceId == playerInstanceId &&
+                    player.GetComponent<PlayerSessionComponent>().Session == null &&
+                    player.GetComponent<PlayerOfflineComponent>() == null)
+                {
+                    player.AddComponent<PlayerOfflineComponent>();
+                }
+            }
+        }
+
+        public static async ETTask<bool> TryReleaseMapState(Scene root, long playerId)
+        {
             RpcCallResult<M2G_SessionDisconnect> result = await root.CallEntity<M2G_SessionDisconnect>(
-                EntityAddress.From(LocationType.Unit, player.Id),
+                EntityAddress.From(LocationType.Unit, playerId),
                 G2M_SessionDisconnect.Create());
-
-            if (player.InstanceId != playerInstanceId || player.GetComponent<PlayerSessionComponent>().Session != null)
+            bool released = result.IsSuccess || result.FailureKind == RpcFailureKind.TargetNotFound;
+            if (!released)
             {
-                result.Response?.Dispose();
-                return;
-            }
-
-            bool mapStateReleased = result.IsSuccess || result.FailureKind == RpcFailureKind.TargetNotFound;
-            if (!mapStateReleased)
-            {
-                Log.Error($"keep gate player because map final save was not confirmed: {player.Id}, " +
+                Log.Error($"keep player because map final save was not confirmed: {playerId}, " +
                           $"failure={result.FailureKind}, error={result.Error}, message={result.Message}");
-                result.Response?.Dispose();
-                return;
             }
-
             result.Response?.Dispose();
-            PlayerRoomComponent playerRoomComponent = player.GetComponent<PlayerRoomComponent>();
-            if ((playerRoomComponent == null || playerRoomComponent.RoomActorId == default) &&
-                player.GetComponent<PlayerOfflineComponent>() == null)
-            {
-                player.AddComponent<PlayerOfflineComponent>();
-            }
+            return released;
         }
     }
 }

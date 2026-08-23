@@ -135,11 +135,15 @@ internal static class Program
         string shutdown = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Observability/GracefulShutdownComponentSystem.cs");
         string sessionLifecycle = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/SessionPlayerComponentSystem.cs");
         string roleRepository = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/RoleRepository.cs");
+        string enterMap = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/C2G_EnterMapHandler.cs");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
-        Assert(gateLogin.Contains("GetByAccount(account)") && gateLogin.Contains("RemoveComponent<PlayerOfflineComponent>()"), "duplicate-login/reconnect path removed");
+        Assert(gateLogin.Contains("CoroutineLockType.PlayerSession") && gateLogin.Contains("BindSession(player, session)"), "duplicate-login serialization or session binding removed");
+        Assert(gateLogin.Contains("DetachOldSession(player)") && gateLogin.Contains("ApplyRoleSnapshot(player"), "old-session eviction or persisted snapshot reload removed");
         Assert(sessionLifecycle.Contains("playerSessionComponent.Session != self.GetParent<Session>()") && sessionLifecycle.Contains("PlayerOfflineComponent"), "old-session protection or reconnect retention removed");
+        Assert(sessionLifecycle.Contains("TryReleaseMapState") && sessionLifecycle.Contains("CoroutineLockType.PlayerSession"), "disconnect save and reconnect are no longer serialized");
+        Assert(enterMap.Contains("ERR_PlayerStateConflict") && enterMap.Contains("TransferAndCleanup"), "repeated enter-map protection or temporary scene cleanup removed");
         Assert(disconnectProto.Contains("G2M_SessionDisconnect // ILocationRequest") && disconnectProto.Contains("M2G_SessionDisconnect // ILocationResponse"), "disconnect save acknowledgement removed");
         Assert(roleRepository.Contains("account.DefaultRoleId") && roleRepository.Contains("SaveProgress"), "stable role reload/save path removed");
         Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");

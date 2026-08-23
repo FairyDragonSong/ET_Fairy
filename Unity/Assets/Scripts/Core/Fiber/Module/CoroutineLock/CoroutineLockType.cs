@@ -12,6 +12,7 @@ namespace ET
         public const int ResourcesLoader = 7;
         public const int YIUILoader = 8;
         public const int Account = 9;                  // 同一账号的认证与注册串行化
+        public const int PlayerSession = 10;            // Gate 玩家登录、断线保存与重连串行化
 
         public const int Max = 100; // 这个必须最大
     }
