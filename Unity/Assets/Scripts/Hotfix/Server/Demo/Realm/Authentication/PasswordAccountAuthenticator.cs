@@ -8,7 +8,8 @@ namespace ET.Server
     {
         public async ETTask<AccountAuthenticationResult> Authenticate(Scene root, AccountAuthenticationRequest request)
         {
-            if (!TryNormalizeLoginName(request.Subject, out string loginName) || !IsPasswordValid(request.Credential))
+            if (!AccountInputValidator.TryNormalizeLoginName(request.Subject, out string loginName) ||
+                !AccountInputValidator.IsPasswordValid(request.Credential))
             {
                 return AccountAuthenticationResult.Failure(ErrorCore.ERR_AccountInputInvalid, "账号或密码格式错误");
             }
@@ -107,30 +108,5 @@ namespace ET.Server
                 "账号或密码错误");
         }
 
-        private static bool TryNormalizeLoginName(string value, out string normalized)
-        {
-            normalized = value?.Trim().ToLowerInvariant();
-            if (normalized == null || normalized.Length < 3 || normalized.Length > 32)
-            {
-                return false;
-            }
-
-            foreach (char c in normalized)
-            {
-                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')
-                {
-                    continue;
-                }
-
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool IsPasswordValid(string password)
-        {
-            return password != null && password.Length >= 8 && password.Length <= 128;
-        }
     }
 }

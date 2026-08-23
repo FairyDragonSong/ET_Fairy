@@ -72,6 +72,7 @@ namespace ET
                 session.AddComponent<SessionAcceptTimeoutComponent>();
                 // 客户端连接，2秒检查一次recv消息，10秒没有消息则断开
                 session.AddComponent<SessionIdleCheckerComponent>();
+                session.AddComponent<SessionTrafficLimitComponent>();
             }
         }
         
@@ -80,6 +81,17 @@ namespace ET
             Session session = self.GetChild<Session>(channelId);
             if (session == null)
             {
+                self.AService.Recycle(memoryBuffer);
+                return;
+            }
+
+            SessionTrafficLimitComponent trafficLimit = session.GetComponent<SessionTrafficLimitComponent>();
+            if (trafficLimit != null && !trafficLimit.TryConsume((int)memoryBuffer.Length))
+            {
+                self.AService.Recycle(memoryBuffer);
+                Log.Warning($"outer session rate limited: {session.RemoteAddress}");
+                session.Error = ErrorCore.ERR_OuterSessionRateLimited;
+                session.Dispose();
                 return;
             }
             session.LastRecvTime = TimeInfo.Instance.ClientNow();
@@ -118,6 +130,41 @@ namespace ET
             }
             self.AService.Create(session.Id, routerIPEndPoint);
             return session;
+        }
+    }
+
+    [EntitySystemOf(typeof(SessionTrafficLimitComponent))]
+    [FriendOf(typeof(SessionTrafficLimitComponent))]
+    public static partial class SessionTrafficLimitComponentSystem
+    {
+        private const long WindowMilliseconds = 1000;
+
+        [EntitySystem]
+        private static void Awake(this SessionTrafficLimitComponent self)
+        {
+            self.WindowStartTime = TimeInfo.Instance.ClientNow();
+        }
+
+        public static bool TryConsume(this SessionTrafficLimitComponent self, int packetBytes)
+        {
+            long now = TimeInfo.Instance.ClientNow();
+            if (now - self.WindowStartTime >= WindowMilliseconds)
+            {
+                self.WindowStartTime = now;
+                self.MessageCount = 0;
+                self.ByteCount = 0;
+            }
+
+            int messageLimit = System.Math.Max(1, Options.Instance.OuterMessageLimit);
+            int bytesLimit = System.Math.Max(1, Options.Instance.OuterBytesLimit);
+            if (self.MessageCount >= messageLimit || self.ByteCount + packetBytes > bytesLimit)
+            {
+                return false;
+            }
+
+            ++self.MessageCount;
+            self.ByteCount += packetBytes;
+            return true;
         }
     }
 }

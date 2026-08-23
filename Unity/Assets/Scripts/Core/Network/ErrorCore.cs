@@ -45,6 +45,7 @@
         public const int ERR_ActorLocationSenderTimeout3 = 110318;
         public const int ERR_ActorLocationSenderTimeout4 = 110319;
         public const int ERR_ActorLocationSenderTimeout5 = 110320;
+        public const int ERR_OuterSessionRateLimited = 110321;
         
         public const int ERR_KcpRouterTimeout = 110401;
         public const int ERR_KcpRouterTooManyPackets = 110402;
@@ -68,6 +69,7 @@
         public const int ERR_InvalidAccountOrPassword = 200102;
         public const int ERR_AccountDisabled = 200103;
         public const int ERR_AccountStorageUnavailable = 200104;
+        public const int ERR_LoginRateLimited = 200105;
 
         public static bool IsRpcNeedThrowException(int error)
         {

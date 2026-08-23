@@ -9,6 +9,18 @@ namespace ET.Server
 	{
 		protected override async ETTask Run(Session session, C2R_Login request, R2C_Login response)
 		{
+			string ipAddress = session.RemoteAddress?.Address.ToString() ?? "unknown";
+			if (!session.Root().GetComponent<LoginRateLimiterComponent>().TryAcquire(
+					ipAddress,
+					request.Account,
+					out long retryAfterMilliseconds))
+			{
+				response.Error = ErrorCore.ERR_LoginRateLimited;
+				response.Message = "登录请求过于频繁，请稍后重试";
+				Log.Warning($"login rate limited: ip: {ipAddress} retryAfterMs: {retryAfterMilliseconds}");
+				return;
+			}
+
 			AccountAuthenticationResult authenticationResult = await AccountAuthentication.Authenticate(
 				session.Root(),
 				AccountAuthenticationRequest.Password(request.Account, request.Password));

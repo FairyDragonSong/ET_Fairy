@@ -194,4 +194,14 @@ namespace ET
             set;
         }
     }
+
+    [ComponentOf(typeof(Session))]
+    public sealed class SessionTrafficLimitComponent: Entity, IAwake
+    {
+        public long WindowStartTime;
+
+        public int MessageCount;
+
+        public long ByteCount;
+    }
 }

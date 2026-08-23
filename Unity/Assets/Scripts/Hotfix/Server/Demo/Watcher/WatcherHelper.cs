@@ -50,7 +50,12 @@ namespace ET.Server
                     $" --Console={Options.Instance.Console}" +
                     $" --RouterWebSocket={Options.Instance.RouterWebSocket}" +
                     $" --RouterWebSocketPortOffset={Options.Instance.RouterWebSocketPortOffset}" +
-                    $" --AccountAutoRegister={Options.Instance.AccountAutoRegister}";
+                    $" --AccountAutoRegister={Options.Instance.AccountAutoRegister}" +
+                    $" --LoginIpLimit={Options.Instance.LoginIpLimit}" +
+                    $" --LoginAccountLimit={Options.Instance.LoginAccountLimit}" +
+                    $" --LoginRateWindowSeconds={Options.Instance.LoginRateWindowSeconds}" +
+                    $" --OuterMessageLimit={Options.Instance.OuterMessageLimit}" +
+                    $" --OuterBytesLimit={Options.Instance.OuterBytesLimit}";
             Log.Debug($"{exe} {arguments}");
             System.Diagnostics.Process process = ProcessHelper.Run(exe, arguments);
             return process;
