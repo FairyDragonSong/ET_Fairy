@@ -63,15 +63,28 @@ namespace ET.Server
 
         private static async ETTask Handle(this HttpComponent self, HttpListenerContext context)
         {
+            string requestId = Guid.NewGuid().ToString("N");
+            context.Response.Headers["X-Request-Id"] = requestId;
+            bool error = false;
             try
             {
                 IHttpHandler handler = HttpDispatcher.Instance.Get(self.IScene.SceneType, context.Request.Url.AbsolutePath);
                 await handler.Handle(self.Scene(), context);
             }
+            catch (KeyNotFoundException)
+            {
+                error = true;
+                context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                HttpHelper.TextResponse(context, "not found\n", "text/plain; charset=utf-8");
+            }
             catch (Exception e)
             {
-                Log.Error(e);
+                error = true;
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                Log.Error($"event=http_request_failed request_id={requestId} method={context.Request.HttpMethod} " +
+                          $"path={context.Request.Url.AbsolutePath}\n{e}");
             }
+            OperationalMetrics.Instance.RecordHttp(error || context.Response.StatusCode >= 500);
             context.Request.InputStream.Dispose();
             context.Response.OutputStream.Dispose();
         }

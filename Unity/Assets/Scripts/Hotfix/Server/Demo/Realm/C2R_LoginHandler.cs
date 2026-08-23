@@ -9,6 +9,8 @@ namespace ET.Server
 	{
 		protected override async ETTask Run(Session session, C2R_Login request, R2C_Login response)
 		{
+			OperationalMetrics.Instance.RecordLoginAttempt();
+			string traceId = $"{session.Id:x}-{request.RpcId}";
 			string ipAddress = session.RemoteAddress?.Address.ToString() ?? "unknown";
 			if (!session.Root().GetComponent<LoginRateLimiterComponent>().TryAcquire(
 					ipAddress,
@@ -17,7 +19,8 @@ namespace ET.Server
 			{
 				response.Error = ErrorCore.ERR_LoginRateLimited;
 				response.Message = "登录请求过于频繁，请稍后重试";
-				Log.Warning($"login rate limited: ip: {ipAddress} retryAfterMs: {retryAfterMilliseconds}");
+				OperationalMetrics.Instance.RecordLoginFailure();
+				Log.Warning($"event=login_rejected trace_id={traceId} reason=rate_limited ip={ipAddress} retry_after_ms={retryAfterMilliseconds}");
 				return;
 			}
 
@@ -28,6 +31,8 @@ namespace ET.Server
 			{
 				response.Error = authenticationResult.Error;
 				response.Message = authenticationResult.Message;
+				OperationalMetrics.Instance.RecordLoginFailure();
+				Log.Warning($"event=login_rejected trace_id={traceId} reason=authentication error={response.Error}");
 				return;
 			}
 
@@ -44,6 +49,8 @@ namespace ET.Server
 			{
 				response.Error = loginKeyResult.Error == 0 ? ErrorCore.ERR_RpcFail : loginKeyResult.Error;
 				response.Message = loginKeyResult.Message;
+				OperationalMetrics.Instance.RecordLoginFailure();
+				Log.Error($"event=login_rejected trace_id={traceId} reason=gate_key_rpc error={response.Error}");
 				return;
 			}
 
@@ -52,6 +59,8 @@ namespace ET.Server
 			response.Address = config.InnerIPPort.ToString();
 			response.Key = g2RGetLoginKey.Key;
 			response.GateId = g2RGetLoginKey.GateId;
+			OperationalMetrics.Instance.RecordLoginSuccess();
+			Log.Info($"event=login_succeeded trace_id={traceId} gate_id={response.GateId}");
 			
 			CloseSession(session).Coroutine();
 		}

@@ -44,7 +44,9 @@ namespace ET.Server
             try
             {
                 Unit unit = self.GetParent<Unit>();
-                return await RoleRepository.SaveProgress(unit.Root(), unit.Id, unit.Scene().Name, unit.Position);
+                bool success = await RoleRepository.SaveProgress(unit.Root(), unit.Id, unit.Scene().Name, unit.Position);
+                OperationalMetrics.Instance.RecordRoleSave(success);
+                return success;
             }
             catch (Exception e)
             {
