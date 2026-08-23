@@ -15,10 +15,9 @@ namespace ET.Server
             root.AddComponent<LoginRateLimiterComponent>();
             root.AddComponent<ProcessInnerSender>();
             root.AddComponent<MessageSender>();
+            await DatabaseMigration.Apply(root);
             StartSceneConfig startSceneConfig = StartSceneConfigCategory.Instance.Get(root.Fiber.Id);
             root.AddComponent<NetComponent, IPEndPoint, NetworkProtocol>(startSceneConfig.InnerIPPort, NetworkProtocol.UDP);
-
-            await ETTask.CompletedTask;
         }
     }
 }
