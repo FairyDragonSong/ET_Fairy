@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MongoDB.Driver;
 using Unity.Mathematics;
 
 namespace ET.Server
@@ -41,6 +42,7 @@ namespace ET.Server
             new(false, ErrorCore.ERR_RoleStorageUnavailable, message, default);
     }
 
+    [FriendOf(typeof(DBComponent))]
     public static class RoleRepository
     {
         public static async ETTask<RoleLoadResult> LoadOrCreate(Scene root, string loginName)
@@ -117,7 +119,6 @@ namespace ET.Server
             Account account)
         {
             Role role = root.AddChild<Role>();
-            bool roleSaved = false;
             try
             {
                 long now = TimeInfo.Instance.ServerNow();
@@ -132,11 +133,69 @@ namespace ET.Server
                 role.LastLoginTime = now;
                 role.LastSaveTime = now;
 
+                if (Options.Instance.Develop == 0)
+                {
+                    await SaveRoleAndAccountTransaction(database, role, account);
+                }
+                else
+                {
+                    await SaveRoleAndAccountWithCompensation(database, accountLockKey, role, account);
+                }
+                return RoleLoadResult.Success(ToSnapshot(role));
+            }
+            finally
+            {
+                role.Dispose();
+            }
+        }
+
+        private static async ETTask SaveRoleAndAccountTransaction(DBComponent database, Role role, Account account)
+        {
+            using IClientSessionHandle session = await database.mongoClient.StartSessionAsync();
+            TransactionOptions transactionOptions = new(
+                ReadConcern.Snapshot,
+                ReadPreference.Primary,
+                WriteConcern.WMajority);
+            IMongoCollection<Role> roles = database.database.GetCollection<Role>(typeof(Role).FullName);
+            IMongoCollection<Account> accounts = database.database.GetCollection<Account>(typeof(Account).FullName);
+            await session.WithTransactionAsync(
+                async (transactionSession, cancellationToken) =>
+                {
+                    await roles.ReplaceOneAsync(
+                        transactionSession,
+                        storedRole => storedRole.Id == role.Id,
+                        role,
+                        new ReplaceOptions { IsUpsert = true },
+                        cancellationToken);
+                    account.DefaultRoleId = role.Id;
+                    ReplaceOneResult accountResult = await accounts.ReplaceOneAsync(
+                        transactionSession,
+                        storedAccount => storedAccount.Id == account.Id,
+                        account,
+                        new ReplaceOptions { IsUpsert = false },
+                        cancellationToken);
+                    if (accountResult.MatchedCount != 1)
+                    {
+                        throw new InvalidOperationException($"account disappeared during role transaction: {account.Id}");
+                    }
+                    return true;
+                },
+                transactionOptions);
+        }
+
+        private static async ETTask SaveRoleAndAccountWithCompensation(
+            DBComponent database,
+            long accountLockKey,
+            Role role,
+            Account account)
+        {
+            bool roleSaved = false;
+            try
+            {
                 await database.Save(accountLockKey, role);
                 roleSaved = true;
                 account.DefaultRoleId = role.Id;
                 await database.Save(accountLockKey, account);
-                return RoleLoadResult.Success(ToSnapshot(role));
             }
             catch
             {
@@ -152,10 +211,6 @@ namespace ET.Server
                     }
                 }
                 throw;
-            }
-            finally
-            {
-                role.Dispose();
             }
         }
 

@@ -192,6 +192,7 @@ internal static class Program
         string passwordAuthenticator = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/Authentication/PasswordAccountAuthenticator.cs");
         string realmInit = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/FiberInit_Realm.cs");
         string serverStartup = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/EntryEvent2_InitServer.cs");
+        string databaseAudit = Read(root, "Tools/ServerOps/Audit-Mongo.js");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -208,6 +209,9 @@ internal static class Program
         Assert(enterMap.Contains("ERR_PlayerStateConflict") && enterMap.Contains("TransferAndCleanup"), "repeated enter-map protection or temporary scene cleanup removed");
         Assert(disconnectProto.Contains("G2M_SessionDisconnect // ILocationRequest") && disconnectProto.Contains("M2G_SessionDisconnect // ILocationResponse"), "disconnect save acknowledgement removed");
         Assert(roleRepository.Contains("account.DefaultRoleId") && roleRepository.Contains("SaveProgress"), "stable role reload/save path removed");
+        Assert(roleRepository.Contains("SaveRoleAndAccountTransaction") && roleRepository.Contains("WithTransactionAsync"), "production account-role transaction removed");
+        Assert(roleRepository.Contains("WriteConcern.WMajority") && roleRepository.Contains("ReadConcern.Snapshot"), "production transaction durability weakened");
+        Assert(databaseAudit.Contains("accountsMissingRoles") && databaseAudit.Contains("orphanRoles") && databaseAudit.Contains("quit(2)"), "account-role consistency audit weakened");
         Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");
         Assert(shutdown.Contains("roleSaveComponent.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
     }

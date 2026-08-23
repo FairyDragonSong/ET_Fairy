@@ -31,3 +31,14 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 ```
 
 生产备份必须写入服务器外的加密存储，并定期在隔离库执行恢复演练。脚本成功退出只代表工具执行成功，不替代恢复后的账号、角色数量和登录抽查。
+
+## 账号与角色一致性审计
+
+安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：
+
+```powershell
+$env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin&tls=true"
+.\Audit-Mongo.ps1 -Database ET
+```
+
+审计检查重复登录名、一个账号多个角色、账号缺少默认角色和孤儿角色；发现问题时退出码非 0。脚本只读，不会自动删除或修复业务数据。
