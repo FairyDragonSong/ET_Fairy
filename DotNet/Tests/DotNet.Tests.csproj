@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ET.Tests</RootNamespace>
+    <LangVersion>12</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\DotNet.Core.csproj" />
+    <ProjectReference Include="..\Model\DotNet.Model.csproj" />
+    <ProjectReference Include="..\Hotfix\DotNet.Hotfix.csproj" />
+  </ItemGroup>
+</Project>

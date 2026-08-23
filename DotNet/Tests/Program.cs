@@ -1,0 +1,173 @@
+using ET.Server;
+using Unity.Mathematics;
+
+namespace ET.Tests;
+
+internal static class Program
+{
+    private static readonly List<(string Name, Action Run)> Tests =
+    [
+        ("账号输入规范化与密码边界", TestAccountInput),
+        ("PBKDF2 哈希、随机盐与错误密码", TestPasswordHashing),
+        ("Gate Key 只能消费一次", TestOneTimeGateKey),
+        ("外网消息与字节限流", TestTrafficLimit),
+        ("登录 IP 与账号爆破限流", TestLoginRateLimit),
+        ("角色快照保留地图与坐标", TestRoleSnapshot),
+        ("停机参与者成功与失败汇总", TestShutdownCoordinator),
+        ("登录与持久化安全架构回归", TestSourceGuards),
+    ];
+
+    private static int Main()
+    {
+        World.Instance.AddSingleton(new Options
+        {
+            OuterMessageLimit = 2,
+            OuterBytesLimit = 10,
+            LoginIpLimit = 2,
+            LoginAccountLimit = 2,
+            LoginRateWindowSeconds = 60,
+        });
+        World.Instance.AddSingleton<TimeInfo>();
+
+        int failures = 0;
+        foreach ((string name, Action run) in Tests)
+        {
+            try
+            {
+                run();
+                Console.WriteLine($"PASS {name}");
+            }
+            catch (Exception e)
+            {
+                ++failures;
+                Console.Error.WriteLine($"FAIL {name}: {e.Message}");
+            }
+        }
+
+        World.Instance.Dispose();
+        Console.WriteLine($"RESULT total={Tests.Count} passed={Tests.Count - failures} failed={failures}");
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static void TestAccountInput()
+    {
+        Assert(AccountInputValidator.TryNormalizeLoginName("  Player_01 ", out string normalized), "valid account rejected");
+        Assert(normalized == "player_01", "account was not normalized");
+        Assert(!AccountInputValidator.TryNormalizeLoginName("ab", out _), "short account accepted");
+        Assert(!AccountInputValidator.TryNormalizeLoginName("player@example", out _), "invalid character accepted");
+        Assert(AccountInputValidator.IsPasswordValid("12345678"), "valid password rejected");
+        Assert(!AccountInputValidator.IsPasswordValid("1234567"), "short password accepted");
+    }
+
+    private static void TestPasswordHashing()
+    {
+        PasswordHashData first = PasswordHasher.Hash("correct horse battery staple");
+        PasswordHashData second = PasswordHasher.Hash("correct horse battery staple");
+        Assert(first.Salt != second.Salt && first.Hash != second.Hash, "password hashes reused salt");
+        Assert(PasswordHasher.Verify("correct horse battery staple", first.Scheme, first.Salt, first.Hash, first.Iterations), "correct password rejected");
+        Assert(!PasswordHasher.Verify("wrong password", first.Scheme, first.Salt, first.Hash, first.Iterations), "wrong password accepted");
+        Assert(!PasswordHasher.Verify("correct horse battery staple", first.Scheme, first.Salt, first.Hash, 1), "unsafe iteration count accepted");
+        Assert(!PasswordHasher.Verify("correct horse battery staple", first.Scheme, "not-base64", first.Hash, first.Iterations), "invalid salt accepted");
+    }
+
+    private static void TestOneTimeGateKey()
+    {
+        GateSessionKeyComponent keys = new();
+        keys.sessionKey[42] = "player_01";
+        Assert(keys.Take(42) == "player_01", "first key consumption failed");
+        Assert(keys.Take(42) == null, "replayed key was accepted");
+    }
+
+    private static void TestTrafficLimit()
+    {
+        SessionTrafficLimitComponent traffic = new() { WindowStartTime = TimeInfo.Instance.ClientNow() };
+        Assert(traffic.TryConsume(4), "first packet rejected");
+        Assert(traffic.TryConsume(6), "second packet rejected");
+        Assert(!traffic.TryConsume(1), "message count limit not enforced");
+        traffic.WindowStartTime = TimeInfo.Instance.ClientNow();
+        traffic.MessageCount = 0;
+        traffic.ByteCount = 0;
+        Assert(!traffic.TryConsume(11), "byte limit not enforced");
+    }
+
+    private static void TestRoleSnapshot()
+    {
+        RoleSnapshot role = new(1001, "角色", "Map2", new float3(1.25f, 2.5f, -3.75f));
+        Assert(role.Id == 1001 && role.MapName == "Map2", "role identity or map changed");
+        Assert(role.Position.Equals(new float3(1.25f, 2.5f, -3.75f)), "role position changed");
+    }
+
+    private static void TestLoginRateLimit()
+    {
+        LoginRateLimiterComponent limiter = new() { NextCleanupTime = long.MaxValue };
+        Assert(limiter.TryAcquire("10.0.0.1", "player_01", out _), "first login rejected");
+        Assert(limiter.TryAcquire("10.0.0.1", "player_01", out _), "second login rejected");
+        Assert(!limiter.TryAcquire("10.0.0.1", "player_01", out long retryAfter), "IP/account limit not enforced");
+        Assert(retryAfter > 0, "rate limit did not return retry time");
+
+        LoginRateLimiterComponent accountLimiter = new() { NextCleanupTime = long.MaxValue };
+        Assert(accountLimiter.TryAcquire("10.0.0.2", "shared_01", out _), "first shared-account login rejected");
+        Assert(accountLimiter.TryAcquire("10.0.0.3", "shared_01", out _), "second shared-account login rejected");
+        Assert(!accountLimiter.TryAcquire("10.0.0.4", "shared_01", out _), "account limit across IPs not enforced");
+    }
+
+    private static void TestShutdownCoordinator()
+    {
+        ShutdownCoordinator shutdown = new();
+        shutdown.Awake();
+        shutdown.RegisterParticipant();
+        shutdown.RegisterParticipant();
+        shutdown.Request();
+        Assert(!shutdown.IsCompleted, "shutdown completed before participants");
+        shutdown.CompleteParticipant(true);
+        Assert(!shutdown.IsCompleted, "shutdown completed after one participant");
+        shutdown.CompleteParticipant(false);
+        Assert(shutdown.IsCompleted && !shutdown.IsSuccessful, "shutdown failure was hidden");
+    }
+
+    private static void TestSourceGuards()
+    {
+        string root = FindRepositoryRoot();
+        string realmLogin = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/C2R_LoginHandler.cs");
+        string gateLogin = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/C2G_LoginGateHandler.cs");
+        string disconnectProto = Read(root, "Unity/Assets/Config/Proto/InnerMessage_S_20001.proto");
+        string migration = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/DatabaseMigration.cs");
+        string shutdown = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Observability/GracefulShutdownComponentSystem.cs");
+        string sessionLifecycle = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/SessionPlayerComponentSystem.cs");
+        string roleRepository = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/RoleRepository.cs");
+
+        Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
+        Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
+        Assert(gateLogin.Contains("GetByAccount(account)") && gateLogin.Contains("RemoveComponent<PlayerOfflineComponent>()"), "duplicate-login/reconnect path removed");
+        Assert(sessionLifecycle.Contains("playerSessionComponent.Session != self.GetParent<Session>()") && sessionLifecycle.Contains("PlayerOfflineComponent"), "old-session protection or reconnect retention removed");
+        Assert(disconnectProto.Contains("G2M_SessionDisconnect // ILocationRequest") && disconnectProto.Contains("M2G_SessionDisconnect // ILocationResponse"), "disconnect save acknowledgement removed");
+        Assert(roleRepository.Contains("account.DefaultRoleId") && roleRepository.Contains("SaveProgress"), "stable role reload/save path removed");
+        Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");
+        Assert(shutdown.Contains("roleSaveComponent.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo directory = new(Directory.GetCurrentDirectory());
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "ET.sln")))
+            {
+                return directory.FullName;
+            }
+            directory = directory.Parent;
+        }
+        throw new InvalidOperationException("repository root not found");
+    }
+
+    private static string Read(string root, string relativePath) =>
+        File.ReadAllText(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    private static void Assert(bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}
