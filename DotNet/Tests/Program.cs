@@ -16,6 +16,7 @@ internal static class Program
         ("角色快照保留地图与坐标", TestRoleSnapshot),
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
         ("商业模式启动配置门禁", TestProductionStartupValidation),
+        ("认证敏感消息统一标记", TestSensitiveMessages),
         ("登录与持久化安全架构回归", TestSourceGuards),
     ];
 
@@ -177,6 +178,21 @@ internal static class Program
             new DatabaseConnectionSettings("mongodb://127.0.0.1", "ET_DEV", false));
     }
 
+    private static void TestSensitiveMessages()
+    {
+        object[] messages =
+        [
+            new Main2NetClient_Login(),
+            new C2M_Reload(),
+            new C2R_Login(),
+            new R2C_Login(),
+            new C2G_LoginGate(),
+            new R2G_GetLoginKey(),
+            new G2R_GetLoginKey(),
+        ];
+        Assert(messages.All(message => message is ISensitiveMessage), "an authentication message is not marked sensitive");
+    }
+
     private static void TestSourceGuards()
     {
         string root = FindRepositoryRoot();
@@ -193,6 +209,7 @@ internal static class Program
         string realmInit = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/FiberInit_Realm.cs");
         string serverStartup = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/EntryEvent2_InitServer.cs");
         string databaseAudit = Read(root, "Tools/ServerOps/Audit-Mongo.js");
+        string messageLogger = Read(root, "Unity/Assets/Scripts/Model/Share/Module/Message/LogMsg.cs");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -212,6 +229,7 @@ internal static class Program
         Assert(roleRepository.Contains("SaveRoleAndAccountTransaction") && roleRepository.Contains("WithTransactionAsync"), "production account-role transaction removed");
         Assert(roleRepository.Contains("WriteConcern.WMajority") && roleRepository.Contains("ReadConcern.Snapshot"), "production transaction durability weakened");
         Assert(databaseAudit.Contains("accountsMissingRoles") && databaseAudit.Contains("orphanRoles") && databaseAudit.Contains("quit(2)"), "account-role consistency audit weakened");
+        Assert(messageLogger.Contains("msg is ISensitiveMessage") && messageLogger.Contains("sensitive payload redacted"), "framework-level sensitive message redaction removed");
         Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");
         Assert(shutdown.Contains("roleSaveComponent.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
     }

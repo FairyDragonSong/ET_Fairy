@@ -18,6 +18,12 @@ namespace ET
 
         public void Debug(Fiber fiber, object msg)
         {
+            if (msg is ISensitiveMessage)
+            {
+                fiber.Log.Debug($"{msg.GetType().Name} [sensitive payload redacted]");
+                return;
+            }
+
             ushort opcode = OpcodeType.Instance.GetOpcode(msg.GetType());
             if (this.ignore.Contains(opcode))
             {
