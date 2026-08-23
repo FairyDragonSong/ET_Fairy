@@ -28,7 +28,6 @@ namespace ET.Client
         
         private static void OnEventPasswordAction(this LoginPanelComponent self, string p1)
         {
-            Log.Info($"当前密码: {p1}");
             self.Password = p1;
         }
         

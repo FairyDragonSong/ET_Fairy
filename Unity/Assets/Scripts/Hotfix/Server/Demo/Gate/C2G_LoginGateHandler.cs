@@ -9,7 +9,7 @@ namespace ET.Server
         protected override async ETTask Run(Session session, C2G_LoginGate request, G2C_LoginGate response)
         {
             Scene root = session.Root();
-            string account = root.GetComponent<GateSessionKeyComponent>().Get(request.Key);
+            string account = root.GetComponent<GateSessionKeyComponent>().Take(request.Key);
             if (account == null)
             {
                 response.Error = ErrorCore.ERR_ConnectGateKeyError;
