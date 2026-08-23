@@ -56,3 +56,31 @@ finally {
     }
     $process.Dispose()
 }
+
+$guardInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$guardInfo.FileName = (Join-Path $repositoryRoot "Bin\App.exe")
+$guardInfo.WorkingDirectory = (Join-Path $repositoryRoot "Bin")
+$guardInfo.Arguments = "--Process=1 --StartConfig=StartConfig/Release --Console=0 --Develop=0"
+$guardInfo.UseShellExecute = $false
+$guardInfo.RedirectStandardOutput = $true
+$guardInfo.RedirectStandardError = $true
+$guardInfo.Environment.Remove("ET_MONGO_URI") | Out-Null
+$guardInfo.Environment.Remove("ET_MONGO_URI_ZONE_1") | Out-Null
+$guardProcess = [System.Diagnostics.Process]::new()
+$guardProcess.StartInfo = $guardInfo
+try {
+    if (-not $guardProcess.Start()) { throw "failed to start production guard process" }
+    if (-not $guardProcess.WaitForExit(10000)) { throw "unsafe production configuration did not terminate" }
+    if ($guardProcess.ExitCode -ne 3) {
+        $guardError = $guardProcess.StandardError.ReadToEnd()
+        throw "production guard expected exit 3 but received $($guardProcess.ExitCode): $guardError"
+    }
+    Write-Host "PASS unsafe Release Realm configuration failed closed with exit code 3"
+}
+finally {
+    if (-not $guardProcess.HasExited) {
+        $guardProcess.Kill($true)
+        $guardProcess.WaitForExit()
+    }
+    $guardProcess.Dispose()
+}

@@ -47,6 +47,12 @@ namespace ET
         [Option("AccountAutoRegister", Required = false, Default = 0, HelpText = "allow password account creation on first login, 0 off 1 on")]
         public int AccountAutoRegister { get; set; }
 
+        [Option("PasswordLoginEnabled", Required = false, Default = 0, HelpText = "enable password authentication, 0 off 1 on")]
+        public int PasswordLoginEnabled { get; set; }
+
+        [Option("PasswordLoginTransportSecure", Required = false, Default = 0, HelpText = "operator assertion that the complete client login transport is encrypted")]
+        public int PasswordLoginTransportSecure { get; set; }
+
         [Option("LoginIpLimit", Required = false, Default = 30, HelpText = "max login requests per IP in one login rate window")]
         public int LoginIpLimit { get; set; }
 

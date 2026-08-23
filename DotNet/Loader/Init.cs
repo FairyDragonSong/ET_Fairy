@@ -26,6 +26,7 @@ namespace ET
                 World.Instance.AddSingleton<TimeInfo>();
                 World.Instance.AddSingleton<FiberManager>();
                 World.Instance.AddSingleton<ShutdownCoordinator>();
+                World.Instance.AddSingleton<StartupCoordinator>();
 
                 World.Instance.AddSingleton<CodeLoader>();
             }

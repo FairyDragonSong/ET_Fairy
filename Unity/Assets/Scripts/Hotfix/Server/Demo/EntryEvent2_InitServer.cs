@@ -16,14 +16,14 @@ namespace ET.Server
                     StartProcessConfig startProcessConfig = StartProcessConfigCategory.Instance.Get(process);
                     if (startProcessConfig.Port != 0)
                     {
-                        await FiberManager.Instance.Create(SchedulerType.ThreadPool, ConstFiberId.NetInner, 0, SceneType.NetInner, "NetInner");
+                        await CreateRequiredFiber(ConstFiberId.NetInner, 0, SceneType.NetInner, "NetInner");
                     }
 
                     // 根据配置创建纤程
                     var processScenes = StartSceneConfigCategory.Instance.GetByProcess(process);
                     foreach (StartSceneConfig startConfig in processScenes)
                     {
-                        await FiberManager.Instance.Create(SchedulerType.ThreadPool, startConfig.Id, startConfig.Zone, startConfig.Type, startConfig.Name);
+                        await CreateRequiredFiber(startConfig.Id, startConfig.Zone, startConfig.Type, startConfig.Name);
                     }
 
                     break;
@@ -42,6 +42,19 @@ namespace ET.Server
             if (Options.Instance.Console == 1)
             {
                 root.AddComponent<ConsoleComponent>();
+            }
+        }
+
+        private static async ETTask CreateRequiredFiber(int fiberId, int zone, SceneType sceneType, string name)
+        {
+            try
+            {
+                await FiberManager.Instance.Create(SchedulerType.ThreadPool, fiberId, zone, sceneType, name);
+            }
+            catch
+            {
+                StartupCoordinator.Instance.MarkFailed();
+                throw;
             }
         }
     }

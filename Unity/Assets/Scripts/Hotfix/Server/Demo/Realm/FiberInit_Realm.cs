@@ -16,6 +16,9 @@ namespace ET.Server
             root.AddComponent<GracefulShutdownComponent>();
             root.AddComponent<ProcessInnerSender>();
             root.AddComponent<MessageSender>();
+            ProductionStartupValidator.ValidateRealm(
+                Options.Instance,
+                DatabaseConnectionResolver.Resolve(root.Zone()));
             await DatabaseMigration.Apply(root);
             StartSceneConfig startSceneConfig = StartSceneConfigCategory.Instance.Get(root.Fiber.Id);
             root.AddComponent<NetComponent, IPEndPoint, NetworkProtocol>(startSceneConfig.InnerIPPort, NetworkProtocol.UDP);

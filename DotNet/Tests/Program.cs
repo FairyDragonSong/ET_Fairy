@@ -15,6 +15,7 @@ internal static class Program
         ("登录 IP 与账号爆破限流", TestLoginRateLimit),
         ("角色快照保留地图与坐标", TestRoleSnapshot),
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
+        ("商业模式启动配置门禁", TestProductionStartupValidation),
         ("登录与持久化安全架构回归", TestSourceGuards),
     ];
 
@@ -137,6 +138,45 @@ internal static class Program
         Assert(shutdown.IsCompleted && !shutdown.IsSuccessful, "shutdown failure was hidden");
     }
 
+    private static void TestProductionStartupValidation()
+    {
+        DatabaseConnectionSettings secureDatabase = new(
+            "mongodb://game:secret@db1:27017,db2:27017/?tls=true&replicaSet=rs0&retryWrites=true",
+            "ET_PROD",
+            true);
+        ProductionStartupValidator.ValidateRealm(new Options { Develop = 0 }, secureDatabase);
+
+        AssertThrows(
+            () => ProductionStartupValidator.ValidateRealm(
+                new Options { Develop = 0, AccountAutoRegister = 1 },
+                secureDatabase),
+            "production auto registration was accepted");
+        AssertThrows(
+            () => ProductionStartupValidator.ValidateRealm(
+                new Options { Develop = 0, PasswordLoginEnabled = 1 },
+                secureDatabase),
+            "password login without secure transport assertion was accepted");
+        AssertThrows(
+            () => ProductionStartupValidator.ValidateRealm(
+                new Options { Develop = 0 },
+                new DatabaseConnectionSettings("mongodb://db1:27017/?tls=true&replicaSet=rs0", "ET", true)),
+            "unauthenticated production MongoDB was accepted");
+        AssertThrows(
+            () => ProductionStartupValidator.ValidateRealm(
+                new Options { Develop = 0 },
+                new DatabaseConnectionSettings("mongodb://game:secret@db1:27017/?replicaSet=rs0", "ET", true)),
+            "non-TLS production MongoDB was accepted");
+        AssertThrows(
+            () => ProductionStartupValidator.ValidateRealm(
+                new Options { Develop = 0 },
+                new DatabaseConnectionSettings("mongodb://game:secret@db1:27017/?tls=true", "ET", true)),
+            "standalone production MongoDB was accepted");
+
+        ProductionStartupValidator.ValidateRealm(
+            new Options { Develop = 1, AccountAutoRegister = 1, PasswordLoginEnabled = 1 },
+            new DatabaseConnectionSettings("mongodb://127.0.0.1", "ET_DEV", false));
+    }
+
     private static void TestSourceGuards()
     {
         string root = FindRepositoryRoot();
@@ -150,11 +190,17 @@ internal static class Program
         string enterMap = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/C2G_EnterMapHandler.cs");
         string keyHandler = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/R2G_GetLoginKeyHandler.cs");
         string passwordAuthenticator = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/Authentication/PasswordAccountAuthenticator.cs");
+        string realmInit = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/FiberInit_Realm.cs");
+        string serverStartup = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/EntryEvent2_InitServer.cs");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
         Assert(keyHandler.Contains(".Issue(request.Account)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key reverted to non-cryptographic random");
         Assert(passwordAuthenticator.Contains("PasswordHasher.SimulateVerification(request.Credential)"), "unknown-account timing equalization removed");
+        Assert(passwordAuthenticator.Contains("PasswordLoginEnabled != 1"), "password provider fail-closed gate removed");
+        Assert(realmInit.IndexOf("ProductionStartupValidator.ValidateRealm", StringComparison.Ordinal) <
+               realmInit.IndexOf("DatabaseMigration.Apply", StringComparison.Ordinal), "production validation no longer runs before database startup");
+        Assert(serverStartup.Contains("StartupCoordinator.Instance.MarkFailed()"), "required Fiber startup failures no longer terminate the process");
         Assert(gateLogin.Contains("CoroutineLockType.PlayerSession") && gateLogin.Contains("BindSession(player, session)"), "duplicate-login serialization or session binding removed");
         Assert(gateLogin.Contains("DetachOldSession(player)") && gateLogin.Contains("ApplyRoleSnapshot(player"), "old-session eviction or persisted snapshot reload removed");
         Assert(sessionLifecycle.Contains("playerSessionComponent.Session != self.GetParent<Session>()") && sessionLifecycle.Contains("PlayerOfflineComponent"), "old-session protection or reconnect retention removed");
@@ -189,5 +235,18 @@ internal static class Program
         {
             throw new InvalidOperationException(message);
         }
+    }
+
+    private static void AssertThrows(Action action, string message)
+    {
+        try
+        {
+            action();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+        throw new InvalidOperationException(message);
     }
 }

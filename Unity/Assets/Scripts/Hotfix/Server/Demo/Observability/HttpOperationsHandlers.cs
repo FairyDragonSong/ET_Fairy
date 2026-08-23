@@ -19,7 +19,8 @@ namespace ET.Server
     {
         public async ETTask Handle(Scene scene, HttpListenerContext context)
         {
-            bool ready = !ShutdownCoordinator.Instance.IsRequested &&
+            bool ready = StartupCoordinator.Instance.IsReady &&
+                    !ShutdownCoordinator.Instance.IsRequested &&
                     StartSceneConfigCategory.Instance.Realms.Count > 0 &&
                     StartSceneConfigCategory.Instance.Routers.Count > 0;
             context.Response.StatusCode = ready ? (int)HttpStatusCode.OK : (int)HttpStatusCode.ServiceUnavailable;

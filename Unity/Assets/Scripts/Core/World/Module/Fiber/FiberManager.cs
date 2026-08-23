@@ -92,6 +92,7 @@ namespace ET
                     catch (Exception e)
                     {
                         Log.Error($"init fiber fail: {sceneType} {e}");
+                        tcs.SetException(e);
                     }
                 });
 

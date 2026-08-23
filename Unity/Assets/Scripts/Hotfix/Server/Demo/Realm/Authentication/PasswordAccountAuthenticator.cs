@@ -8,6 +8,13 @@ namespace ET.Server
     {
         public async ETTask<AccountAuthenticationResult> Authenticate(Scene root, AccountAuthenticationRequest request)
         {
+            if (Options.Instance.PasswordLoginEnabled != 1)
+            {
+                return AccountAuthenticationResult.Failure(
+                    ErrorCore.ERR_AuthenticationProviderDisabled,
+                    "当前未开放账号密码登录");
+            }
+
             if (!AccountInputValidator.TryNormalizeLoginName(request.Subject, out string loginName) ||
                 !AccountInputValidator.IsPasswordValid(request.Credential))
             {

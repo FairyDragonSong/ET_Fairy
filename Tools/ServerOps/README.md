@@ -2,6 +2,18 @@
 
 本目录只保存不含凭据的操作脚本。MongoDB URI 必须通过当前进程的 `ET_MONGO_URI` 环境变量注入。
 
+## 登录与生产启动模式
+
+本地试用账号密码登录必须显式开启开发模式：
+
+```powershell
+.\App.exe --Develop=1 --PasswordLoginEnabled=1 --AccountAutoRegister=1
+```
+
+商业模式（`--Develop=0`）默认关闭密码登录，并要求 MongoDB URI 来自环境变量且同时具备认证、有效 TLS、Replica Set/SRV/负载均衡部署。按区可使用 `ET_MONGO_URI_ZONE_1`、`ET_MONGO_DATABASE_ZONE_1`；未按区配置时使用 `ET_MONGO_URI`、`ET_MONGO_DATABASE`。
+
+只有完整客户端链路已经通过 WSS/TLS 等方式加密时，才可同时设置 `--PasswordLoginEnabled=1 --PasswordLoginTransportSecure=1`。该参数是部署方安全确认，不会自动给 UDP/KCP 增加加密；原生 UDP 登录不得把它设置为 1。生产凭据应由 Secret Manager 注入，不应写入仓库、启动脚本或日志。
+
 ## 备份
 
 ```powershell

@@ -72,6 +72,7 @@
         public const int ERR_LoginRateLimited = 200105;
         public const int ERR_RoleStorageUnavailable = 200106;
         public const int ERR_PlayerStateConflict = 200107;
+        public const int ERR_AuthenticationProviderDisabled = 200108;
 
         public static bool IsRpcNeedThrowException(int error)
         {

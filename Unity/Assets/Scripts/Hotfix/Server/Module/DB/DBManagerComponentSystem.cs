@@ -13,13 +13,16 @@ namespace ET.Server
                 return dbComponent;
             }
 
-            StartZoneConfig startZoneConfig = StartZoneConfigCategory.Instance.Get(zone);
-            if (startZoneConfig.DBConnection == "")
+            DatabaseConnectionSettings settings = DatabaseConnectionResolver.Resolve(zone);
+            if (settings.ConnectionString == "")
             {
                 throw new Exception($"zone: {zone} not found mongo connect string");
             }
 
-            dbComponent = self.AddChildWithId<DBComponent, string, string>(zone, startZoneConfig.DBConnection, startZoneConfig.DBName);
+            dbComponent = self.AddChildWithId<DBComponent, string, string>(
+                zone,
+                settings.ConnectionString,
+                settings.DatabaseName);
             return dbComponent;
         }
     }

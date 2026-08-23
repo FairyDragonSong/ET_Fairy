@@ -52,6 +52,13 @@ namespace ET
                     Log.Error(e);
                 }
 
+                if (StartupCoordinator.Instance?.IsFailed == true)
+                {
+                    Log.Error("server startup failed; process exits with code 3");
+                    Environment.ExitCode = 3;
+                    break;
+                }
+
                 ShutdownCoordinator shutdown = ShutdownCoordinator.Instance;
                 if (shutdown == null || !shutdown.IsRequested)
                 {
