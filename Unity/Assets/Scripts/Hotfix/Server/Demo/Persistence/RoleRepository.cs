@@ -54,7 +54,7 @@ namespace ET.Server
                     List<Account> accounts = await database.Query<Account>(accountLockKey, account => account.LoginName == loginName);
                     if (accounts.Count != 1)
                     {
-                        Log.Error($"role load account count invalid: {loginName} count: {accounts.Count}");
+                        Log.Error($"role load account count invalid: accountKey: {accountLockKey} count: {accounts.Count}");
                         return RoleLoadResult.Failure("角色服务暂时不可用");
                     }
 
@@ -67,7 +67,7 @@ namespace ET.Server
                     Role role = await database.Query<Role>(account.DefaultRoleId);
                     if (role == null || role.AccountId != account.Id)
                     {
-                        Log.Error($"default role missing or owner mismatch: account: {loginName} roleId: {account.DefaultRoleId}");
+                        Log.Error($"default role missing or owner mismatch: accountId: {account.Id} roleId: {account.DefaultRoleId}");
                         return RoleLoadResult.Failure("角色服务暂时不可用");
                     }
 
@@ -77,7 +77,7 @@ namespace ET.Server
                 }
                 catch (Exception e)
                 {
-                    Log.Error($"role load storage error: {loginName}\n{e}");
+                    Log.Error($"role load storage error: accountKey: {accountLockKey}\n{e}");
                     return RoleLoadResult.Failure("角色服务暂时不可用");
                 }
             }

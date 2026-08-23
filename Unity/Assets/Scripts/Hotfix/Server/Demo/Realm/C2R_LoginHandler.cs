@@ -20,7 +20,7 @@ namespace ET.Server
 				response.Error = ErrorCore.ERR_LoginRateLimited;
 				response.Message = "登录请求过于频繁，请稍后重试";
 				OperationalMetrics.Instance.RecordLoginFailure();
-				Log.Warning($"event=login_rejected trace_id={traceId} reason=rate_limited ip={ipAddress} retry_after_ms={retryAfterMilliseconds}");
+				Log.Warning($"event=login_rejected trace_id={traceId} reason=rate_limited ip_key={ipAddress.GetLongHashCode()} retry_after_ms={retryAfterMilliseconds}");
 				return;
 			}
 

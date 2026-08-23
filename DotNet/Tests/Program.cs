@@ -10,6 +10,7 @@ internal static class Program
         ("账号输入规范化与密码边界", TestAccountInput),
         ("PBKDF2 哈希、随机盐与错误密码", TestPasswordHashing),
         ("Gate Key 只能消费一次", TestOneTimeGateKey),
+        ("Gate Key 使用密码学随机源", TestSecureGateKey),
         ("外网消息与字节限流", TestTrafficLimit),
         ("登录 IP 与账号爆破限流", TestLoginRateLimit),
         ("角色快照保留地图与坐标", TestRoleSnapshot),
@@ -90,6 +91,17 @@ internal static class Program
         Assert(!traffic.TryConsume(11), "byte limit not enforced");
     }
 
+    private static void TestSecureGateKey()
+    {
+        HashSet<long> keys = [];
+        for (int i = 0; i < 1000; ++i)
+        {
+            long key = GateSessionKeyComponentSystem.GenerateSecureKey();
+            Assert(key >= 0, "secure Gate key was outside protocol range");
+            Assert(keys.Add(key), "secure Gate key collision in sample");
+        }
+    }
+
     private static void TestRoleSnapshot()
     {
         RoleSnapshot role = new(1001, "角色", "Map2", new float3(1.25f, 2.5f, -3.75f));
@@ -136,9 +148,13 @@ internal static class Program
         string sessionLifecycle = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/SessionPlayerComponentSystem.cs");
         string roleRepository = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/RoleRepository.cs");
         string enterMap = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/C2G_EnterMapHandler.cs");
+        string keyHandler = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/R2G_GetLoginKeyHandler.cs");
+        string passwordAuthenticator = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/Authentication/PasswordAccountAuthenticator.cs");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
+        Assert(keyHandler.Contains(".Issue(request.Account)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key reverted to non-cryptographic random");
+        Assert(passwordAuthenticator.Contains("PasswordHasher.SimulateVerification(request.Credential)"), "unknown-account timing equalization removed");
         Assert(gateLogin.Contains("CoroutineLockType.PlayerSession") && gateLogin.Contains("BindSession(player, session)"), "duplicate-login serialization or session binding removed");
         Assert(gateLogin.Contains("DetachOldSession(player)") && gateLogin.Contains("ApplyRoleSnapshot(player"), "old-session eviction or persisted snapshot reload removed");
         Assert(sessionLifecycle.Contains("playerSessionComponent.Session != self.GetParent<Session>()") && sessionLifecycle.Contains("PlayerOfflineComponent"), "old-session protection or reconnect retention removed");

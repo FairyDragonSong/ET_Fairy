@@ -9,6 +9,26 @@
             self.TimeoutRemoveKey(key).Coroutine();
         }
 
+        public static long Issue(this GateSessionKeyComponent self, string account)
+        {
+            long key;
+            do
+            {
+                key = GenerateSecureKey();
+            }
+            while (key == 0 || self.sessionKey.ContainsKey(key));
+
+            self.Add(key, account);
+            return key;
+        }
+
+        public static long GenerateSecureKey()
+        {
+            System.Span<byte> bytes = stackalloc byte[sizeof(long)];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+            return System.BitConverter.ToInt64(bytes) & long.MaxValue;
+        }
+
         /// <summary>
         /// 消费一次性登录 Key。无论后续登录流程是否成功，同一个 Key 都不能再次使用。
         /// Gate Fiber 内的消息按顺序执行，因此查询和删除在同一执行上下文中完成。

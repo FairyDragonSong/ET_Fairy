@@ -23,7 +23,7 @@ namespace ET.Server
                     List<Account> accounts = await database.Query<Account>(accountLockKey, account => account.LoginName == loginName);
                     if (accounts.Count > 1)
                     {
-                        Log.Error($"duplicate account records: {loginName} count: {accounts.Count}");
+                        Log.Error($"duplicate account records: accountKey: {accountLockKey} count: {accounts.Count}");
                         return AccountAuthenticationResult.Failure(
                             ErrorCore.ERR_AccountStorageUnavailable,
                             "账号服务暂时不可用");
@@ -33,6 +33,7 @@ namespace ET.Server
                     {
                         if (Options.Instance.AccountAutoRegister != 1)
                         {
+                            PasswordHasher.SimulateVerification(request.Credential);
                             return InvalidCredentials();
                         }
 
@@ -42,7 +43,9 @@ namespace ET.Server
                     Account account = accounts[0];
                     if (account.Status != AccountStatus.Active)
                     {
-                        return AccountAuthenticationResult.Failure(ErrorCore.ERR_AccountDisabled, "账号不可用");
+                        PasswordHasher.SimulateVerification(request.Credential);
+                        Log.Warning($"event=login_rejected reason=account_disabled account_id={account.Id}");
+                        return InvalidCredentials();
                     }
 
                     if (!PasswordHasher.Verify(
@@ -61,7 +64,7 @@ namespace ET.Server
                 }
                 catch (Exception e)
                 {
-                    Log.Error($"account authentication storage error: {loginName}\n{e}");
+                    Log.Error($"account authentication storage error: accountKey: {accountLockKey}\n{e}");
                     return AccountAuthenticationResult.Failure(
                         ErrorCore.ERR_AccountStorageUnavailable,
                         "账号服务暂时不可用");
@@ -92,7 +95,7 @@ namespace ET.Server
                 account.LastLoginTime = now;
 
                 await database.Save(loginName.GetLongHashCode(), account);
-                Log.Info($"password account registered: {loginName} id: {account.Id}");
+                Log.Info($"event=password_account_registered account_id={account.Id}");
                 return AccountAuthenticationResult.Success(loginName);
             }
             finally

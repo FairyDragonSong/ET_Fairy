@@ -76,6 +76,7 @@ namespace ET.Server
                 string.IsNullOrEmpty(saltText) ||
                 string.IsNullOrEmpty(hashText))
             {
+                SimulateVerification(password);
                 return false;
             }
 
@@ -88,6 +89,7 @@ namespace ET.Server
             }
             catch (FormatException)
             {
+                SimulateVerification(password);
                 return false;
             }
 
@@ -95,6 +97,7 @@ namespace ET.Server
             {
                 CryptographicOperations.ZeroMemory(salt);
                 CryptographicOperations.ZeroMemory(expectedHash);
+                SimulateVerification(password);
                 return false;
             }
 
@@ -118,6 +121,31 @@ namespace ET.Server
                 if (actualHash != null)
                 {
                     CryptographicOperations.ZeroMemory(actualHash);
+                }
+            }
+        }
+
+        public static void SimulateVerification(string password)
+        {
+            byte[] passwordBytes = Encoding.UTF8.GetBytes(password ?? string.Empty);
+            byte[] salt = new byte[SaltSize];
+            byte[] hash = null;
+            try
+            {
+                hash = Rfc2898DeriveBytes.Pbkdf2(
+                    passwordBytes,
+                    salt,
+                    DefaultIterations,
+                    HashAlgorithmName.SHA256,
+                    HashSize);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(passwordBytes);
+                CryptographicOperations.ZeroMemory(salt);
+                if (hash != null)
+                {
+                    CryptographicOperations.ZeroMemory(hash);
                 }
             }
         }
