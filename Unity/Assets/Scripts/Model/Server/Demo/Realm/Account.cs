@@ -31,5 +31,7 @@ namespace ET.Server
         public long CreateTime { get; set; }
 
         public long LastLoginTime { get; set; }
+
+        public long DefaultRoleId { get; set; }
     }
 }

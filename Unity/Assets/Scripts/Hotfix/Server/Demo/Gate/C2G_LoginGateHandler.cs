@@ -23,7 +23,21 @@ namespace ET.Server
             Player player = playerComponent.GetByAccount(account);
             if (player == null)
             {
-                player = playerComponent.AddChild<Player, string>(account);
+                RoleLoadResult roleLoadResult = await RoleRepository.LoadOrCreate(root, account);
+                if (!roleLoadResult.IsSuccess)
+                {
+                    response.Error = roleLoadResult.Error;
+                    response.Message = roleLoadResult.Message;
+                    return;
+                }
+
+                RoleSnapshot role = roleLoadResult.Role;
+                player = playerComponent.AddChildWithId<Player, string>(role.Id, account);
+                player.RoleName = role.Name;
+                player.LastMapName = role.MapName;
+                player.PositionX = role.Position.x;
+                player.PositionY = role.Position.y;
+                player.PositionZ = role.Position.z;
                 playerComponent.Add(player);
                 PlayerSessionComponent playerSessionComponent = player.AddComponent<PlayerSessionComponent>();
                 playerSessionComponent.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.GateSession);
@@ -37,9 +51,10 @@ namespace ET.Server
             }
             else
             {
+                player.RemoveComponent<PlayerOfflineComponent>();
                 // 判断是否在战斗
                 PlayerRoomComponent playerRoomComponent = player.GetComponent<PlayerRoomComponent>();
-                if (playerRoomComponent.RoomActorId != default)
+                if (playerRoomComponent != null && playerRoomComponent.RoomActorId != default)
                 {
                     CheckRoom(player, session).Coroutine();
                 }

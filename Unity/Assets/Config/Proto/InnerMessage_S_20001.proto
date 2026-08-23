@@ -147,9 +147,17 @@ message G2R_GetLoginKey // IResponse
 	int64 GateId = 5;
 }
 
-message G2M_SessionDisconnect // ILocationMessage
+// ResponseType M2G_SessionDisconnect
+message G2M_SessionDisconnect // ILocationRequest
 {
 	int32 RpcId = 1;
+}
+
+message M2G_SessionDisconnect // ILocationResponse
+{
+	int32 RpcId = 1;
+	int32 Error = 2;
+	string Message = 3;
 }
 
 message ObjectQueryResponse // IResponse

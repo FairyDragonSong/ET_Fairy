@@ -70,6 +70,7 @@
         public const int ERR_AccountDisabled = 200103;
         public const int ERR_AccountStorageUnavailable = 200104;
         public const int ERR_LoginRateLimited = 200105;
+        public const int ERR_RoleStorageUnavailable = 200106;
 
         public static bool IsRpcNeedThrowException(int error)
         {

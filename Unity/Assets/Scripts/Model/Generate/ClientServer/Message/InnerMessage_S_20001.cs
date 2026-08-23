@@ -666,7 +666,8 @@ namespace ET
 
     [MemoryPackable]
     [Message(InnerMessage.G2M_SessionDisconnect)]
-    public partial class G2M_SessionDisconnect : MessageObject, ILocationMessage
+    [ResponseType(nameof(M2G_SessionDisconnect))]
+    public partial class G2M_SessionDisconnect : MessageObject, ILocationRequest
     {
         public static G2M_SessionDisconnect Create(bool isFromPool = false)
         {
@@ -684,6 +685,39 @@ namespace ET
             }
 
             this.RpcId = default;
+
+            ObjectPool.Instance.Recycle(this);
+        }
+    }
+
+    [MemoryPackable]
+    [Message(InnerMessage.M2G_SessionDisconnect)]
+    public partial class M2G_SessionDisconnect : MessageObject, ILocationResponse
+    {
+        public static M2G_SessionDisconnect Create(bool isFromPool = false)
+        {
+            return ObjectPool.Instance.Fetch(typeof(M2G_SessionDisconnect), isFromPool) as M2G_SessionDisconnect;
+        }
+
+        [MemoryPackOrder(0)]
+        public int RpcId { get; set; }
+
+        [MemoryPackOrder(1)]
+        public int Error { get; set; }
+
+        [MemoryPackOrder(2)]
+        public string Message { get; set; }
+
+        public override void Dispose()
+        {
+            if (!this.IsFromPool)
+            {
+                return;
+            }
+
+            this.RpcId = default;
+            this.Error = default;
+            this.Message = default;
 
             ObjectPool.Instance.Recycle(this);
         }
@@ -819,8 +853,9 @@ namespace ET
         public const ushort R2G_GetLoginKey = 20019;
         public const ushort G2R_GetLoginKey = 20020;
         public const ushort G2M_SessionDisconnect = 20021;
-        public const ushort ObjectQueryResponse = 20022;
-        public const ushort M2M_UnitTransferRequest = 20023;
-        public const ushort M2M_UnitTransferResponse = 20024;
+        public const ushort M2G_SessionDisconnect = 20022;
+        public const ushort ObjectQueryResponse = 20023;
+        public const ushort M2M_UnitTransferRequest = 20024;
+        public const ushort M2M_UnitTransferResponse = 20025;
     }
 }

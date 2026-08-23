@@ -14,9 +14,14 @@
 			Scene scene = gateMapComponent.Scene;
 			
 			// 这里可以从DB中加载Unit
-			Unit unit = UnitFactory.Create(scene, player.Id, UnitType.Player);
+			Unit unit = UnitFactory.Create(
+				scene,
+				player.Id,
+				UnitType.Player,
+				new Unity.Mathematics.float3(player.PositionX, player.PositionY, player.PositionZ));
 			
-			StartSceneConfig startSceneConfig = StartSceneConfigCategory.Instance.GetBySceneName(session.Zone(), "Map1");
+			string mapName = string.IsNullOrEmpty(player.LastMapName) ? "Map1" : player.LastMapName;
+			StartSceneConfig startSceneConfig = StartSceneConfigCategory.Instance.GetBySceneName(session.Zone(), mapName);
 			response.MyId = player.Id;
 
 			// 等到一帧的最后面再传送，先让G2C_EnterMap返回，否则传送消息可能比G2C_EnterMap还早
