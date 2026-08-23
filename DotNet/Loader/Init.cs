@@ -25,6 +25,7 @@ namespace ET
                 ETTask.ExceptionHandler += Log.Error;
                 World.Instance.AddSingleton<TimeInfo>();
                 World.Instance.AddSingleton<FiberManager>();
+                World.Instance.AddSingleton<ShutdownCoordinator>();
 
                 World.Instance.AddSingleton<CodeLoader>();
             }

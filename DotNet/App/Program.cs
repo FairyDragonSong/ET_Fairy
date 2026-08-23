@@ -19,6 +19,26 @@ namespace ET
             Init init = new();
             init.Start();
             
+            int shutdownTimeoutSeconds = Math.Max(1, Options.Instance.ShutdownTimeoutSeconds);
+            System.Diagnostics.Stopwatch shutdownTimer = null;
+            Console.CancelKeyPress += (_, eventArgs) =>
+            {
+                eventArgs.Cancel = true;
+                ShutdownCoordinator.Instance?.Request();
+            };
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => ShutdownCoordinator.Instance?.Request();
+            System.Runtime.InteropServices.PosixSignalRegistration sigtermRegistration = null;
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            {
+                sigtermRegistration = System.Runtime.InteropServices.PosixSignalRegistration.Create(
+                    System.Runtime.InteropServices.PosixSignal.SIGTERM,
+                    context =>
+                    {
+                        context.Cancel = true;
+                        ShutdownCoordinator.Instance?.Request();
+                    });
+            }
+
             while (true)
             {
                 Thread.Sleep(1);
@@ -31,7 +51,28 @@ namespace ET
                 {
                     Log.Error(e);
                 }
+
+                ShutdownCoordinator shutdown = ShutdownCoordinator.Instance;
+                if (shutdown == null || !shutdown.IsRequested)
+                {
+                    continue;
+                }
+
+                shutdownTimer ??= System.Diagnostics.Stopwatch.StartNew();
+                if (shutdown.IsCompleted || shutdownTimer.Elapsed >= TimeSpan.FromSeconds(shutdownTimeoutSeconds))
+                {
+                    if (!shutdown.IsSuccessful)
+                    {
+                        Log.Error($"graceful shutdown incomplete: completed={shutdown.CompletedCount}, " +
+                                  $"participants={shutdown.ParticipantCount}, elapsedMs={shutdownTimer.ElapsedMilliseconds}");
+                        Environment.ExitCode = 2;
+                    }
+                    break;
+                }
             }
+
+            World.Instance.Dispose();
+            sigtermRegistration?.Dispose();
         }
     }
 }

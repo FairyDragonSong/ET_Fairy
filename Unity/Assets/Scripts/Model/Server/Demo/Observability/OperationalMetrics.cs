@@ -63,6 +63,7 @@ namespace ET.Server
             Append(text, "et_login_failures_total", Interlocked.Read(ref this.loginFailures));
             Append(text, "et_role_save_successes_total", Interlocked.Read(ref this.roleSaveSuccesses));
             Append(text, "et_role_save_failures_total", Interlocked.Read(ref this.roleSaveFailures));
+            Append(text, "et_shutdown_requested", ShutdownCoordinator.Instance.IsRequested ? 1 : 0);
             return text.ToString();
         }
 

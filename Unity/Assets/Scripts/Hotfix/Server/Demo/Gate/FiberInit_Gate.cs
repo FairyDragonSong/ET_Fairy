@@ -12,6 +12,7 @@ namespace ET.Server
             root.AddComponent<TimerComponent>();
             root.AddComponent<CoroutineLockComponent>();
             root.AddComponent<DBManagerComponent>();
+            root.AddComponent<GracefulShutdownComponent>();
             root.AddComponent<ProcessInnerSender>();
             root.AddComponent<MessageSender>();
             root.AddComponent<PlayerComponent>();

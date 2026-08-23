@@ -61,5 +61,8 @@ namespace ET
 
         [Option("OuterBytesLimit", Required = false, Default = 262144, HelpText = "max outer bytes per session per second")]
         public int OuterBytesLimit { get; set; }
+
+        [Option("ShutdownTimeoutSeconds", Required = false, Default = 15, HelpText = "maximum graceful shutdown drain time in seconds")]
+        public int ShutdownTimeoutSeconds { get; set; }
     }
 }
