@@ -42,3 +42,19 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin&tls=tr
 ```
 
 审计检查重复登录名、一个账号多个角色、账号缺少默认角色和孤儿角色；发现问题时退出码非 0。脚本只读，不会自动删除或修复业务数据。
+
+## 014 预发布验收
+
+在干净工作区和真实预发布 MongoDB Replica Set 上执行统一验收入口。目标恢复库必须与源库不同、以 `_DR_TEST` 结尾，并再次精确确认；脚本会覆盖该隔离恢复库，禁止填写生产库名。
+
+```powershell
+$env:ET_MONGO_URI = "mongodb://user:password@node1,node2,node3/?authSource=admin&tls=true&replicaSet=rs0&retryWrites=true"
+.\Test-Preproduction.ps1 `
+  -Database ET_PREPRODUCTION `
+  -RestoreDatabase ET_PREPRODUCTION_DR_TEST `
+  -ConfirmRestoreDatabase ET_PREPRODUCTION_DR_TEST `
+  -BackupOutputDirectory D:\Backups\ET-Acceptance `
+  -EvidenceOutputDirectory D:\Evidence\ET-Acceptance
+```
+
+该入口执行第一阶段回归、MongoDB 认证/拓扑/会话检查、事务提交与回滚、索引及账号角色审计、备份、隔离恢复和恢复数据核对。证据 JSON 不包含连接串。MongoDB 切主、网络故障、多客户端重连和负载测试依赖具体部署平台，必须另外执行并附证据，不能由此脚本的 PASS 替代。
