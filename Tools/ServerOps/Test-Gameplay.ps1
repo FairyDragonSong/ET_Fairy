@@ -117,6 +117,8 @@ try {
             if($RecoverCrashJournal){
                 $previousRecoveryContext=$env:ET_CRASH_RECOVERY_CONTEXT;$previousRecoveryFault=$env:ET_CRASH_RECOVERY_TEST_FAIL;$previousRecoveryCheck=$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK
                 $peer=$null;$peerStarted=$false
+                $recoveryRoleCreated=$false
+                $previousRecoveryUser=$env:ET_RECOVERY_TEST_USER;$previousRecoveryPassword=$env:ET_RECOVERY_TEST_PASSWORD;$previousRecoveryCleanup=$env:ET_RECOVERY_ROLE_CLEANUP
                 try {
                     # Reuse the same process/config/ports with a fresh OS process and cohort.
                     $peerInfo=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
@@ -160,29 +162,38 @@ try {
                     Wait-RecoveryPeerMarker 'GAMEPLAY_PROGRESS online=20 sustained_ms='
                     $peerBefore=Read-RecoveryPeerJournal 'Snapshot-GameplayJournal.js'
                     if(-not $peerBefore.Passed -or $peer.HasExited -or @($peerBefore.GateInstanceIds|Where-Object{$_ -in $beforeCrash.GateInstanceIds}).Count){throw 'Replacement live instance isolation not established'}
+                    $env:ET_RECOVERY_TEST_USER='et_recovery_test_'+[Guid]::NewGuid().ToString('N')
+                    $env:ET_RECOVERY_TEST_PASSWORD=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+                    $env:ET_RECOVERY_ROLE_CLEANUP='0';$recoveryRoleCreated=$true
+                    & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalRecoveryDatabaseRole.js"
+                    if($LASTEXITCODE -ne 0){throw 'Recovery identity provisioning failed'}
+                    $permissionOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Test-RecoveryDatabasePermissions.js"
+                    if($LASTEXITCODE -ne 0){throw 'Recovery database permission verification failed'}
+                    $permissions=($permissionOutput -join "`n")|ConvertFrom-Json
+                    if(-not $permissions.Passed){throw 'Recovery permission evidence missing'}
                     $env:ET_CRASH_RECOVERY_CONTEXT=([ordered]@{OperationId=[Guid]::NewGuid().ToString('N');HostProcessId=$ownedPid;
                         ExitObserved=$crashExitObserved;ProcessStartedAtUtc=$startedAt;ExitObservedAtUtc=$observedAt;
                         BeforeSha256=$beforeCrash.SnapshotSha256;GateInstanceIds=@($beforeCrash.GateInstanceIds)}|ConvertTo-Json -Compress)
                     $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='0';$env:ET_CRASH_RECOVERY_TEST_FAIL='1'
-                    $injectedOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
+                    $injectedOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
                     if($LASTEXITCODE -eq 0 -or ($injectedOutput -join "`n") -notmatch 'Injected recovery audit failure'){throw 'Expected injected recovery audit failure was not observed'}
                     $env:ET_CRASH_RECOVERY_TEST_FAIL='0';$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='1'
-                    $rollbackOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    $rollbackOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
                     if($LASTEXITCODE -ne 0){throw 'Recovery transaction rollback verification failed'}
                     $rollback=($rollbackOutput -join "`n")|ConvertFrom-Json
                     if(-not $rollback.Passed -or -not $rollback.RolledBack){throw 'Recovery rollback evidence missing'}
                     $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='0'
-                    $recoveryOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    $recoveryOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
                     if($LASTEXITCODE -ne 0){throw 'Local crash recovery failed'}
                     $recovery=($recoveryOutput -join "`n")|ConvertFrom-Json
                     $originalRecoveryContext=$env:ET_CRASH_RECOVERY_CONTEXT
                     $collision=$originalRecoveryContext|ConvertFrom-Json
                     $collision.BeforeSha256=('0'*64)
                     $env:ET_CRASH_RECOVERY_CONTEXT=$collision|ConvertTo-Json -Compress
-                    $collisionOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
+                    $collisionOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
                     if($LASTEXITCODE -eq 0 -or ($collisionOutput -join "`n") -notmatch 'Recovery operation id collision'){throw 'Expected recovery operation collision rejection was not observed'}
                     $env:ET_CRASH_RECOVERY_CONTEXT=$originalRecoveryContext
-                    $replayOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    $replayOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
                     if($LASTEXITCODE -ne 0){throw 'Local crash recovery replay failed'}
                     $replay=($replayOutput -join "`n")|ConvertFrom-Json
                     if(-not $recovery.Passed -or $recovery.Replay -or -not $replay.Passed -or -not $replay.Replay){throw 'Recovery idempotency verification failed'}
@@ -195,6 +206,7 @@ try {
                     $peerFinal=Read-RecoveryPeerJournal 'Verify-GameplayJournal.js'
                     if(-not $peerFinal.Passed){throw 'Replacement final journal failed'}
                     $crashReport.LiveReplacementIsolationVerified=$true
+                    $crashReport.RestrictedRecoveryIdentityVerified=$true;$crashReport.RecoveryPermissions=$permissions
                     $crashReport.Replacement=[ordered]@{HostProcessId=$peer.Id;Cohort=$peerCohort;SameAccounts=$true;Before=$peerBefore;After=$peerAfter;Final=$peerFinal;ExitCode=$peer.ExitCode}
                     $crashReport.RecoveryVerified=$true;$crashReport.Recovery=$recovery;$crashReport.Replay=$replay;$crashReport.Rollback=$rollback;$crashReport.CollisionRejected=$true
                     $crashReport.CompletedAtUtc=[DateTime]::UtcNow.ToString('O')
@@ -203,9 +215,21 @@ try {
                     Write-Host "GAMEPLAY_PASS local-crash-recovery-interrupted-and-idempotent records=$Clients"
                     Write-Host "Recovery evidence: $recoveryPath"
                 } finally {
-                    if($peerStarted -and -not $peer.HasExited){$peer.Kill($true);$peer.WaitForExit()}
-                    if($null -ne $peer){$peer.Dispose()}
-                    $env:ET_CRASH_RECOVERY_CONTEXT=$previousRecoveryContext;$env:ET_CRASH_RECOVERY_TEST_FAIL=$previousRecoveryFault;$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK=$previousRecoveryCheck
+                    try {
+                        if($peerStarted -and -not $peer.HasExited){$peer.Kill($true);if(-not $peer.WaitForExit(10000)){throw 'Replacement cleanup exit not observed'}}
+                        if($null -ne $peer){$peer.Dispose()}
+                    } finally {
+                        try {
+                            if($recoveryRoleCreated){
+                                $env:ET_RECOVERY_ROLE_CLEANUP='1'
+                                & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalRecoveryDatabaseRole.js"
+                                if($LASTEXITCODE -ne 0){throw 'Recovery identity cleanup failed'}
+                            }
+                        } finally {
+                            $env:ET_RECOVERY_TEST_USER=$previousRecoveryUser;$env:ET_RECOVERY_TEST_PASSWORD=$previousRecoveryPassword;$env:ET_RECOVERY_ROLE_CLEANUP=$previousRecoveryCleanup
+                            $env:ET_CRASH_RECOVERY_CONTEXT=$previousRecoveryContext;$env:ET_CRASH_RECOVERY_TEST_FAIL=$previousRecoveryFault;$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK=$previousRecoveryCheck
+                        }
+                    }
                 }
             }
             Write-Host "GAMEPLAY_PASS owned-process-crash-journal records=$Clients recovery_verified=$($crashReport.RecoveryVerified.ToString().ToLowerInvariant())"
