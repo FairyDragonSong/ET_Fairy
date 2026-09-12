@@ -31,6 +31,7 @@ internal static class Program
             LoginRateWindowSeconds = 60,
         });
         World.Instance.AddSingleton<TimeInfo>();
+        World.Instance.AddSingleton<ObjectPool>();
 
         int failures = 0;
         foreach ((string name, Action run) in Tests)
@@ -76,9 +77,20 @@ internal static class Program
     private static void TestOneTimeGateKey()
     {
         GateSessionKeyComponent keys = new();
-        keys.sessionKey[42] = "player_01";
-        Assert(keys.Take(42) == "player_01", "first key consumption failed");
+        keys.sessionKey[42] = new GateLoginTicket("player_01", 7);
+        GateLoginTicket ticket = keys.Take(42);
+        Assert(ticket.Account == "player_01" && ticket.StateVersion == 7, "first key consumption or account version failed");
         Assert(keys.Take(42) == null, "replayed key was accepted");
+        R2G_GetLoginKey message = new() { Account = "player_01", AccountStateVersion = 7, RpcId = 12 };
+        byte[] bytes = MemoryPack.MemoryPackSerializer.Serialize(message);
+        R2G_GetLoginKey copy = MemoryPack.MemoryPackSerializer.Deserialize<R2G_GetLoginKey>(bytes);
+        Assert(copy.AccountStateVersion == 7 && copy.Account == message.Account && copy.RpcId == 12, "internal ticket version serialization failed");
+        R2G_GetLoginKey pooled = R2G_GetLoginKey.Create(true);
+        pooled.AccountStateVersion = 99;
+        pooled.Account = "previous";
+        pooled.Dispose();
+        using R2G_GetLoginKey reused = R2G_GetLoginKey.Create(true);
+        Assert(reused.AccountStateVersion == 0 && reused.Account == null, "pooled authentication data was retained");
     }
 
     private static void TestTrafficLimit()
@@ -214,7 +226,9 @@ internal static class Program
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
-        Assert(keyHandler.Contains(".Issue(request.Account)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key reverted to non-cryptographic random");
+        Assert(keyHandler.Contains(".Issue(request.Account, request.AccountStateVersion)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key lost version binding or cryptographic randomness");
+        Assert(gateLogin.Contains("accounts[0].StateVersion != ticket.StateVersion") &&
+               realmLogin.Contains("r2GGetLoginKey.AccountStateVersion = authenticationResult.StateVersion"), "authenticated version no longer reaches Gate validation");
         Assert(passwordAuthenticator.Contains("PasswordHasher.SimulateVerification(request.Credential)"), "unknown-account timing equalization removed");
         Assert(passwordAuthenticator.Contains("PasswordLoginEnabled != 1"), "password provider fail-closed gate removed");
         Assert(passwordAuthenticator.Contains("stored.Status == AccountStatus.Active") &&

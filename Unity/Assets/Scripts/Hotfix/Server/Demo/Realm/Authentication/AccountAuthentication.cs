@@ -36,23 +36,25 @@ namespace ET.Server
         public string Message { get; }
 
         public string LoginName { get; }
+        public long StateVersion { get; }
 
-        private AccountAuthenticationResult(bool isSuccess, int error, string message, string loginName)
+        private AccountAuthenticationResult(bool isSuccess, int error, string message, string loginName, long stateVersion)
         {
             this.IsSuccess = isSuccess;
             this.Error = error;
             this.Message = message;
             this.LoginName = loginName;
+            this.StateVersion = stateVersion;
         }
 
-        public static AccountAuthenticationResult Success(string loginName)
+        public static AccountAuthenticationResult Success(string loginName, long stateVersion)
         {
-            return new AccountAuthenticationResult(true, 0, string.Empty, loginName);
+            return new AccountAuthenticationResult(true, 0, string.Empty, loginName, stateVersion);
         }
 
         public static AccountAuthenticationResult Failure(int error, string message)
         {
-            return new AccountAuthenticationResult(false, error, message, string.Empty);
+            return new AccountAuthenticationResult(false, error, message, string.Empty, 0);
         }
     }
 

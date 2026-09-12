@@ -609,6 +609,9 @@ namespace ET
         [MemoryPackOrder(1)]
         public string Account { get; set; }
 
+        [MemoryPackOrder(2)]
+        public long AccountStateVersion { get; set; }
+
         public override void Dispose()
         {
             if (!this.IsFromPool)
@@ -618,6 +621,7 @@ namespace ET
 
             this.RpcId = default;
             this.Account = default;
+            this.AccountStateVersion = default;
 
             ObjectPool.Instance.Recycle(this);
         }

@@ -9,15 +9,15 @@ namespace ET.Server
         protected override async ETTask Run(Session session, C2G_LoginGate request, G2C_LoginGate response)
         {
             Scene root = session.Root();
-            string account = root.GetComponent<GateSessionKeyComponent>().Take(request.Key);
-            if (account == null)
+            GateLoginTicket ticket = root.GetComponent<GateSessionKeyComponent>().Take(request.Key);
+            if (ticket == null)
             {
                 response.Error = ErrorCore.ERR_ConnectGateKeyError;
                 response.Message = "Gate key验证失败!";
                 return;
             }
             
-            session.RemoveComponent<SessionAcceptTimeoutComponent>();
+            string account = ticket.Account;
 
             PlayerComponent playerComponent = root.GetComponent<PlayerComponent>();
             using (await root.GetComponent<CoroutineLockComponent>().Wait(
@@ -29,7 +29,7 @@ namespace ET.Server
                 {
                     DBComponent database = root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
                     var accounts = await database.Query<Account>(account.GetLongHashCode(), stored => stored.LoginName == account);
-                    if (accounts.Count != 1 || accounts[0].Status != AccountStatus.Active)
+                    if (accounts.Count != 1 || accounts[0].Status != AccountStatus.Active || accounts[0].StateVersion != ticket.StateVersion)
                     {
                         response.Error = ErrorCore.ERR_InvalidAccountOrPassword;
                         response.Message = "登录凭据已失效";
@@ -106,6 +106,7 @@ namespace ET.Server
                     }
                 }
 
+                session.RemoveComponent<SessionAcceptTimeoutComponent>();
                 response.PlayerId = player.Id;
             }
         }

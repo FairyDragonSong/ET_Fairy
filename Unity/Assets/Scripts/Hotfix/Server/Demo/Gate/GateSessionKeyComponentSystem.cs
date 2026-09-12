@@ -3,13 +3,13 @@
     [FriendOf(typeof(GateSessionKeyComponent))]
     public static partial class GateSessionKeyComponentSystem
     {
-        public static void Add(this GateSessionKeyComponent self, long key, string account)
+        public static void Add(this GateSessionKeyComponent self, long key, string account, long stateVersion)
         {
-            self.sessionKey.Add(key, account);
+            self.sessionKey.Add(key, new GateLoginTicket(account, stateVersion));
             self.TimeoutRemoveKey(key).Coroutine();
         }
 
-        public static long Issue(this GateSessionKeyComponent self, string account)
+        public static long Issue(this GateSessionKeyComponent self, string account, long stateVersion)
         {
             long key;
             do
@@ -18,7 +18,7 @@
             }
             while (key == 0 || self.sessionKey.ContainsKey(key));
 
-            self.Add(key, account);
+            self.Add(key, account, stateVersion);
             return key;
         }
 
@@ -33,9 +33,9 @@
         /// 消费一次性登录 Key。无论后续登录流程是否成功，同一个 Key 都不能再次使用。
         /// Gate Fiber 内的消息按顺序执行，因此查询和删除在同一执行上下文中完成。
         /// </summary>
-        public static string Take(this GateSessionKeyComponent self, long key)
+        public static GateLoginTicket Take(this GateSessionKeyComponent self, long key)
         {
-            if (!self.sessionKey.TryGetValue(key, out string account))
+            if (!self.sessionKey.TryGetValue(key, out GateLoginTicket account))
             {
                 return null;
             }

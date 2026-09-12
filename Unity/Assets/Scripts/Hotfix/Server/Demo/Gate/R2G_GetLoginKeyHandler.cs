@@ -8,7 +8,7 @@ namespace ET.Server
 	{
 		protected override async ETTask Run(Scene scene, R2G_GetLoginKey request, G2R_GetLoginKey response)
 		{
-			long key = scene.GetComponent<GateSessionKeyComponent>().Issue(request.Account);
+			long key = scene.GetComponent<GateSessionKeyComponent>().Issue(request.Account, request.AccountStateVersion);
 			response.Key = key;
 			response.GateId = scene.Id;
 			await ETTask.CompletedTask;

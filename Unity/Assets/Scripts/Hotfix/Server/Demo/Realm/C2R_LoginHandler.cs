@@ -43,6 +43,7 @@ namespace ET.Server
 			// 向gate请求一个key,客户端可以拿着这个key连接gate
 			R2G_GetLoginKey r2GGetLoginKey = R2G_GetLoginKey.Create();
 			r2GGetLoginKey.Account = authenticationResult.LoginName;
+			r2GGetLoginKey.AccountStateVersion = authenticationResult.StateVersion;
 			RpcCallResult<G2R_GetLoginKey> loginKeyResult = await session.Root().CallService<G2R_GetLoginKey>(
 				ServiceAddress.From(config.ActorId), r2GGetLoginKey);
 			if (!loginKeyResult.IsSuccess)

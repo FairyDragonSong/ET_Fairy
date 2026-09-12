@@ -399,6 +399,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
         using R2C_Login key=await RealmLogin(net,realm,name,password);
         Check(key.Error==0,"Governance registration failed");
+        // Simulate an account created before StateVersion existed.
+        await accounts.UpdateOneAsync(a=>a.LoginName==name,Builders<Account>.Update.Unset(a=>a.StateVersion));
         try
         {
             var disabled=await accounts.UpdateOneAsync(a=>a.LoginName==name,Builders<Account>.Update.Set(a=>a.Status,AccountStatus.Disabled));
@@ -432,6 +434,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
         await parent.GetComponent<TimerComponent>().WaitAsync(1500);
         await Echo(session,801);
         await AuditTransactions(db,stored);
+        using Session staleKeySession=net.Create(NetworkHelper.ToIPEndPoint(again.Address));
+        using G2C_LoginGate staleKeyResult=await GateLogin(staleKeySession,again);
+        Check(staleKeyResult.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Unconsumed key survived disable-enable version changes");
+        Console.WriteLine("GAMEPLAY_PASS unconsumed-key-revoked-by-account-version");
         for(int i=0;i<100 && !session.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
         Check(session.IsDisposed,"Old session survived account state version changes");
         Console.WriteLine("GAMEPLAY_PASS old-session-revoked-after-disable-enable");

@@ -136,6 +136,7 @@ message R2G_GetLoginKey // IRequest
 {
 	int32 RpcId = 1;
 	string Account = 2;
+	int64 AccountStateVersion = 3;
 }
 
 message G2R_GetLoginKey // IResponse

@@ -67,13 +67,16 @@ namespace ET.Server
                         return InvalidCredentials();
                     }
 
-                    UpdateResult updated = await database.database.GetCollection<Account>(typeof(Account).FullName)
-                        .UpdateOneAsync(stored => stored.Id == account.Id && stored.Status == AccountStatus.Active &&
+                    FilterDefinition<Account> versionFilter = Builders<Account>.Filter.Eq(stored => stored.StateVersion, account.StateVersion);
+                    if (account.StateVersion == 0) versionFilter |= Builders<Account>.Filter.Exists(nameof(Account.StateVersion), false);
+                    var identityFilter = Builders<Account>.Filter.Where(stored => stored.Id == account.Id && stored.Status == AccountStatus.Active &&
                             stored.PasswordHash == account.PasswordHash && stored.PasswordSalt == account.PasswordSalt &&
-                            stored.PasswordIterations == account.PasswordIterations && stored.PasswordScheme == account.PasswordScheme,
+                            stored.PasswordIterations == account.PasswordIterations && stored.PasswordScheme == account.PasswordScheme);
+                    UpdateResult updated = await database.database.GetCollection<Account>(typeof(Account).FullName)
+                        .UpdateOneAsync(identityFilter & versionFilter,
                             Builders<Account>.Update.Max(stored => stored.LastLoginTime, TimeInfo.Instance.ServerNow()));
                     if (updated.MatchedCount != 1) return InvalidCredentials();
-                    return AccountAuthenticationResult.Success(account.LoginName);
+                    return AccountAuthenticationResult.Success(account.LoginName, account.StateVersion);
                 }
                 catch (Exception e)
                 {
@@ -109,7 +112,7 @@ namespace ET.Server
 
                 await database.Save(loginName.GetLongHashCode(), account);
                 Log.Info($"event=password_account_registered account_id={account.Id}");
-                return AccountAuthenticationResult.Success(loginName);
+                return AccountAuthenticationResult.Success(loginName, account.StateVersion);
             }
             finally
             {
