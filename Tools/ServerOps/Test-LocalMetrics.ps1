@@ -1,6 +1,14 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492,[switch]$Prometheus)
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492,[switch]$Prometheus,[switch]$Alertmanager)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
+if($Alertmanager){
+    $Prometheus=$true
+    foreach($auxPort in @(30910,30911)){
+        if($Port -eq $auxPort -or $PeerPort -eq $auxPort -or (Get-NetTCPConnection -LocalPort $auxPort -State Listen -ErrorAction SilentlyContinue)){throw 'Alert test ports unavailable'}
+    }
+    $amRoot="$EnvironmentRoot/alertmanager-0.34.0/alertmanager-0.34.0.windows-amd64"
+    if(-not(Test-Path "$amRoot/alertmanager.exe")){throw 'Run Install-LocalAlertmanager.ps1 first'}
+}
 if($Prometheus){
     if($Port -eq 30909 -or $PeerPort -eq 30909 -or (Get-NetTCPConnection -LocalPort 30909 -State Listen -ErrorAction SilentlyContinue)){throw 'Collector test port 30909 unavailable'}
     $promRoot="$EnvironmentRoot/prometheus-3.13.3/prometheus-3.13.3.windows-amd64"
@@ -22,6 +30,9 @@ $token=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::Get
 $process=$null
 $peer=$null
 $collector=$null
+$manager=$null
+$receiver=$null
+$alertTokenFile=Join-Path $fixture 'alert-token.txt'
 $peerTokenFile=Join-Path $fixture 'peer-token.txt'
 $peerToken=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 [IO.File]::WriteAllText($peerTokenFile,$peerToken)
@@ -75,6 +86,18 @@ function Wait-Prom([string]$Expression,[string]$Expected){
     }
     throw 'Collector query did not reach expected state'
 }
+function Wait-Notification([string]$Status){
+    for($attempt=0;$attempt -lt 80;$attempt++){
+        if($receiver.HasExited -or $manager.HasExited){throw 'Local notification process exited'}
+        $path=Join-Path $fixture 'received-alerts.jsonl'
+        if(Test-Path $path){
+            $events=@(Get-Content $path|ForEach-Object {$_|ConvertFrom-Json})
+            if(@($events|Where-Object {$_.Job -eq 'et-primary' -and $_.Status -eq $Status}).Count){return}
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    throw 'Expected webhook notification did not arrive'
+}
 try {
     $process=Start-TestProcess ([string]$Port) $tokenFile
     $deadline=[DateTime]::UtcNow.AddSeconds(20)
@@ -127,13 +150,37 @@ try {
     if((Counter $primaryBody 'et_startup_ready') -ne 1 -or (Counter $peerBody 'et_startup_ready') -ne 1){throw 'Both processes must be ready during the isolation test'}
     if((Counter $primaryBody 'et_http_requests_total') -le $beforePrimary -or (Counter $peerBody 'et_http_requests_total') -ne $beforePeer){throw 'Per-process counter isolation failed'}
     $checks.Add('two-ready-process-identities-credentials-and-counters-isolated')
+    if($Alertmanager){
+        [IO.File]::WriteAllText($alertTokenFile,[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)))
+        $receiverInfo=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
+        $receiverInfo.UseShellExecute=$false;$receiverInfo.CreateNoWindow=$true
+        $receiverInfo.RedirectStandardOutput=$true;$receiverInfo.RedirectStandardError=$true
+        foreach($argument in @('-NoProfile','-File',"$PSScriptRoot/Receive-LocalAlerts.ps1")){$receiverInfo.ArgumentList.Add($argument)}
+        $receiverInfo.Environment['ET_ALERT_TEST_DIRECTORY']=$fixture
+        $receiver=[Diagnostics.Process]::new();$receiver.StartInfo=$receiverInfo
+        if(-not $receiver.Start()){throw 'Receiver start failed'}
+        $receiverOutput=$receiver.StandardOutput.ReadToEndAsync();$receiverError=$receiver.StandardError.ReadToEndAsync()
+        $amConfig=Join-Path $fixture 'alertmanager.json'
+        @{route=@{receiver='local-test';group_by=@('alertname','job');group_wait='1s';group_interval='1s';repeat_interval='1m'};receivers=@(@{name='local-test';webhook_configs=@(@{url='http://127.0.0.1:30911/alerts';send_resolved=$true;http_config=@{authorization=@{type='Bearer';credentials_file=$alertTokenFile.Replace('\','/')}}})})}|ConvertTo-Json -Depth 12|Set-Content $amConfig
+        & "$amRoot/amtool.exe" check-config $amConfig
+        if($LASTEXITCODE -ne 0){throw 'Alertmanager config invalid'}
+        $managerInfo=[Diagnostics.ProcessStartInfo]::new("$amRoot/alertmanager.exe")
+        $managerInfo.UseShellExecute=$false;$managerInfo.CreateNoWindow=$true
+        $managerInfo.RedirectStandardOutput=$true;$managerInfo.RedirectStandardError=$true
+        foreach($argument in @("--config.file=$amConfig",'--web.listen-address=127.0.0.1:30910','--cluster.listen-address=',"--storage.path=$fixture/alertmanager-data")){$managerInfo.ArgumentList.Add($argument)}
+        $manager=[Diagnostics.Process]::new();$manager.StartInfo=$managerInfo
+        if(-not $manager.Start()){throw 'Alertmanager start failed'}
+        $managerOutput=$manager.StandardOutput.ReadToEndAsync();$managerError=$manager.StandardError.ReadToEndAsync()
+    }
     if($Prometheus){
         $jobs=@(
             @{job_name='et-primary';authorization=@{type='Bearer';credentials_file=$tokenFile.Replace('\','/')};static_configs=@(@{targets=@("127.0.0.1:$Port")})},
             @{job_name='et-peer';authorization=@{type='Bearer';credentials_file=$peerTokenFile.Replace('\','/')};static_configs=@(@{targets=@("127.0.0.1:$PeerPort")})}
         )
         $config=Join-Path $fixture 'prometheus.json'
-        @{global=@{scrape_interval='1s';scrape_timeout='500ms';evaluation_interval='1s'};rule_files=@("$PSScriptRoot/monitoring/et-local.rules.yml".Replace('\','/'));scrape_configs=$jobs}|ConvertTo-Json -Depth 10|Set-Content $config
+        $promConfig=@{global=@{scrape_interval='1s';scrape_timeout='500ms';evaluation_interval='1s'};rule_files=@("$PSScriptRoot/monitoring/et-local.rules.yml".Replace('\','/'));scrape_configs=$jobs}
+        if($Alertmanager){$promConfig.alerting=@{alertmanagers=@(@{static_configs=@(@{targets=@('127.0.0.1:30910')})})}}
+        $promConfig|ConvertTo-Json -Depth 10|Set-Content $config
         & "$promRoot/promtool.exe" check config $config
         if($LASTEXITCODE -ne 0){throw 'Collector config validation failed'}
         $collectorInfo=[Diagnostics.ProcessStartInfo]::new("$promRoot/prometheus.exe")
@@ -149,6 +196,11 @@ try {
         Wait-Prom 'et_process_id{job="et-peer"}' ([string]$peer.Id)
         if(@(Get-NetTCPConnection -LocalPort 30909 -State Listen|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Collector is not loopback-only'}
         $checks.Add('prometheus-two-authenticated-targets-and-identities')
+        if($Alertmanager){
+            $unauthorized=$client.PostAsync('http://127.0.0.1:30911/alerts',[Net.Http.StringContent]::new('{}')).GetAwaiter().GetResult()
+            try {if([int]$unauthorized.StatusCode -ne 401){throw 'Webhook receiver accepted missing credentials'}}finally{$unauthorized.Dispose()}
+            $checks.Add('webhook-receiver-rejects-unauthorized-post')
+        }
     }
     $address=Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.AddressState -eq 'Preferred'} | Select-Object -First 1 -ExpandProperty IPAddress
     if(-not $address){throw 'A local non-loopback address is required to verify legacy metrics isolation'}
@@ -165,11 +217,23 @@ try {
         Wait-Prom 'ALERTS{alertname="ETLocalTargetDown",job="et-primary",alertstate="firing"}' '1'
         Wait-Prom 'up{job="et-peer"}' '1'
         $checks.Add('prometheus-target-down-and-firing-with-peer-healthy')
+        if($Alertmanager){Wait-Notification 'firing';$checks.Add('alertmanager-firing-webhook-delivered')}
         $process=Start-TestProcess ([string]$Port) $tokenFile
         Wait-Prom 'up{job="et-primary"}' '1'
         Wait-Prom 'et_process_id{job="et-primary"}' ([string]$process.Id)
         Wait-Prom 'absent(ALERTS{alertname="ETLocalTargetDown",job="et-primary",alertstate="firing"})' '1'
         $checks.Add('prometheus-restarted-target-new-pid-and-alert-cleared')
+        if($Alertmanager){
+            Wait-Notification 'resolved'
+            $notifications=@(Get-Content (Join-Path $fixture 'received-alerts.jsonl')|ForEach-Object {$_|ConvertFrom-Json})
+            $resolved=$notifications|Where-Object {$_.Job -eq 'et-primary' -and $_.Status -eq 'resolved'}|Select-Object -First 1
+            $firing=$notifications|Where-Object {$_.Job -eq 'et-primary' -and $_.Status -eq 'firing' -and $_.Fingerprint -eq $resolved.Fingerprint}|Select-Object -First 1
+            if(-not $firing -or -not $resolved.Fingerprint -or [DateTimeOffset]$firing.ReceivedAtUtc -gt [DateTimeOffset]$resolved.ReceivedAtUtc){throw 'Recovery notification does not match the earlier firing alert'}
+            foreach($auxPort in @(30910,30911)){
+                if(@(Get-NetTCPConnection -LocalPort $auxPort -State Listen|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Notification process listener is not loopback-only'}
+            }
+            $checks.Add('alertmanager-resolved-webhook-delivered-loopback-only')
+        }
         $process.StandardInput.WriteLine('shutdown')
         if(-not $process.WaitForExit(12000) -or $process.ExitCode -ne 0){throw 'Recovered target shutdown failed'}
         $process.Dispose();$process=$null
@@ -206,13 +270,15 @@ try {
     if(-not $process.WaitForExit(12000) -or $process.ExitCode -ne 0){throw 'Default-disabled shutdown failed'}
     $process.Dispose();$process=$null
     $checks.Add('disabled-by-default')
-    [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Checks=@($checks);LocalCollectorVerified=[bool]$Prometheus;QueryEvidence=@($queryEvidence);ProductionMonitoringVerified=$false}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
+    [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Checks=@($checks);LocalCollectorVerified=[bool]$Prometheus;LocalNotificationVerified=[bool]$Alertmanager;QueryEvidence=@($queryEvidence);ProductionMonitoringVerified=$false}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
     foreach($check in $checks){Write-Host "PASS $check"}
 }finally{
     if($process){if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()};$process.Dispose()}
     if($peer){if(-not $peer.HasExited){$peer.Kill($true);$peer.WaitForExit()};$peer.Dispose()}
     if($collector){if(-not $collector.HasExited){$collector.Kill($true);$collector.WaitForExit()};$collector.Dispose()}
+    foreach($aux in @($manager,$receiver)){if($aux){if(-not $aux.HasExited){$aux.Kill($true);$aux.WaitForExit()};$aux.Dispose()}}
     $client.Dispose()
     if(Test-Path -LiteralPath $tokenFile){Remove-Item -LiteralPath $tokenFile -ErrorAction Stop}
     if(Test-Path -LiteralPath $peerTokenFile){Remove-Item -LiteralPath $peerTokenFile -ErrorAction Stop}
+    if(Test-Path -LiteralPath $alertTokenFile){Remove-Item -LiteralPath $alertTokenFile -ErrorAction Stop}
 }
