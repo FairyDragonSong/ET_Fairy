@@ -198,6 +198,8 @@ try {
         Wait-Prom 'et_process_id{job="et-peer"}' ([string]$peer.Id)
         Wait-Prom 'count(et_gate_login_handler_seconds_bucket{job="et-primary"})' '12'
         Wait-Prom 'et_gate_login_handler_seconds_count{job="et-primary"}' '0'
+        Wait-Prom 'et_fiber_message_queues{job="et-primary"} > bool 0' '1'
+        Wait-Prom 'et_fiber_messages_pending{job="et-primary"} >= bool et_fiber_messages_max_pending_per_queue{job="et-primary"}' '1'
         if(@(Get-NetTCPConnection -LocalPort 30909 -State Listen|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Collector is not loopback-only'}
         $checks.Add('prometheus-two-authenticated-targets-and-identities')
         if($Alertmanager){

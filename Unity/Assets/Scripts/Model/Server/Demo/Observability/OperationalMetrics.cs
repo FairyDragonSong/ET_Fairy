@@ -143,6 +143,13 @@ namespace ET.Server
             Process process = Process.GetCurrentProcess();
             StringBuilder text = new();
             Append(text, "et_process_id", process.Id);
+            var queues=MessageQueue.Instance?.GetSnapshot() ?? default;
+            text.Append("# TYPE et_fiber_message_queues gauge\n");
+            Append(text,"et_fiber_message_queues",queues.Queues);
+            text.Append("# TYPE et_fiber_messages_pending gauge\n");
+            Append(text,"et_fiber_messages_pending",queues.Pending);
+            text.Append("# TYPE et_fiber_messages_max_pending_per_queue gauge\n");
+            Append(text,"et_fiber_messages_max_pending_per_queue",queues.Maximum);
             Append(text, "et_config_process_id", Options.Instance.Process);
             Append(text, "et_process_start_time_seconds", this.startedAtUnixSeconds);
             Append(text, "et_process_uptime_seconds", Math.Max(0, now - this.startedAtUnixSeconds));

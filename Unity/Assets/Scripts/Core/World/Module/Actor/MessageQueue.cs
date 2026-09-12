@@ -19,6 +19,22 @@ namespace ET
         {
         }
 
+        // Weakly consistent, read-only process snapshot. Does not enumerate message payloads.
+        // Dequeued messages and coroutine-lock waiters are deliberately not included.
+        public (int Queues,long Pending,int Maximum) GetSnapshot()
+        {
+            int queues=0,maximum=0;
+            long pending=0;
+            foreach(var queue in this.messages.Values)
+            {
+                int count=queue.Count;
+                ++queues;
+                pending+=count;
+                if(count>maximum)maximum=count;
+            }
+            return (queues,pending,maximum);
+        }
+
         public bool Send(ActorId actorId, MessageObject messageObject)
         {
             return this.Send(actorId.Address, actorId, messageObject);

@@ -24,6 +24,7 @@ internal static class Program
         ("自助改密混合加密与有效期", TestSelfPasswordCipher),
         ("安全指标固定基数与并发计数", TestSecurityMetrics),
         ("处理耗时直方图边界与并发", TestHandlerLatency),
+        ("Fiber 投递队列积压快照", TestMessageQueueSnapshot),
     ];
 
     private static int Main()
@@ -390,7 +391,7 @@ internal static class Program
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change)_handler|role_save_(success|failure))_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+8,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+11,"Metric count changed unexpectedly");
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
@@ -424,6 +425,27 @@ internal static class Program
             catch(ArgumentOutOfRangeException){rejected=true;}
             Assert(rejected,"Invalid latency sample accepted");
         }
+    }
+
+    private static void TestMessageQueueSnapshot()
+    {
+        var queue=new MessageQueue();queue.Awake();
+        queue.AddQueue(100);queue.AddQueue(200);
+        var first=new ActorId(1,100,1);
+        var second=new ActorId(1,200,1);
+        Parallel.For(0,1000,_=>Assert(queue.Send(first,null),"Registered queue rejected message"));
+        for(int i=0;i<3;i++)Assert(queue.Send(second,null),"Second queue rejected message");
+        var snapshot=queue.GetSnapshot();
+        Assert(snapshot.Queues==2&&snapshot.Pending==1003&&snapshot.Maximum==1000,"Pending snapshot incorrect");
+        var batch=new List<MessageInfo>();queue.Fetch(100,10,batch);
+        Assert(batch.Count==10&&queue.GetSnapshot().Pending==993,"Fetched messages still counted as pending");
+        queue.RemoveQueue(200);
+        Assert(!queue.Send(second,null)&&queue.GetSnapshot().Pending==990&&queue.GetSnapshot().Queues==1,"Removed queue remains in snapshot");
+        int fetched=0;
+        Parallel.For(0,100,_=>{var items=new List<MessageInfo>();queue.Fetch(100,10,items);Interlocked.Add(ref fetched,items.Count);});
+        Assert(fetched==990&&queue.GetSnapshot().Pending==0&&queue.GetSnapshot().Maximum==0,"Concurrent fetch accounting incorrect");
+        queue.RemoveQueue(100);
+        Assert(queue.GetSnapshot().Queues==0,"Empty registry retained queues");
     }
 
     private static string Read(string root, string relativePath) =>
