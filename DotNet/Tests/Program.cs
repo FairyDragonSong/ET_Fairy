@@ -279,6 +279,9 @@ internal static class Program
 
     private static void TestAdminAuthorization()
     {
+        var limiter=new AccountAdminRateLimiter(2,60000);
+        Assert(limiter.TryAcquire(0)&&limiter.TryAcquire(1)&&!limiter.TryAcquire(59999),"Admin rate limit not enforced");
+        Assert(limiter.TryAcquire(60000)&&!limiter.TryAcquire(60000)&&limiter.TryAcquire(60001),"Admin rolling window recovery incorrect");
         using var rsa=System.Security.Cryptography.RSA.Create(3072);
         long now=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var identity=new AccountAdminOperator {Id="test-operator",PublicKeyPem=rsa.ExportSubjectPublicKeyInfoPem(),Database="test",DeploymentId="test-deployment",Zone=1,Actions=["disable"],ExpiresAt=now+3600};
