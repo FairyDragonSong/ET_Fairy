@@ -210,6 +210,7 @@ internal static class Program
         string serverStartup = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/EntryEvent2_InitServer.cs");
         string databaseAudit = Read(root, "Tools/ServerOps/Audit-Mongo.js");
         string messageLogger = Read(root, "Unity/Assets/Scripts/Model/Share/Module/Message/LogMsg.cs");
+        string sessionMonitor = Read(root, "DotNet/Hotfix/AccountSessionMonitorSystem.cs");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -221,6 +222,10 @@ internal static class Program
                passwordAuthenticator.Contains("Builders<Account>.Update.Max") &&
                !passwordAuthenticator.Contains("database.Save(accountLockKey, account)"), "login can overwrite concurrent account changes");
         Assert(gateLogin.Contains("accounts[0].Status != AccountStatus.Active"), "Gate no longer rechecks account state");
+        Assert(gateLogin.Contains("player.AccountStateVersion = accountStateVersion") &&
+               sessionMonitor.Contains("matches[0].StateVersion!=player.AccountStateVersion") &&
+               sessionMonitor.Contains("Session!=session") && sessionMonitor.Contains("now-player.AccountVerifiedAt>120000"),
+               "Account session version, connection ownership or lease protection removed");
         Assert(roleRepository.Contains("storedAccount.DefaultRoleId == 0") &&
                roleRepository.Contains("Builders<Account>.Update.Set") &&
                !roleRepository.Contains("accounts.ReplaceOneAsync") &&
@@ -228,7 +233,7 @@ internal static class Program
         Assert(realmInit.IndexOf("ProductionStartupValidator.ValidateRealm", StringComparison.Ordinal) <
                realmInit.IndexOf("DatabaseMigration.Apply", StringComparison.Ordinal), "production validation no longer runs before database startup");
         Assert(serverStartup.Contains("StartupCoordinator.Instance.MarkFailed()"), "required Fiber startup failures no longer terminate the process");
-        Assert(gateLogin.Contains("CoroutineLockType.PlayerSession") && gateLogin.Contains("BindSession(player, session)"), "duplicate-login serialization or session binding removed");
+        Assert(gateLogin.Contains("CoroutineLockType.PlayerSession") && gateLogin.Contains("BindSession(player, session, accountStateVersion)"), "duplicate-login serialization or session binding removed");
         Assert(gateLogin.Contains("DetachOldSession(player)") && gateLogin.Contains("ApplyRoleSnapshot(player"), "old-session eviction or persisted snapshot reload removed");
         Assert(sessionLifecycle.Contains("playerSessionComponent.Session != self.GetParent<Session>()") && sessionLifecycle.Contains("PlayerOfflineComponent"), "old-session protection or reconnect retention removed");
         Assert(sessionLifecycle.Contains("TryReleaseMapState") && sessionLifecycle.Contains("CoroutineLockType.PlayerSession"), "disconnect save and reconnect are no longer serialized");

@@ -21,9 +21,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
             if (Options.Instance.Develop != 1 || Environment.GetEnvironmentVariable("ET_MONGO_DATABASE") != "ET_LOCAL_GAMEPLAY")
                 throw new InvalidOperationException("Requires development mode and isolated ET_LOCAL_GAMEPLAY database");
             bool saveFailure=content.EndsWith(" save-failure",StringComparison.Ordinal);
+            bool leaseExpiry=content.EndsWith(" lease-expiry",StringComparison.Ordinal);
             if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
             else if(content.EndsWith(" baseline",StringComparison.Ordinal)) await Baseline(fiber.Root);
-            else await Execute(fiber.Root, content.EndsWith(" resume",StringComparison.Ordinal), content.EndsWith(" outage",StringComparison.Ordinal) || saveFailure, saveFailure);
+            else await Execute(fiber.Root, content.EndsWith(" resume",StringComparison.Ordinal), content.EndsWith(" outage",StringComparison.Ordinal) || saveFailure || leaseExpiry, saveFailure, leaseExpiry);
             Console.WriteLine("GAMEPLAY_RESULT PASS");
         }
         catch (Exception exception)
@@ -33,7 +34,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         finally { context.Parent.RemoveComponent<ModeContex>(); }
     }
 
-    private static async ETTask Execute(Scene parent,bool resume,bool outage,bool saveFailure)
+    private static async ETTask Execute(Scene parent,bool resume,bool outage,bool saveFailure,bool leaseExpiry)
     {
         long id = IdGenerater.Instance.GenerateId();
         using Scene client = EntitySceneFactory.CreateScene(parent, id, id, SceneType.BenchmarkClient, "AcceptanceClient");
@@ -85,6 +86,23 @@ public sealed class GameplayAcceptance : IConsoleHandler
             long savesBefore=Metric("et_role_save_successes_total");
             Console.WriteLine("GAMEPLAY_OUTAGE_STOP");
             await WaitForMarker(client,Path.Combine(directory,"outage-stopped"));
+            if(leaseExpiry)
+            {
+                Stopwatch lease=Stopwatch.StartNew();
+                for(int i=0;i<140 && !first.IsDisposed;i++)
+                {
+                    if(i%15==0)Console.WriteLine($"GAMEPLAY_OUTAGE_PROGRESS lease_seconds={i}");
+                    try { await Echo(first,900+i); }
+                    catch(Exception) when(first.IsDisposed) { break; }
+                    await client.GetComponent<TimerComponent>().WaitAsync(1000);
+                }
+                Check(first.IsDisposed,"Unverifiable account session did not expire");
+                Check(lease.Elapsed.TotalSeconds>=100,"Session expired before the short-outage grace period");
+                Console.WriteLine($"GAMEPLAY_PASS unverifiable-session-lease-expired elapsed_ms={lease.ElapsedMilliseconds}");
+                Console.WriteLine("GAMEPLAY_OUTAGE_RESTORE");
+                await WaitForMarker(client,Path.Combine(directory,"outage-restored"));
+                return;
+            }
             for(int i=0;i<(saveFailure?35:95);i++)
             {
                 await Echo(first,400+i);
@@ -409,7 +427,37 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var stored=await accounts.Find(a=>a.LoginName==name).SingleAsync();
         Check(stored.DefaultRoleId==login.PlayerId && stored.Status==AccountStatus.Active,"Authentication overwrote role association");
         Console.WriteLine("GAMEPLAY_PASS reenabled-fresh-login-and-role-link-preserved");
+        using G2C_EnterMap initialMap=(G2C_EnterMap)await session.Call(C2G_EnterMap.Create(),10000);
+        Check(initialMap.Error==0,"Governance map entry failed");
+        await parent.GetComponent<TimerComponent>().WaitAsync(1500);
+        await Echo(session,801);
         await AuditTransactions(db,stored);
+        for(int i=0;i<100 && !session.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
+        Check(session.IsDisposed,"Old session survived account state version changes");
+        Console.WriteLine("GAMEPLAY_PASS old-session-revoked-after-disable-enable");
+        using R2C_Login newKey=await RealmLogin(net,realm,name,password);
+        Check(newKey.Error==0,"Post-revocation authentication failed");
+        using Session newSession=net.Create(NetworkHelper.ToIPEndPoint(newKey.Address));
+        using G2C_LoginGate newLogin=await GateLogin(newSession,newKey);
+        Check(newLogin.Error==0 && newLogin.PlayerId==login.PlayerId,"Post-revocation role identity lost");
+        using G2C_EnterMap newMap=(G2C_EnterMap)await newSession.Call(C2G_EnterMap.Create(),10000);
+        Check(newMap.Error==0,"Post-revocation map entry failed");
+        await parent.GetComponent<TimerComponent>().WaitAsync(6500);
+        Check(!newSession.IsDisposed,"Current account version session was incorrectly revoked");
+        await Echo(newSession,802);
+        Console.WriteLine("GAMEPLAY_PASS fresh-session-retained-and-map-restored");
+        var active=await accounts.Find(a=>a.Id==stored.Id).SingleAsync();
+        await AccountStateStore.Change(db,active.Id,active.StateVersion,AccountStatus.Disabled,"local-test","test-online-disable",Guid.NewGuid().ToString("N"));
+        try
+        {
+            for(int i=0;i<100 && !newSession.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
+            Check(newSession.IsDisposed,"Disabled online account remained connected");
+            Console.WriteLine("GAMEPLAY_PASS disabled-online-session-disconnected");
+        }
+        finally
+        {
+            await AccountStateStore.Change(db,active.Id,active.StateVersion+1,AccountStatus.Active,"local-test","test-enable",Guid.NewGuid().ToString("N"));
+        }
     }
 
     private static async ETTask AuditTransactions(DBComponent db,Account account)

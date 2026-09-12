@@ -15,6 +15,7 @@
         public const int SessionAcceptTimeout = 203;
         public const int RolePeriodicSave = 204;
         public const int PlayerOffline = 205;
+        public const int AccountSessionCheck = 206;
         
         public const int RoomUpdate = 301;
     }

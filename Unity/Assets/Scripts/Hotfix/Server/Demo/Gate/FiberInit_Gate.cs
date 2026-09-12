@@ -16,6 +16,9 @@ namespace ET.Server
             root.AddComponent<ProcessInnerSender>();
             root.AddComponent<MessageSender>();
             root.AddComponent<PlayerComponent>();
+#if DOTNET
+            root.AddComponent<AccountSessionMonitor>();
+#endif
             root.AddComponent<GateSessionKeyComponent>();
             root.AddComponent<LocationProxyComponent>();
             root.AddComponent<MessageLocationSenderComponent>();

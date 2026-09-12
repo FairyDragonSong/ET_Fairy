@@ -24,6 +24,7 @@ namespace ET.Server
                        CoroutineLockType.PlayerSession,
                        account.GetLongHashCode()))
             {
+                long accountStateVersion;
                 try
                 {
                     DBComponent database = root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
@@ -34,6 +35,7 @@ namespace ET.Server
                         response.Message = "登录凭据已失效";
                         return;
                     }
+                    accountStateVersion = accounts[0].StateVersion;
                 }
                 catch (Exception)
                 {
@@ -63,7 +65,7 @@ namespace ET.Server
                     player.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.UnOrderedMessage);
                     await player.AddLocation(LocationType.Player);
 
-                    BindSession(player, session);
+                    BindSession(player, session, accountStateVersion);
                 }
                 else
                 {
@@ -78,7 +80,7 @@ namespace ET.Server
                     PlayerRoomComponent playerRoomComponent = player.GetComponent<PlayerRoomComponent>();
                     if (playerRoomComponent != null && playerRoomComponent.RoomActorId != default)
                     {
-                        BindSession(player, session);
+                        BindSession(player, session, accountStateVersion);
                         await CheckRoom(player, session);
                     }
                     else
@@ -100,7 +102,7 @@ namespace ET.Server
                         }
 
                         ApplyRoleSnapshot(player, roleLoadResult.Role);
-                        BindSession(player, session);
+                        BindSession(player, session, accountStateVersion);
                     }
                 }
 
@@ -138,8 +140,10 @@ namespace ET.Server
             player.PositionZ = role.Position.z;
         }
 
-        private static void BindSession(Player player, Session session)
+        private static void BindSession(Player player, Session session, long accountStateVersion)
         {
+            player.AccountStateVersion = accountStateVersion;
+            player.AccountVerifiedAt = TimeInfo.Instance.ServerNow();
             PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();
             Session previousSession = playerSessionComponent.Session;
             SessionPlayerComponent sessionPlayerComponent = session.GetComponent<SessionPlayerComponent>() ??

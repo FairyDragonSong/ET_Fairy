@@ -16,6 +16,8 @@
         public float PositionZ { get; set; }
         // Connection lifecycle state, reset only after old Map state has been released.
         public bool MapEntered { get; set; }
+        public long AccountStateVersion { get; set; }
+        public long AccountVerifiedAt { get; set; }
     }
 
     [ComponentOf(typeof(Player))]
