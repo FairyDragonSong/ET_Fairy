@@ -413,6 +413,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(login.Error==0,"Self credential Gate failed");
             using R2C_Login pending=await RealmLogin(net,realm,name,oldPassword);
             var before=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+            await SelfPasswordTransactions(db,name,oldPassword,before.StateVersion);
             string operation=Guid.NewGuid().ToString("N");
             string Envelope(string account,string old)=>SelfPasswordCipher.Encrypt(new SelfPasswordChange
             {LoginName=account,OldPassword=old,NewPassword=newPassword,OperationId=operation,ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240},rsa.ExportSubjectPublicKeyInfoPem());
@@ -460,6 +461,58 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var request=C2G_ChangePassword.Create();request.Envelope=envelope;
         using var response=(G2C_ChangePassword)await session.Call(request,10000);
         return response.Error;
+    }
+
+    private static async ETTask SelfPasswordTransactions(DBComponent db,string name,string password,long version)
+    {
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        var audits=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountStateStore.AuditCollection);
+        var request=new SelfPasswordChange {LoginName=name,OldPassword=password,NewPassword=password+"rollback",OperationId=Guid.NewGuid().ToString("N")};
+        bool injected=false;
+        try
+        {
+            await UserPasswordStore.Change(db,request,version,new string('A',64),()=>{injected=true;throw new InvalidOperationException("Injected pre-audit failure");});
+            throw new InvalidOperationException("Rollback injection did not reject");
+        }
+        catch(InvalidOperationException) when(injected) { }
+        Check(injected,"Rollback injection did not execute");
+        var unchanged=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        Check(unchanged.StateVersion==version&&PasswordHasher.Verify(password,unchanged.PasswordScheme,unchanged.PasswordSalt,unchanged.PasswordHash,unchanged.PasswordIterations),"Aborted self change altered credentials");
+        Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",request.OperationId))==0,"Aborted self change retained audit");
+        // Competing operations use an isolated account, so the public protocol fixture stays unchanged.
+        string competing=name+"race";
+        var hash=PasswordHasher.Hash(password);
+        using var account=db.Scene().AddChild<Account>();
+        account.LoginName=competing;account.Status=AccountStatus.Active;account.PasswordScheme=hash.Scheme;
+        account.PasswordSalt=hash.Salt;account.PasswordHash=hash.Hash;account.PasswordIterations=hash.Iterations;
+        await accounts.InsertOneAsync(account);
+        var first=new SelfPasswordChange {LoginName=competing,OldPassword=password,NewPassword=password+"first",OperationId=Guid.NewGuid().ToString("N")};
+        var second=new SelfPasswordChange {LoginName=competing,OldPassword=password,NewPassword=password+"second",OperationId=Guid.NewGuid().ToString("N")};
+        var bothRead=new System.Threading.Tasks.TaskCompletionSource<bool>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        int readers=0;
+        System.Threading.Tasks.Task BeforeUpdate()
+        {
+            if(System.Threading.Interlocked.Increment(ref readers)==2)bothRead.TrySetResult(true);
+            return bothRead.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        var outcomes=await System.Threading.Tasks.Task.WhenAll(AttemptSelfChange(db,first,BeforeUpdate),AttemptSelfChange(db,second,BeforeUpdate));
+        Check(readers>=2,"Both transactions did not reach the same pre-update version");
+        Check(outcomes[0]!=outcomes[1],"Competing same-version changes did not have exactly one winner");
+        var winner=outcomes[0]?first:second;
+        var saved=await accounts.Find(a=>a.Id==account.Id).SingleAsync();
+        Check(saved.StateVersion==1&&PasswordHasher.Verify(winner.NewPassword,saved.PasswordScheme,saved.PasswordSalt,saved.PasswordHash,saved.PasswordIterations),"Competing change stored wrong credentials");
+        Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",account.Id))==1,"Competing change audit count incorrect");
+        bool collision=false;
+        try {await UserPasswordStore.Change(db,winner,1,new string('B',64));}
+        catch(AccountStateConflictException){collision=true;}
+        Check(collision,"Operation ID accepted a different digest");
+        Console.WriteLine("GAMEPLAY_PASS self-password-transaction-rollback-same-version-competition-digest-collision");
+    }
+
+    private static async System.Threading.Tasks.Task<bool> AttemptSelfChange(DBComponent db,SelfPasswordChange request,Func<System.Threading.Tasks.Task> beforeUpdate)
+    {
+        try {await UserPasswordStore.Change(db,request,0,new string('A',64),beforeUpdate:beforeUpdate);return true;}
+        catch(AccountStateConflictException){return false;}
     }
 
     private static async ETTask Credentials(Scene parent)

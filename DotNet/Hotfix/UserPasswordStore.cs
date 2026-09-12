@@ -7,8 +7,14 @@ namespace ET.Server;
 [FriendOf(typeof(DBComponent))]
 internal static class UserPasswordStore
 {
-    internal static async ETTask Change(DBComponent db,SelfPasswordChange request,long expectedVersion,string digest)
+    internal static async ETTask Change(DBComponent db,SelfPasswordChange request,long expectedVersion,string digest,Action beforeAudit=null,
+        Func<System.Threading.Tasks.Task> beforeUpdate=null)
     {
+        if(request==null||expectedVersion<0||expectedVersion==long.MaxValue||!Guid.TryParseExact(request.OperationId,"N",out _)||
+            !AccountInputValidator.TryNormalizeLoginName(request.LoginName,out string normalized)||normalized!=request.LoginName||
+            !AccountInputValidator.IsPasswordValid(request.OldPassword)||!AccountInputValidator.IsPasswordValid(request.NewPassword)||
+            request.OldPassword==request.NewPassword||string.IsNullOrEmpty(digest)||digest.Length!=64)
+            throw new AccountStateConflictException();
         var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
         var audits=db.database.GetCollection<BsonDocument>(AccountStateStore.AuditCollection);
         using var session=await db.mongoClient.StartSessionAsync();
@@ -26,11 +32,13 @@ internal static class UserPasswordStore
             if(account.StateVersion!=expectedVersion||expectedVersion==long.MaxValue||
                 !PasswordHasher.Verify(request.OldPassword,account.PasswordScheme,account.PasswordSalt,account.PasswordHash,account.PasswordIterations))
                 throw new AccountStateConflictException();
+            if(beforeUpdate!=null)await beforeUpdate();
             var hash=PasswordHasher.Hash(request.NewPassword);
             var result=await accounts.UpdateOneAsync(transaction,a=>a.Id==account.Id,
                 Builders<Account>.Update.Set(a=>a.PasswordHash,hash.Hash).Set(a=>a.PasswordSalt,hash.Salt)
                     .Set(a=>a.PasswordScheme,hash.Scheme).Set(a=>a.PasswordIterations,hash.Iterations).Set(a=>a.StateVersion,expectedVersion+1),cancellationToken:cancellation);
             if(result.MatchedCount!=1)throw new AccountStateConflictException();
+            beforeAudit?.Invoke();
             await audits.InsertOneAsync(transaction,new BsonDocument
             {
                 {"_id",request.OperationId},{"AccountId",account.Id},{"Action","user-change-password"},
