@@ -25,8 +25,20 @@ $info.Environment['ET_GAMEPLAY_DURATION']=[string]$DurationSeconds
 foreach($name in @($info.Environment.Keys)){if($name -match '^ET_MONGO_(URI|DATABASE)_ZONE_'){$info.Environment.Remove($name)|Out-Null}}
 $process=[Diagnostics.Process]::new();$process.StartInfo=$info
 $lines=[Collections.Generic.List[string]]::new()
+$selfRoleCreated=$false
+$processStarted=$false
 try {
+    if($SelfCredentials){
+        $env:ET_SELF_TEST_USER='et_self_test_'+[Guid]::NewGuid().ToString('N')
+        $env:ET_SELF_TEST_PASSWORD=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+        $env:ET_SELF_TEST_CLEANUP='0'
+        $selfRoleCreated=$true
+        & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalSelfPasswordRole.js"
+        if($LASTEXITCODE -ne 0){throw 'Self-password test role provisioning failed'}
+        $info.Environment['ET_SELF_TEST_MONGO_URI']="mongodb://$($env:ET_SELF_TEST_USER):$($env:ET_SELF_TEST_PASSWORD)@localhost:27101,localhost:27102,localhost:27103/ET_LOCAL_GAMEPLAY?authSource=ET_LOCAL_GAMEPLAY&replicaSet=et-local-rs&tls=true&retryWrites=true"
+    }
     if(-not $process.Start()){throw 'Start failed'}
+    $processStarted=$true
     $errors=$process.StandardError.ReadToEndAsync()
     Start-Sleep -Seconds 8
     if($process.HasExited){throw "Server exited before test: $($process.ExitCode)"}
@@ -66,8 +78,15 @@ try {
     $failure | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/gameplay-failed-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
     throw
 } finally {
-    if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()}
+    if($processStarted -and -not $process.HasExited){$process.Kill($true);$process.WaitForExit()}
     $process.Dispose()
+    if($selfRoleCreated){
+        try {
+            $env:ET_SELF_TEST_CLEANUP='1'
+            & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalSelfPasswordRole.js"
+            if($LASTEXITCODE -ne 0){throw 'Temporary self-password role cleanup failed'}
+        } finally {Remove-Item Env:ET_SELF_TEST_USER,Env:ET_SELF_TEST_PASSWORD,Env:ET_SELF_TEST_CLEANUP -ErrorAction SilentlyContinue}
+    }
     if($Outage){& "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot}
 }
 if(-not $Resume -and -not $Outage -and -not $Baseline -and -not $Governance -and -not $Credentials -and -not $SelfCredentials){

@@ -479,6 +479,22 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var unchanged=await accounts.Find(a=>a.LoginName==name).SingleAsync();
         Check(unchanged.StateVersion==version&&PasswordHasher.Verify(password,unchanged.PasswordScheme,unchanged.PasswordSalt,unchanged.PasswordHash,unchanged.PasswordIterations),"Aborted self change altered credentials");
         Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",request.OperationId))==0,"Aborted self change retained audit");
+        string limitedUri=Environment.GetEnvironmentVariable("ET_SELF_TEST_MONGO_URI");
+        Check(!string.IsNullOrWhiteSpace(limitedUri),"Audit-denied database identity missing");
+        long scopeId=IdGenerater.Instance.GenerateId();
+        using(var scope=EntitySceneFactory.CreateScene(db.Scene(),scopeId,scopeId,SceneType.Main,"SelfPasswordAuditDenied"))
+        {
+            var restricted=scope.AddComponent<DBManagerComponent>().AddChildWithId<DBComponent,string,string>(1,limitedUri,"ET_LOCAL_GAMEPLAY");
+            bool updated=false,denied=false;
+            try {await UserPasswordStore.Change(restricted,request,version,new string('A',64),()=>updated=true);}
+            catch(MongoCommandException exception) when(exception.Code==13){denied=true;}
+            catch(MongoWriteException exception) when(exception.WriteError?.Code==13){denied=true;}
+            Check(updated&&denied,"Audit insert must fail with code 13 after account update");
+        }
+        var afterDenied=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        Check(afterDenied.StateVersion==version&&afterDenied.PasswordHash==unchanged.PasswordHash&&afterDenied.PasswordSalt==unchanged.PasswordSalt,"Denied audit left changed credentials");
+        Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",request.OperationId))==0,"Denied audit retained partial evidence");
+        Console.WriteLine("GAMEPLAY_PASS self-password-real-audit-permission-denied-code13-rollback");
         // Competing operations use an isolated account, so the public protocol fixture stays unchanged.
         string competing=name+"race";
         var hash=PasswordHasher.Hash(password);
