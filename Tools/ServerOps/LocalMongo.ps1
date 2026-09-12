@@ -96,16 +96,24 @@ $password = (Get-Content "$localRoot\secrets.json" -Raw | ConvertFrom-Json).Pass
 $env:ET_MONGO_URI = "mongodb://etlocal:$password@localhost:27101,localhost:27102,localhost:27103/?authSource=admin&tls=true&replicaSet=et-local-rs&retryWrites=true"
 $env:ET_MONGO_DATABASE = 'ET_LOCAL_ACCEPTANCE'
 if ($Action -eq 'Stop') {
-    & $shell --nodb --quiet --eval 'for (const port of [27103,27102,27101]) { try { const uri=process.env.ET_MONGO_URI.replace("localhost:27101,localhost:27102,localhost:27103", "localhost:"+port).replace("replicaSet=et-local-rs", "directConnection=true") + "&serverSelectionTimeoutMS=2000&tlsCAFile=" + encodeURIComponent(process.env.ET_MONGO_CA_FILE); new Mongo(uri).getDB("admin").runCommand({shutdown:1,force:true}); } catch(e) { if (!/network|closed|ECONNREFUSED|connection|timed out/i.test(e.message)) throw e; } }'
+    & $shell --nodb --quiet --eval 'for (const port of [27103,27102,27101]) { try { const uri=process.env.ET_MONGO_URI.replace("localhost:27101,localhost:27102,localhost:27103", "localhost:"+port).replace("replicaSet=et-local-rs", "directConnection=true") + "&serverSelectionTimeoutMS=2000&tlsCAFile=" + encodeURIComponent(process.env.ET_MONGO_CA_FILE); new Mongo(uri).getDB("admin").runCommand({shutdown:1,force:true}); } catch(e) { if (!/network|closed|ECONNREFUSED|ECONNRESET|connection|timed out/i.test(e.message)) throw e; } }'
     if ($LASTEXITCODE -ne 0) { throw 'Graceful node shutdown failed' }
+    $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    do {
+        $remaining = @(Get-CimInstance Win32_Process -Filter "Name='mongod.exe'" | Where-Object { $_.ExecutablePath -eq $server -and $_.CommandLine -like "*$localRoot\27*.yml*" })
+        if ($remaining.Count -eq 0) { break }
+        if ([DateTime]::UtcNow -ge $deadline) { throw 'Local nodes did not stop within 30 seconds' }
+        Start-Sleep -Milliseconds 200
+    } while ($true)
+    Write-Host 'Local test nodes shut down gracefully; data retained.'
     return
 }
 if ($Action -eq 'Initialize') {
     & $shell --nodb --quiet --file "$PSScriptRoot\Initialize-LocalMongo.js"
     if ($LASTEXITCODE -ne 0) { throw 'Replica set initialization failed' }
 }
-if ($Action -eq 'Status') {
-    & $shell --nodb --quiet --eval 'const c = new Mongo(process.env.ET_MONGO_URI + "&tlsCAFile=" + encodeURIComponent(process.env.ET_MONGO_CA_FILE)); printjson(c.getDB("admin").runCommand({replSetGetStatus:1}).members.map(m=>({name:m.name,state:m.stateStr})));'
+if ($Action -in 'Status','Start') {
+    & $shell --nodb --quiet --eval 'const c = new Mongo(process.env.ET_MONGO_URI + "&serverSelectionTimeoutMS=30000&tlsCAFile=" + encodeURIComponent(process.env.ET_MONGO_CA_FILE)); printjson(c.getDB("admin").runCommand({replSetGetStatus:1}).members.map(m=>({name:m.name,state:m.stateStr})));'
     if ($LASTEXITCODE -ne 0) { throw 'Local MongoDB status failed' }
 }
 Write-Host "Local MongoDB environment loaded: $localRoot (credentials not displayed)"

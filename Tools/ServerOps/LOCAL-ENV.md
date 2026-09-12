@@ -59,9 +59,14 @@ mongosh --nodb --quiet --file .\Tools\ServerOps\Connect-Mongo.js --file .\Tools\
 
 # 故障演练，只允许 et-local-rs。
 mongosh --nodb --quiet --file .\Tools\ServerOps\Connect-Mongo.js --file .\Tools\ServerOps\Test-LocalMongoFailover.js
+
+# 完整本机数据库故障/安全演练，要求已完成上述隔离恢复。
+.\Tools\ServerOps\Test-LocalMongoRecovery.ps1
 ```
 
 `Crash` 操作仅用于故障演练：强制终止本环境三个 mongod，然后用 `Start` 重启并执行恢复核对。不要对有效业务数据执行故障演练。
+
+故障/安全演练会临时移除并恢复**本环境 CA** 在当前用户的信任，验证使用错误 CA 时连接失败；随后切主、强制重启三个节点，验证数据保持一致。最后改动并还原隔离恢复库的一个假数据字段，验证数量不变的内容损坏也会被检出。结果保存在 `mongo-local\evidence\local-recovery.json`。
 
 备份工具使用受限临时配置文件传入 URI，调用后删除该文件。恢复目标必须再次确认，允许覆盖的 `_DR_TEST` 测试库仍需由操作者确认没有有效业务数据。
 
