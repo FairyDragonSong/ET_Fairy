@@ -32,6 +32,7 @@ $lines=[Collections.Generic.List[string]]::new()
 $selfRoleCreated=$false
 $processStarted=$false
 $shutdownObserved=$false;$shutdownExitCode=$null;$shutdownElapsedMs=$null
+$journalVerification=$null
 try {
     if($SelfCredentials){
         $env:ET_SELF_TEST_USER='et_self_test_'+[Guid]::NewGuid().ToString('N')
@@ -89,8 +90,21 @@ try {
     if(-not $shutdownObserved){throw 'Gameplay server did not exit within the 25-second shutdown observation window'}
     if($shutdownExitCode -ne $expectedExit){throw "Gameplay server exited with code $shutdownExitCode; expected $expectedExit"}
     if($SaveFailure){$lines.Add('GAMEPLAY_PASS storage-failure-shutdown-exit-2');Write-Host 'GAMEPLAY_PASS storage-failure-shutdown-exit-2'}
+    if($Baseline){
+        $previousJournalClients=$env:ET_GAMEPLAY_CLIENTS
+        try {
+            $env:ET_GAMEPLAY_CLIENTS=[string]$Clients
+            $journalOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Verify-GameplayJournal.js"
+            $journalExit=$LASTEXITCODE
+            $journalVerification=($journalOutput -join "`n")|ConvertFrom-Json
+            if($journalExit -ne 0 -or -not $journalVerification.Passed){throw 'Post-shutdown session journal verification failed'}
+            $journalCheck="GAMEPLAY_PASS shutdown-journal-all-ended records=$($journalVerification.Records)"
+            $lines.Add($journalCheck);Write-Host $journalCheck
+        } finally {$env:ET_GAMEPLAY_CLIENTS=$previousJournalClients}
+    }
     $report=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Clients=$Clients;DurationSeconds=$DurationSeconds;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_PASS'});Samples=@($lines|Where-Object{$_ -match 'GAMEPLAY_PROGRESS'});ProductionCapacityVerified=$false}
     $report.CapacityProfile=[bool]$CapacityProfile
+    $report.JournalVerification=$journalVerification
     $report.LogProfile=$info.Environment['ET_LOG_PROFILE'];$report.HostProcessId=$process.Id
     $report.ShutdownObserved=$shutdownObserved;$report.ShutdownExitCode=$shutdownExitCode;$report.ShutdownElapsedMs=$shutdownElapsedMs
     $report.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
@@ -100,6 +114,7 @@ try {
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
     $failure.CapacityProfile=[bool]$CapacityProfile
+    $failure.JournalVerification=$journalVerification
     $failure.LogProfile=$info.Environment['ET_LOG_PROFILE'];$failure.HostProcessId=$(if($processStarted){$process.Id}else{$null})
     $failure.ShutdownObserved=$shutdownObserved;$failure.ShutdownExitCode=$shutdownExitCode;$failure.ShutdownElapsedMs=$shutdownElapsedMs
     $failure.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
