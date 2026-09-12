@@ -553,6 +553,9 @@ internal static class Program
         Assert(gateLogin.Contains("accounts[0].StateVersion != ticket.StateVersion") &&
                realmLogin.Contains("r2GGetLoginKey.AccountStateVersion = authenticationResult.StateVersion"), "authenticated version no longer reaches Gate validation");
         Assert(passwordAuthenticator.Contains("PasswordHasher.SimulateVerification(request.Credential)"), "unknown-account timing equalization removed");
+        Assert(realmLogin.Contains("authenticationResult.Error==ErrorCore.ERR_AccountStorageUnavailable?LoginFailureKind.ServiceError:LoginFailureKind.Rejected") &&
+               realmLogin.Contains("RecordLoginFailure(LoginFailureKind.ServiceError)") && realmLogin.Contains("if(!outcomeRecorded)"),
+               "login rejection and service-error outcome classification removed");
         Assert(passwordAuthenticator.Contains("PasswordLoginEnabled != 1"), "password provider fail-closed gate removed");
         Assert(passwordAuthenticator.Contains("stored.Status == AccountStatus.Active") &&
                passwordAuthenticator.Contains("stored.PasswordHash == account.PasswordHash") &&
@@ -758,19 +761,28 @@ internal static class Program
         var metrics=new OperationalMetrics();metrics.Awake();
         Parallel.For(0,1000,_=>metrics.RecordSecurity(SecurityMetric.PasswordChangeAccepted));
         Parallel.For(0,1000,_=>{metrics.RecordGateSession(true);metrics.RecordGateSession(false);});
+        Parallel.For(0,1000,_=>metrics.RecordLoginFailure(LoginFailureKind.Rejected));
+        Parallel.For(0,1000,_=>metrics.RecordLoginFailure(LoginFailureKind.ServiceError));
         foreach(var metric in Enum.GetValues<SecurityMetric>().Where(v=>v!=SecurityMetric.Count))metrics.RecordSecurity(metric);
         string text=metrics.ExportPrometheus();
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+22,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+27,"Metric count changed unexpectedly");
+        Assert(text.Contains("et_login_failures_total 2000\n")&&text.Contains("# TYPE et_login_rejections_total counter\n")&&
+            text.Contains("et_login_rejections_total 1000\n")&&text.Contains("# TYPE et_login_service_errors_total counter\n")&&
+            text.Contains("et_login_service_errors_total 1000\n"),"Login rejection and service-error counters are not isolated");
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
         try {metrics.RecordSecurity((SecurityMetric)999);}
         catch(ArgumentOutOfRangeException){rejected=true;}
         Assert(rejected,"Unknown metric accepted");
+        rejected=false;
+        try {metrics.RecordLoginFailure((LoginFailureKind)999);}
+        catch(ArgumentOutOfRangeException){rejected=true;}
+        Assert(rejected,"Unknown login failure kind accepted");
     }
 
     private static void TestHandlerLatency()

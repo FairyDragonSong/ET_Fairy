@@ -446,6 +446,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         string keyPath=Path.Combine(Environment.GetEnvironmentVariable("ET_LOCAL_MONGO_ROOT"),"self-password-test-"+Guid.NewGuid().ToString("N")+".json");
         string previous=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
         string previousRing=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE");
+        long loginRejectionsBefore=Metric("et_login_rejections_total"),loginServiceErrorsBefore=Metric("et_login_service_errors_total");
         try
         {
             long keyNow=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -537,7 +538,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(Metric("et_realm_login_handler_seconds_count")==Metric("et_login_attempts_total")&&
                 Metric("et_gate_login_handler_seconds_count")==3&&Metric("et_password_change_handler_seconds_count")==7,
                 "Handler latency samples do not include every success/rejection/early return");
+            Check(Metric("et_login_rejections_total")==loginRejectionsBefore+1&&Metric("et_login_service_errors_total")==loginServiceErrorsBefore,
+                "Wrong password was not isolated from login service errors");
             Console.WriteLine("GAMEPLAY_PASS handler-latency-samples-include-rejections-and-rate-limit");
+            Console.WriteLine("GAMEPLAY_PASS login-user-rejection-isolated-from-service-errors");
             await SessionJournalBurst(parent, db);
             await SessionJournalAdmissionDrain(parent);
             await SessionJournalRetries(db);

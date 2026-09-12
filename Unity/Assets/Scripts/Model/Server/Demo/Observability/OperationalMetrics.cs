@@ -6,6 +6,7 @@ using System.Threading;
 namespace ET.Server
 {
     public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, RoleSaveSuccess, RoleSaveFailure, MapOrderedMailbox, MapUnorderedMailbox, Count }
+    public enum LoginFailureKind { Rejected, ServiceError }
     public enum SecurityMetric
     {
         PasswordChangeAccepted, PasswordChangeUnconfirmed, PasswordChangeRateLimited,
@@ -21,7 +22,8 @@ namespace ET.Server
         private long httpErrors;
         private long loginAttempts;
         private long loginSuccesses;
-        private long loginFailures;
+        private long loginRejections;
+        private long loginServiceErrors;
         private long roleSaveSuccesses;
         private long roleSaveFailures;
         private readonly long[] mapMailboxInflight = new long[2];
@@ -139,7 +141,20 @@ namespace ET.Server
 
         public void RecordLoginAttempt() => Interlocked.Increment(ref this.loginAttempts);
         public void RecordLoginSuccess() => Interlocked.Increment(ref this.loginSuccesses);
-        public void RecordLoginFailure() => Interlocked.Increment(ref this.loginFailures);
+        public void RecordLoginFailure(LoginFailureKind kind)
+        {
+            switch (kind)
+            {
+                case LoginFailureKind.Rejected:
+                    Interlocked.Increment(ref this.loginRejections);
+                    break;
+                case LoginFailureKind.ServiceError:
+                    Interlocked.Increment(ref this.loginServiceErrors);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
 
         public void RecordRoleSave(bool success)
         {
@@ -184,9 +199,18 @@ namespace ET.Server
             Append(text, "et_gc_managed_memory_bytes", GC.GetTotalMemory(false));
             Append(text, "et_http_requests_total", Interlocked.Read(ref this.httpRequests));
             Append(text, "et_http_errors_total", Interlocked.Read(ref this.httpErrors));
+            text.Append("# TYPE et_login_attempts_total counter\n");
             Append(text, "et_login_attempts_total", Interlocked.Read(ref this.loginAttempts));
+            text.Append("# TYPE et_login_successes_total counter\n");
             Append(text, "et_login_successes_total", Interlocked.Read(ref this.loginSuccesses));
-            Append(text, "et_login_failures_total", Interlocked.Read(ref this.loginFailures));
+            long loginRejectionsSnapshot=Interlocked.Read(ref this.loginRejections);
+            long loginServiceErrorsSnapshot=Interlocked.Read(ref this.loginServiceErrors);
+            text.Append("# TYPE et_login_failures_total counter\n");
+            Append(text, "et_login_failures_total", loginRejectionsSnapshot+loginServiceErrorsSnapshot);
+            text.Append("# TYPE et_login_rejections_total counter\n");
+            Append(text, "et_login_rejections_total", loginRejectionsSnapshot);
+            text.Append("# TYPE et_login_service_errors_total counter\n");
+            Append(text, "et_login_service_errors_total", loginServiceErrorsSnapshot);
             Append(text, "et_role_save_successes_total", Interlocked.Read(ref this.roleSaveSuccesses));
             Append(text, "et_role_save_failures_total", Interlocked.Read(ref this.roleSaveFailures));
             text.Append("# TYPE et_gate_bound_sessions gauge\n");
