@@ -71,6 +71,22 @@
 
 监督器或人工启动前必须调用 `Test-InstalledServerSlot.ps1`，不能只检查原 ZIP。槽位结构、逐文件验证、ACL 与回滚边界见 [020.11](../../Book/服务器上线升级/020.11-不可变签名发布槽位.md)。槽位测试已经包含在 `Test-ServerRollout.ps1` 中。
 
+## 签名部署状态
+
+使用独立于发布、审批和监控身份的 RSA-3072+ 状态密钥初始化部署状态；私钥必须位于仓库外 SecretRoot。初始化只能执行一次：
+
+```powershell
+.\Set-ServerDeploymentState.ps1 -Action Bootstrap -DeploymentRoot '<部署根>' `
+  -ConfirmDeploymentRoot '<解析后的同一绝对路径>' -DeploymentId '<部署 ID>' `
+  -SecretRoot '<受限 Secret 根>' -StatePrivateKeyFile '<状态私钥>' `
+  -StatePublicKeyFile '<状态公钥>' -StateSignerKeyId '<Key ID>' `
+  -CurrentSlotDirectory '<当前槽位>' -CurrentTrustedPublicKeyFile '<当前发布公钥>' `
+  -CurrentExpectedSigningKeyId '<发布 Key ID>' -ExpectedPackageSupplier '<发行组织>' `
+  -ExpectedSbomNamespaceBase 'https://<受信命名空间>'
+```
+
+候选暂存还必须提供候选槽位、双签计划、请求/批准/监控公钥与 Key ID。每次读取或启动前调用 `Test-ServerDeploymentState.ps1`，它会校验当前签名和从第 1 代开始的完整审计链。完整参数、权限边界和故障恢复见 [020.12](../../Book/服务器上线升级/020.12-签名部署状态与审计链.md)。
+
 ## 备份
 
 ```powershell

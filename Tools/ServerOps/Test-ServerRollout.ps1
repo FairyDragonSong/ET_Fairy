@@ -7,7 +7,7 @@ $utf8=[Text.UTF8Encoding]::new($false)
 New-Item -ItemType Directory -Path $fixture|Out-Null
 try{
     $keys=@{}
-    foreach($name in @('release-current','release-candidate','requester','approver','monitor')){
+    foreach($name in @('release-current','release-candidate','requester','approver','monitor','deployment-state')){
         $rsa=[Security.Cryptography.RSA]::Create(3072)
         try{
             $private=Join-Path $fixture "$name.private.pem"
@@ -138,11 +138,17 @@ try{
     if(-not $rejected){throw 'Requester key was accepted as the monitoring identity'}
 
     $deploymentRoot=Join-Path $fixture 'deployment'
+    $currentInstallParameters=@{ReleaseDirectory=$current;DeploymentRoot=$deploymentRoot;
+        TrustedPublicKeyFile=$keys['release-current'].Public;ExpectedSigningKeyId='release-current';
+        ExpectedPackageSupplier='ET Local Test';ExpectedSbomNamespaceBase='https://example.invalid/et-rollout';
+        ConfirmDeploymentRoot=[IO.Path]::GetFullPath($deploymentRoot)}
     $installParameters=@{ReleaseDirectory=$candidate;DeploymentRoot=$deploymentRoot;
         TrustedPublicKeyFile=$keys['release-candidate'].Public;ExpectedSigningKeyId='release-candidate';
         ExpectedPackageSupplier='ET Local Test';ExpectedSbomNamespaceBase='https://example.invalid/et-rollout';
         ConfirmDeploymentRoot=[IO.Path]::GetFullPath($deploymentRoot)}
-    if($AllowDirtyTestArtifacts){$installParameters.AllowDirtyTestArtifact=$true}
+    if($AllowDirtyTestArtifacts){$currentInstallParameters.AllowDirtyTestArtifact=$true;$installParameters.AllowDirtyTestArtifact=$true}
+    $currentInstalledRaw=& "$PSScriptRoot/Install-ServerReleaseSlot.ps1" @currentInstallParameters
+    $currentInstalled=($currentInstalledRaw -join [Environment]::NewLine)|ConvertFrom-Json
     $installedRaw=& "$PSScriptRoot/Install-ServerReleaseSlot.ps1" @installParameters
     $installed=($installedRaw -join [Environment]::NewLine)|ConvertFrom-Json
     $slotParameters=@{SlotDirectory=$installed.SlotDirectory;TrustedPublicKeyFile=$keys['release-candidate'].Public;
@@ -157,6 +163,51 @@ try{
     $rejected=$false
     try{& "$PSScriptRoot/Install-ServerReleaseSlot.ps1" @installParameters|Out-Null}catch{$rejected=$true}
     if(-not $rejected){throw 'Existing immutable slot was overwritten'}
+
+    $stateCommon=@{DeploymentRoot=$deploymentRoot;ConfirmDeploymentRoot=[IO.Path]::GetFullPath($deploymentRoot);
+        DeploymentId='rollout-state-test';SecretRoot=$fixture;StatePrivateKeyFile=$keys['deployment-state'].Private;
+        StatePublicKeyFile=$keys['deployment-state'].Public;StateSignerKeyId='deployment-state-test';
+        CurrentSlotDirectory=$currentInstalled.SlotDirectory;CurrentTrustedPublicKeyFile=$keys['release-current'].Public;
+        CurrentExpectedSigningKeyId='release-current';ExpectedPackageSupplier='ET Local Test';
+        ExpectedSbomNamespaceBase='https://example.invalid/et-rollout'}
+    if($AllowDirtyTestArtifacts){$stateCommon.AllowDirtyTestArtifact=$true}
+    $bootstrapRaw=& "$PSScriptRoot/Set-ServerDeploymentState.ps1" -Action Bootstrap @stateCommon
+    $bootstrap=($bootstrapRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($bootstrap.Generation -ne 1 -or $bootstrap.Phase -ne 'Stable'){throw 'Deployment state bootstrap failed'}
+    $stageParameters=$stateCommon.Clone();$stageParameters.CandidateSlotDirectory=$installed.SlotDirectory
+    $stageParameters.CandidateTrustedPublicKeyFile=$keys['release-candidate'].Public
+    $stageParameters.CandidateExpectedSigningKeyId='release-candidate';$stageParameters.PlanFile=$planFile
+    $stageParameters.RequesterPublicKeyFile=$keys.requester.Public;$stageParameters.ExpectedRequesterKeyId='requester-test'
+    $stageParameters.ApproverPublicKeyFile=$keys.approver.Public;$stageParameters.ExpectedApproverKeyId='approver-test'
+    $stageParameters.MonitoringPublicKeyFile=$keys.monitor.Public;$stageParameters.ExpectedMonitoringKeyId='monitor-test'
+    $stageParameters.AllowTestPlan=$true
+    $stageRaw=& "$PSScriptRoot/Set-ServerDeploymentState.ps1" -Action StageCandidate @stageParameters
+    $staged=($stageRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($staged.Generation -ne 2 -or $staged.Phase -ne 'CandidateStaged' -or $staged.CandidateSlot -ne $installed.SlotId){
+        throw 'Signed candidate staging state is invalid'
+    }
+    $stateVerify=@{DeploymentRoot=$deploymentRoot;StatePublicKeyFile=$keys['deployment-state'].Public;
+        ExpectedStateSignerKeyId='deployment-state-test'}
+    $stateRaw=& "$PSScriptRoot/Test-ServerDeploymentState.ps1" @stateVerify
+    $stateResult=($stateRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if(-not $stateResult.Passed -or $stateResult.Generation -ne 2){throw 'Deployment state chain verification failed'}
+    $currentState=Join-Path $deploymentRoot 'state/current.json';$currentStateSignature=$currentState+'.sig'
+    $savedState=[IO.File]::ReadAllBytes($currentState);$savedStateSignature=[IO.File]::ReadAllBytes($currentStateSignature)
+    [IO.File]::AppendAllText($currentState,' ')
+    $rejected=$false
+    try{& "$PSScriptRoot/Test-ServerDeploymentState.ps1" @stateVerify|Out-Null}catch{$rejected=$true}
+    if(-not $rejected){throw 'Tampered deployment state was accepted'}
+    [IO.File]::WriteAllBytes($currentState,$savedState);[IO.File]::WriteAllBytes($currentStateSignature,$savedStateSignature)
+    $firstAudit=Get-ChildItem -LiteralPath (Join-Path $deploymentRoot 'state/audit') -File -Filter '00000001-*.json'
+    $heldAudit=$firstAudit.FullName+'.held';Move-Item -LiteralPath $firstAudit.FullName -Destination $heldAudit
+    $rejected=$false
+    try{& "$PSScriptRoot/Test-ServerDeploymentState.ps1" @stateVerify|Out-Null}catch{$rejected=$true}
+    Move-Item -LiteralPath $heldAudit -Destination $firstAudit.FullName
+    if(-not $rejected){throw 'Incomplete deployment state audit chain was accepted'}
+    $rejected=$false
+    try{& "$PSScriptRoot/Set-ServerDeploymentState.ps1" -Action Bootstrap @stateCommon|Out-Null}catch{$rejected=$true}
+    if(-not $rejected){throw 'Existing deployment state was overwritten by bootstrap'}
+
     $hotfix=Join-Path $installed.SlotDirectory 'package/Bin/Hotfix.dll'
     $stream=[IO.File]::Open($hotfix,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try{$stream.Position=0;$value=$stream.ReadByte();$stream.Position=0;$stream.WriteByte($value-bxor1)}finally{$stream.Dispose()}
@@ -169,7 +220,9 @@ try{
         DualApprovalVerified=$true;Decisions=@('PROMOTE:0','HOLD:2','ROLLBACK:3');
         TamperedPlanRejected=$true;ReversedVersionRejected=$true;CopiedApprovalKeyRejected=$true;
         MonitoringKeyReuseRejected=$true;ImmutableSlotVerified=$true;DuplicateSlotRejected=$true;
-        TamperedSlotRejected=$true}|ConvertTo-Json -Depth 5
+        TamperedSlotRejected=$true;SignedDeploymentStateVerified=$true;DeploymentStateGeneration=2;
+        TamperedDeploymentStateRejected=$true;MissingDeploymentAuditRejected=$true;
+        DeploymentStateRebootstrapRejected=$true}|ConvertTo-Json -Depth 5
 }
 finally{
     $tempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
