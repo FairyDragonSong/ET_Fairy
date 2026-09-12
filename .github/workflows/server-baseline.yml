@@ -149,6 +149,10 @@ jobs:
           $promtool = Join-Path $env:RUNNER_TEMP 'prometheus-3.13.3/prometheus-3.13.3.windows-amd64/promtool.exe'
           ./Tools/ServerOps/Test-InfrastructureMonitoringRules.ps1 -PromtoolPath $promtool
 
+      - name: Verify centralized log parsing, redaction and restart offsets
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-CentralLogCollection.ps1 -EnvironmentRoot $env:RUNNER_TEMP
+
       - name: Verify production Alertmanager routing governance
         shell: pwsh
         run: |

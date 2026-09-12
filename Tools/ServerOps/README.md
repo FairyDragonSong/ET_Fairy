@@ -184,6 +184,16 @@ Windows SCM 托管先用 `New-ServerSupervisorConfiguration.ps1` 生成签名生
 
 `New-ProductionAlertmanagerConfiguration.ps1` 在仓库外生成生产候选配置，critical/warning 必须使用不同 HTTPS URL Secret 文件和不同 Bearer Token 文件，避免敏感 webhook 出现在命令行；所有通知启用 `send_resolved`，未知级别默认升级到 critical。用 `Test-ProductionAlertmanagerGovernance.ps1` 执行 amtool schema 与路由验证。生成成功不代表外部值班人员已经收到告警。
 
+## 集中日志本机门禁
+
+`Install-LocalOpenTelemetryCollector.ps1` 安装并校验固定 OpenTelemetry Collector Contrib；`New-CentralLogCollectorConfiguration.ps1` 在仓库外生成读取 bounded 多进程日志的无监听配置，使用磁盘偏移、结构化关联 ID、异常多行合并和常见凭据模式二次脱敏。本机闭环：
+
+```powershell
+.\Test-CentralLogCollection.ps1
+```
+
+测试终点是有界本机文件，不等于生产异机日志后端。生产接入、ACL、TLS/凭据、断网背压、查询权限和保留审批见 [018.24](../../Book/服务器上线升级/018.24-集中日志采集与重启续传门禁.md)。
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

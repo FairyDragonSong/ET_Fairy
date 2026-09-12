@@ -9,6 +9,7 @@
 - `tools`：Database Tools 100.18.0。
 - `downloads`、`packages.json`：官方安装包和固定 SHA-256。
 - `tools\winsw-2.12.0`：WinSW 2.12.0 x64 固定二进制，仅为后续 Windows 服务托管准备；当前未注册系统服务。
+- `otelcol-contrib-0.153.0`：固定并校验的 OpenTelemetry Collector Contrib，用于本机多进程日志汇聚和重启续传验收；当前未注册服务。
 - `mongo-local`：三个节点的数据/日志、配置、随机凭据、内部 keyFile、私有 CA 和服务器证书。ACL 只允许当前用户与 SYSTEM。
 - 副本集 `et-local-rs`，只监听 IPv4/IPv6 回环 `127.0.0.1`、`::1` 的 27101–27103 端口；成员地址为 `localhost`。
 - 源测试库 `ET_LOCAL_ACCEPTANCE`，恢复库 `ET_LOCAL_ACCEPTANCE_DR_TEST`。
