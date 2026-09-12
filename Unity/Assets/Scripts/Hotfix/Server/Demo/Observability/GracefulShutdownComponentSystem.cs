@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ET.Server
@@ -45,24 +46,22 @@ namespace ET.Server
                 if (unitComponent != null)
                 {
                     Unit[] units = unitComponent.Children.Values.OfType<Unit>().ToArray();
-                    foreach (Unit unit in units)
+                    // Bound database pressure per scene; never launch one task per online role.
+                    const int batchSize = 16;
+                    for (int offset = 0; offset < units.Length; offset += batchSize)
                     {
-                        RoleSaveComponent roleSaveComponent = unit.GetComponent<RoleSaveComponent>();
-                        if (roleSaveComponent == null)
+                        int count = Math.Min(batchSize, units.Length - offset);
+                        bool[] results = new bool[count];
+                        List<ETTask> tasks = new List<ETTask>(count);
+                        for (int index = 0; index < count; ++index)
                         {
-                            continue;
+                            tasks.Add(SaveForShutdown(root, units[offset + index], results, index));
                         }
-
-                        bool saved = false;
-                        for (int retry = 0; retry < 3 && !saved; ++retry)
+                        await ETTaskHelper.WaitAll(tasks);
+                        foreach (bool saved in results)
                         {
-                            saved = await roleSaveComponent.SaveNow();
-                            if (!saved)
-                            {
-                                await root.GetComponent<TimerComponent>().WaitAsync(200);
-                            }
+                            success &= saved;
                         }
-                        success &= saved;
                     }
                 }
             }
@@ -79,6 +78,36 @@ namespace ET.Server
                     ShutdownCoordinator.Instance.CompleteParticipant(success);
                     Log.Info($"event=graceful_shutdown_completed scene={root.Name} fiber={root.Fiber.Id} success={success}");
                 }
+            }
+        }
+
+        private static async ETTask SaveForShutdown(Scene root, Unit unit, bool[] results, int index)
+        {
+            // WaitAll does not propagate child exceptions: record failures inside each task.
+            try
+            {
+                RoleSaveComponent saver = unit.GetComponent<RoleSaveComponent>();
+                if (saver == null)
+                {
+                    results[index] = true;
+                    return;
+                }
+                for (int retry = 0; retry < 3; ++retry)
+                {
+                    if (await saver.SaveNow())
+                    {
+                        results[index] = true;
+                        return;
+                    }
+                    if (retry < 2)
+                    {
+                        await root.GetComponent<TimerComponent>().WaitAsync(200);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"event=graceful_shutdown_role_failed scene={root.Name}\n{e}");
             }
         }
     }

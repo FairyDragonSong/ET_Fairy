@@ -273,7 +273,9 @@ internal static class Program
         Assert(databaseAudit.Contains("accountsMissingRoles") && databaseAudit.Contains("orphanRoles") && databaseAudit.Contains("quit(2)"), "account-role consistency audit weakened");
         Assert(messageLogger.Contains("msg is ISensitiveMessage") && messageLogger.Contains("sensitive payload redacted"), "framework-level sensitive message redaction removed");
         Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");
-        Assert(shutdown.Contains("roleSaveComponent.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
+        Assert(shutdown.Contains("saver.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
+        Assert(shutdown.Contains("const int batchSize = 16") && shutdown.Contains("await ETTaskHelper.WaitAll(tasks)")
+            && shutdown.Contains("success &= saved") && shutdown.Contains("retry < 3"), "bounded shutdown drain or failure aggregation removed");
     }
 
     private static string FindRepositoryRoot()
