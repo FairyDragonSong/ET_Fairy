@@ -17,6 +17,7 @@ namespace ET.Server
             root.AddComponent<MessageSender>();
             root.AddComponent<PlayerComponent>();
 #if DOTNET
+            await AccountSessionJournal.Initialize(root);
             root.AddComponent<AccountSessionMonitor>();
 #endif
             root.AddComponent<GateSessionKeyComponent>();

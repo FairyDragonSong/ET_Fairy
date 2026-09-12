@@ -25,6 +25,7 @@ namespace ET.Server
                        account.GetLongHashCode()))
             {
                 long accountStateVersion;
+                long accountId;
                 try
                 {
                     DBComponent database = root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
@@ -36,6 +37,7 @@ namespace ET.Server
                         return;
                     }
                     accountStateVersion = accounts[0].StateVersion;
+                    accountId = accounts[0].Id;
                 }
                 catch (Exception)
                 {
@@ -43,6 +45,14 @@ namespace ET.Server
                     response.Message = "账号服务暂时不可用";
                     return;
                 }
+#if DOTNET
+                if(!await AccountSessionJournal.Begin(session,accountId,accountStateVersion))
+                {
+                    response.Error=ErrorCore.ERR_AccountStorageUnavailable;
+                    response.Message="会话服务暂时不可用";
+                    return;
+                }
+#endif
                 Player player = playerComponent.GetByAccount(account);
                 if (player == null)
                 {

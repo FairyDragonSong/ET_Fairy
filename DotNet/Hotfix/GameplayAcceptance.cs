@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using ET.Client;
 using MongoDB.Driver;
@@ -448,6 +449,25 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(audit["Action"].AsString=="user-change-password"&&!audit.Contains("PasswordHash")&&!audit.Contains("OldPassword")&&!audit.Contains("NewPassword")&&!audit.Contains("Envelope"),"Unsafe self change audit");
             Console.WriteLine("GAMEPLAY_PASS self-password-anonymous-wrong-old-cross-account-tamper-rejected");
             Console.WriteLine("GAMEPLAY_PASS self-password-change-idempotency-limit-role-preserved-old-session-ticket-revoked");
+            var journal=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection);
+            var journalFilter=Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",before.Id);
+            var records=await journal.Find(journalFilter).ToListAsync();
+            Check(records.Count==2&&records.Count(r=>r["State"].AsString=="ended")==1,"Session admission/revocation journal incorrect");
+            Check(records.Any(r=>r["AccountStateVersion"].AsInt64==before.StateVersion&&r["State"].AsString=="ended")&&
+                records.Any(r=>r["AccountStateVersion"].AsInt64==before.StateVersion+1&&r["State"].AsString=="admitted"),"Session credential version journal incorrect");
+            string[] safeFields={"_id","AccountId","AccountStateVersion","Process","GateId","Zone","OpenedAtUtc","State","EndedAtUtc","DisconnectError"};
+            Check(records.All(r=>r.Names.All(n=>safeFields.Contains(n))),"Session journal contains unexpected identity payload");
+            renewed.Dispose();
+            for(int i=0;i<50;i++)
+            {
+                records=await journal.Find(journalFilter).ToListAsync();
+                if(records.All(r=>r["State"].AsString=="ended"))break;
+                await parent.GetComponent<TimerComponent>().WaitAsync(100);
+            }
+            Check(records.All(r=>r["State"].AsString=="ended"&&r.Contains("EndedAtUtc")),"Normal disconnect journal missing");
+            using var indexes=await journal.Indexes.ListAsync();
+            Check((await indexes.ToListAsync()).Any(i=>i["name"].AsString=="ix_session_account_opened"),"Session journal query index missing");
+            Console.WriteLine("GAMEPLAY_PASS session-journal-admission-version-revocation-disconnect-index-minimal-fields");
         }
         finally
         {
