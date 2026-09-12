@@ -140,6 +140,14 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 .\Test-BackupStorageGovernance.ps1
 ```
 
+## 上线变更审计
+
+按[生产上线检查表](../../Book/服务器上线升级/运维模板/生产上线检查表.md)准备 17 项仓库外证据，用 `New-ServerChangeRecord.ps1` 生成请求人/批准人双签记录。上线控制器切流前必须执行 `Test-ServerChangeRecord.ps1 -RequireActiveWindow`；证据缺失、哈希变化、窗口失效、高风险问题非零或审批职责未隔离都会失败关闭。完整边界见 [020.17](../../Book/服务器上线升级/020.17-上线变更双签审计与事故响应.md)，离线自检：
+
+```powershell
+.\Test-ServerChangeGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

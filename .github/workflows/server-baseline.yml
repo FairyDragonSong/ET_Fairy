@@ -111,3 +111,7 @@ jobs:
       - name: Verify backup storage inventory governance
         shell: pwsh
         run: ./Tools/ServerOps/Test-BackupStorageGovernance.ps1
+
+      - name: Verify signed production change governance
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-ServerChangeGovernance.ps1
