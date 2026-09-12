@@ -1,9 +1,10 @@
 param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
-    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs,[switch]$CrashJournal)
+    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs,[switch]$CrashJournal,[switch]$RecoverCrashJournal)
 $ErrorActionPreference='Stop'
 if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load parameters require -Baseline'}
 if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolated Baseline mode'}
 if($CrashJournal -and (-not $Baseline -or $Clients -gt 100 -or $DurationSeconds -lt 60)){throw 'Crash journal requires Baseline, at most 100 clients and at least 60 sustained seconds'}
+if($RecoverCrashJournal -and -not $CrashJournal){throw 'Recovery requires this invocation to own and crash its test server'}
 if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
 if($SaveFailure -or $LeaseExpiry){$Outage=$true}
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
@@ -112,7 +113,44 @@ try {
                 Before=$beforeCrash;After=$afterCrash;RecoveryVerified=$false;ProductionCapacityVerified=$false}
             $crashPath="$env:ET_LOCAL_MONGO_ROOT/evidence/journal-crash-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
             $crashReport|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $crashPath
-            Write-Host "GAMEPLAY_PASS owned-process-crash-journal records=$Clients recovery_verified=false"
+            if($RecoverCrashJournal){
+                $previousRecoveryContext=$env:ET_CRASH_RECOVERY_CONTEXT;$previousRecoveryFault=$env:ET_CRASH_RECOVERY_TEST_FAIL;$previousRecoveryCheck=$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK
+                try {
+                    $env:ET_CRASH_RECOVERY_CONTEXT=([ordered]@{OperationId=[Guid]::NewGuid().ToString('N');HostProcessId=$ownedPid;
+                        ExitObserved=$crashExitObserved;ProcessStartedAtUtc=$startedAt;ExitObservedAtUtc=$observedAt;
+                        BeforeSha256=$beforeCrash.SnapshotSha256;GateInstanceIds=@($beforeCrash.GateInstanceIds)}|ConvertTo-Json -Compress)
+                    $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='0';$env:ET_CRASH_RECOVERY_TEST_FAIL='1'
+                    $injectedOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
+                    if($LASTEXITCODE -eq 0 -or ($injectedOutput -join "`n") -notmatch 'Injected recovery audit failure'){throw 'Expected injected recovery audit failure was not observed'}
+                    $env:ET_CRASH_RECOVERY_TEST_FAIL='0';$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='1'
+                    $rollbackOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    if($LASTEXITCODE -ne 0){throw 'Recovery transaction rollback verification failed'}
+                    $rollback=($rollbackOutput -join "`n")|ConvertFrom-Json
+                    if(-not $rollback.Passed -or -not $rollback.RolledBack){throw 'Recovery rollback evidence missing'}
+                    $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='0'
+                    $recoveryOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    if($LASTEXITCODE -ne 0){throw 'Local crash recovery failed'}
+                    $recovery=($recoveryOutput -join "`n")|ConvertFrom-Json
+                    $originalRecoveryContext=$env:ET_CRASH_RECOVERY_CONTEXT
+                    $collision=$originalRecoveryContext|ConvertFrom-Json
+                    $collision.BeforeSha256=('0'*64)
+                    $env:ET_CRASH_RECOVERY_CONTEXT=$collision|ConvertTo-Json -Compress
+                    $collisionOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
+                    if($LASTEXITCODE -eq 0 -or ($collisionOutput -join "`n") -notmatch 'Recovery operation id collision'){throw 'Expected recovery operation collision rejection was not observed'}
+                    $env:ET_CRASH_RECOVERY_CONTEXT=$originalRecoveryContext
+                    $replayOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    if($LASTEXITCODE -ne 0){throw 'Local crash recovery replay failed'}
+                    $replay=($replayOutput -join "`n")|ConvertFrom-Json
+                    if(-not $recovery.Passed -or $recovery.Replay -or -not $replay.Passed -or -not $replay.Replay){throw 'Recovery idempotency verification failed'}
+                    $crashReport.RecoveryVerified=$true;$crashReport.Recovery=$recovery;$crashReport.Replay=$replay;$crashReport.Rollback=$rollback;$crashReport.CollisionRejected=$true
+                    $crashReport.CompletedAtUtc=[DateTime]::UtcNow.ToString('O')
+                    $recoveryPath="$env:ET_LOCAL_MONGO_ROOT/evidence/journal-recovery-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
+                    $crashReport|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $recoveryPath
+                    Write-Host "GAMEPLAY_PASS local-crash-recovery-interrupted-and-idempotent records=$Clients"
+                    Write-Host "Recovery evidence: $recoveryPath"
+                } finally {$env:ET_CRASH_RECOVERY_CONTEXT=$previousRecoveryContext;$env:ET_CRASH_RECOVERY_TEST_FAIL=$previousRecoveryFault;$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK=$previousRecoveryCheck}
+            }
+            Write-Host "GAMEPLAY_PASS owned-process-crash-journal records=$Clients recovery_verified=$($crashReport.RecoveryVerified.ToString().ToLowerInvariant())"
             Write-Host "Evidence: $crashPath"
         } finally {$env:ET_GAMEPLAY_CLIENTS=$previousCrashClients}
         return
