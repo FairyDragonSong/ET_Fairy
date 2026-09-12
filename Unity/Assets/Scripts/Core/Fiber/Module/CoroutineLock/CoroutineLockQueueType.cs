@@ -29,6 +29,7 @@ namespace ET
 
         public static async ETTask<CoroutineLock> Wait(this CoroutineLockQueueType self, long key, int time)
         {
+            if (self.IsDisposed) throw new System.ObjectDisposedException(nameof(CoroutineLockQueueType));
             CoroutineLockQueue queue = self.Get(key) ?? self.New(key);
             return await queue.Wait(time);
         }

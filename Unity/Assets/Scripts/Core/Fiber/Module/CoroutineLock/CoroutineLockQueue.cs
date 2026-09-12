@@ -16,9 +16,15 @@ namespace ET
         [EntitySystem]
         private static void Destroy(this CoroutineLockQueue self)
         {
-            foreach (var waiter in self.queue)
+            // Remove before completing: continuations can run synchronously.
+            while (self.queue.Count > 0)
             {
+                var waiter = self.queue.Dequeue();
                 waiter.AbandonTracking();
+                if (!waiter.IsDisposed())
+                {
+                    waiter.SetException(new ObjectDisposedException(nameof(CoroutineLockQueue)));
+                }
             }
             self.queue.Clear();
             self.type = 0;
@@ -27,6 +33,7 @@ namespace ET
         
         public static async ETTask<CoroutineLock> Wait(this CoroutineLockQueue self, int time)
         {
+            if (self.IsDisposed) throw new ObjectDisposedException(nameof(CoroutineLockQueue));
             CoroutineLock coroutineLock = null;
             if (!self.isStart)
             {
@@ -49,6 +56,7 @@ namespace ET
         // 返回值，是否找到了一个有效的协程锁
         public static bool Notify(this CoroutineLockQueue self, int level)
         {
+            if (self.IsDisposed) return false;
             // 有可能WaitCoroutineLock已经超时抛出异常，所以要找到一个未处理的WaitCoroutineLock
             while (self.queue.Count > 0)
             {

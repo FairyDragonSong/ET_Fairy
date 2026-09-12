@@ -16,7 +16,11 @@ namespace ET
         [EntitySystem]
         private static void Destroy(this CoroutineLock self)
         {
-            self.Scene<CoroutineLockComponent>().RunNextCoroutine(self.type, self.key, self.level + 1);
+            // Do not wake a future queue with the same key when this queue is being destroyed.
+            if (self.Parent != null && !self.Parent.IsDisposed)
+            {
+                self.Scene<CoroutineLockComponent>().RunNextCoroutine(self.type, self.key, self.level + 1);
+            }
             self.type = CoroutineLockType.None;
             self.key = 0;
             self.level = 0;

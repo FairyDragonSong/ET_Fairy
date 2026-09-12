@@ -397,6 +397,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
 
     private static async ETTask SelfCredentials(Scene parent)
     {
+        await CoroutineLockLifecycle(parent);
         long id=IdGenerater.Instance.GenerateId();
         using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"SelfCredentialTest");
         var net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
@@ -497,6 +498,70 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",previous);
             if(File.Exists(keyPath))File.Delete(keyPath);
         }
+    }
+
+    private static async ETTask CoroutineLockLifecycle(Scene parent)
+    {
+        long id = IdGenerater.Instance.GenerateId();
+        using Scene scene = EntitySceneFactory.CreateScene(parent, id, id, SceneType.BenchmarkClient, "LockLifecycleTest");
+        var timer = scene.AddComponent<TimerComponent>();
+        var locks = scene.AddComponent<CoroutineLockComponent>();
+        var before = CoroutineLockMetrics.GetSnapshot();
+        await locks.Wait(0, 1, 0); // Owned and disposed by the queue; do not retain a pooled reference.
+        var noTimeout = locks.Wait(0, 1, 0);
+        var timed = locks.Wait(0, 1, 100);
+        var queue = locks.GetChild<CoroutineLockQueueType>(0).Get(1);
+        queue.Dispose();
+        Check(noTimeout.IsCompleted && timed.IsCompleted, "Destroyed queue left pending waiters");
+        await ExpectDisposed(noTimeout);
+        await ExpectDisposed(timed);
+        await ExpectDisposed(queue.Wait(0));
+        // The old holder must not schedule a notification into this replacement queue.
+        using var replacement = await locks.Wait(0, 1, 0);
+        var replacementWait = locks.Wait(0, 1, 0);
+        await timer.WaitAsync(200);
+        Check(!replacementWait.IsCompleted, "Destroyed holder released replacement queue");
+        replacement.Dispose();
+        await timer.WaitAsync(50);
+        Check(replacementWait.IsCompleted, "Normal release failed to wake waiter");
+        using var acquired = await replacementWait;
+        var timeout = locks.Wait(0, 1, 50);
+        await timer.WaitAsync(150);
+        Check(timeout.IsCompleted, "Real timer did not end waiting");
+        bool timeoutCaught = false;
+        try { using var unexpected = await timeout; }
+        catch (Exception e) when (e.Message == "coroutine is timeout!") { timeoutCaught = true; }
+        Check(timeoutCaught, "Timeout semantics changed");
+        var shutdownWait = locks.Wait(0, 1, 0);
+        locks.Dispose();
+        Check(shutdownWait.IsCompleted, "Component disposal left pending waiter");
+        await ExpectDisposed(shutdownWait);
+        await ExpectDisposed(locks.Wait(0, 1, 0));
+        // A notification already queued before destruction must also be generation-bound.
+        var second = scene.AddComponent<CoroutineLockComponent>();
+        var oldHolder = await second.Wait(0, 2, 0);
+        oldHolder.Dispose();
+        second.GetChild<CoroutineLockQueueType>(0).Get(2).Dispose();
+        await second.Wait(0, 2, 0);
+        var newWait = second.Wait(0, 2, 0);
+        await timer.WaitAsync(50);
+        Check(!newWait.IsCompleted, "Stale next-frame notification released replacement queue");
+        second.Dispose();
+        Check(newWait.IsCompleted, "Replacement disposal did not complete waiter");
+        await ExpectDisposed(newWait);
+        var after = CoroutineLockMetrics.GetSnapshot();
+        Check(after.Waiting == before.Waiting && after.Abandoned - before.Abandoned == 4 &&
+              after.Acquired - before.Acquired == 1 && after.Failed - before.Failed == 1,
+              "Lifecycle counters leaked or counted late timeout twice");
+        Console.WriteLine("GAMEPLAY_PASS coroutine-lock-destroy-timeout-replacement-and-component-disposal");
+    }
+
+    private static async ETTask ExpectDisposed(ETTask<CoroutineLock> task)
+    {
+        bool caught = false;
+        try { using var unexpected = await task; }
+        catch (ObjectDisposedException) { caught = true; }
+        Check(caught, "Disposed lock owner did not reject wait");
     }
 
     private static async ETTask<int> ChangePassword(Session session,string envelope)

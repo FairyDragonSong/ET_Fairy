@@ -17,8 +17,8 @@ namespace ET
             // 循环过程中会有对象继续加入队列
             while (self.nextFrameRun.Count > 0)
             {
-                (int coroutineLockType, long key, int count) = self.nextFrameRun.Dequeue();
-                self.Notify(coroutineLockType, key, count);
+                (int coroutineLockType, long key, int count, long queueInstanceId) = self.nextFrameRun.Dequeue();
+                self.Notify(coroutineLockType, key, count, queueInstanceId);
             }
         }
 
@@ -30,22 +30,28 @@ namespace ET
                 Log.Warning($"too much coroutine level: {coroutineLockType} {key}");
             }
 
-            self.nextFrameRun.Enqueue((coroutineLockType, key, level));
+            if (self.IsDisposed) return;
+            var queue = self.GetChild<CoroutineLockQueueType>(coroutineLockType)?.Get(key);
+            if (queue == null || queue.IsDisposed) return;
+            self.nextFrameRun.Enqueue((coroutineLockType, key, level, queue.InstanceId));
         }
 
         public static async ETTask<CoroutineLock> Wait(this CoroutineLockComponent self, int coroutineLockType, long key, int time = 60000)
         {
+            if (self.IsDisposed) throw new ObjectDisposedException(nameof(CoroutineLockComponent));
             CoroutineLockQueueType coroutineLockQueueType = self.GetChild<CoroutineLockQueueType>(coroutineLockType) ?? self.AddChildWithId<CoroutineLockQueueType>(coroutineLockType);
             return await coroutineLockQueueType.Wait(key, time);
         }
 
-        private static void Notify(this CoroutineLockComponent self, int coroutineLockType, long key, int level)
+        private static void Notify(this CoroutineLockComponent self, int coroutineLockType, long key, int level, long queueInstanceId)
         {
             CoroutineLockQueueType coroutineLockQueueType = self.GetChild<CoroutineLockQueueType>(coroutineLockType);
             if (coroutineLockQueueType == null)
             {
                 return;
             }
+            var queue = coroutineLockQueueType.Get(key);
+            if (queue == null || queue.IsDisposed || queue.InstanceId != queueInstanceId) return;
             coroutineLockQueueType.Notify(key, level);
         }
     }
@@ -56,6 +62,6 @@ namespace ET
         public Fiber Fiber { get; set; }
         public SceneType SceneType { get; set; }
         
-        public readonly Queue<(int, long, int)> nextFrameRun = new();
+        public readonly Queue<(int, long, int, long)> nextFrameRun = new();
     }
 }
