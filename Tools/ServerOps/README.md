@@ -148,6 +148,12 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 .\Test-ServerChangeGovernance.ps1
 ```
 
+上线前的安全结论由 `New-ServerSecurityAssessment.ps1` 汇总依赖、凭据、权限、渗透和故障注入五类原始证据，并由安全评估方、请求人和批准人三签。Critical/High 未关闭时不能生成可用报告；验证命令会重新读取原始证据。详情见 [020.18](../../Book/服务器上线升级/020.18-安全评估与高风险闭环门禁.md)，离线自检：
+
+```powershell
+.\Test-SecurityAssessmentGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

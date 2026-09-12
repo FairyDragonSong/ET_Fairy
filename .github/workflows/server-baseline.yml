@@ -115,3 +115,7 @@ jobs:
       - name: Verify signed production change governance
         shell: pwsh
         run: ./Tools/ServerOps/Test-ServerChangeGovernance.ps1
+
+      - name: Verify security assessment and risk closure governance
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-SecurityAssessmentGovernance.ps1
