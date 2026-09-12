@@ -409,5 +409,68 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var stored=await accounts.Find(a=>a.LoginName==name).SingleAsync();
         Check(stored.DefaultRoleId==login.PlayerId && stored.Status==AccountStatus.Active,"Authentication overwrote role association");
         Console.WriteLine("GAMEPLAY_PASS reenabled-fresh-login-and-role-link-preserved");
+        await AuditTransactions(db,stored);
+    }
+
+    private static async ETTask AuditTransactions(DBComponent db,Account account)
+    {
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        var audits=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountStateStore.AuditCollection);
+        string operation=Guid.NewGuid().ToString("N");
+        Check(await AccountStateStore.Change(db,account.Id,account.StateVersion,AccountStatus.Disabled,"local-test","test-disable",operation),"State transaction did not commit");
+        try
+        {
+            Check(!await AccountStateStore.Change(db,account.Id,account.StateVersion,AccountStatus.Disabled,"local-test","test-disable",operation),"Repeated operation applied twice");
+            bool conflict=false;
+            try { await AccountStateStore.Change(db,account.Id,account.StateVersion,AccountStatus.Active,"local-test","test-disable",operation); }
+            catch(InvalidOperationException){conflict=true;}
+            Check(conflict,"Conflicting operation id accepted");
+            bool stale=false;
+            try { await AccountStateStore.Change(db,account.Id,account.StateVersion,AccountStatus.Active,"local-test","test-enable",Guid.NewGuid().ToString("N")); }
+            catch(InvalidOperationException){stale=true;}
+            Check(stale,"Stale account version accepted");
+
+            string failedOperation=Guid.NewGuid().ToString("N");
+            bool failed=false;
+            try { await AccountStateStore.Change(db,account.Id,account.StateVersion+1,AccountStatus.Active,"local-test","test-rollback",failedOperation,
+                () => throw new InvalidOperationException("Injected audit failure")); }
+            catch(InvalidOperationException){failed=true;}
+            Check(failed,"Fault injection did not abort");
+            var after=await accounts.Find(a=>a.Id==account.Id).SingleAsync();
+            Check(after.Status==AccountStatus.Disabled && after.StateVersion==account.StateVersion+1,"Aborted transaction changed account");
+            Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",failedOperation))==0,"Aborted transaction left audit");
+            Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",operation))==1,"Audit idempotency failed");
+            Console.WriteLine("GAMEPLAY_PASS account-state-audit-atomicity-idempotency-and-version-conflicts");
+        }
+        finally
+        {
+            await AccountStateStore.Change(db,account.Id,account.StateVersion+1,AccountStatus.Active,"local-test","test-enable",Guid.NewGuid().ToString("N"));
+        }
+        var restored=await accounts.Find(a=>a.Id==account.Id).SingleAsync();
+        Check(restored.Status==AccountStatus.Active && restored.StateVersion==account.StateVersion+2,"Audited restoration failed");
+        int committed=0,conflicted=0;
+        try
+        {
+            await ETTaskHelper.WaitAll(new List<ETTask> { Compete(), Compete() });
+            Check(committed==1 && conflicted==1,"Concurrent state changes did not select exactly one winner");
+            var final=await accounts.Find(a=>a.Id==account.Id).SingleAsync();
+            Check(final.StateVersion==account.StateVersion+3 && final.Status==AccountStatus.Disabled,"Concurrent state version invalid");
+            Console.WriteLine("GAMEPLAY_PASS concurrent-state-transactions-one-winner");
+        }
+        finally
+        {
+            var current=await accounts.Find(a=>a.Id==account.Id).SingleAsync();
+            if(current.Status==AccountStatus.Disabled)
+                await AccountStateStore.Change(db,account.Id,current.StateVersion,AccountStatus.Active,"local-test","test-enable",Guid.NewGuid().ToString("N"));
+        }
+
+        async ETTask Compete()
+        {
+            try
+            {
+                if(await AccountStateStore.Change(db,account.Id,account.StateVersion+2,AccountStatus.Disabled,"local-test","test-compete",Guid.NewGuid().ToString("N")))++committed;
+            }
+            catch(InvalidOperationException){++conflicted;}
+        }
     }
 }

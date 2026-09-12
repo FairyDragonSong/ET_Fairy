@@ -20,6 +20,8 @@ namespace ET.Server
 
         public AccountStatus Status { get; set; }
 
+        public long StateVersion { get; set; }
+
         public PasswordHashScheme PasswordScheme { get; set; }
 
         public string PasswordSalt { get; set; }
