@@ -586,7 +586,10 @@ internal static class Program
         Assert(gateLogin.Contains("DetachOldSession(player)") && gateLogin.Contains("ApplyRoleSnapshot(player"), "old-session eviction or persisted snapshot reload removed");
         Assert(sessionLifecycle.Contains("playerSessionComponent.Session != self.GetParent<Session>()") && sessionLifecycle.Contains("PlayerOfflineComponent"), "old-session protection or reconnect retention removed");
         Assert(sessionLifecycle.Contains("TryReleaseMapState") && sessionLifecycle.Contains("CoroutineLockType.PlayerSession"), "disconnect save and reconnect are no longer serialized");
-        Assert(enterMap.Contains("ERR_PlayerStateConflict") && enterMap.Contains("TransferAndCleanup"), "repeated enter-map protection or temporary scene cleanup removed");
+        Assert(enterMap.Contains("ERR_PlayerStateConflict") && enterMap.Contains("StartMapTransfer()") &&
+               enterMap.Contains("FinishMapTransfer(success)") && enterMap.Contains("RecordMapEntryServiceError()") &&
+               enterMap.Contains("player.MapEntered = false") && enterMap.Contains("ResetFailedTransfer"),
+               "map entry classification, temporary scene cleanup or failed-transfer retry recovery removed");
         Assert(disconnectProto.Contains("G2M_SessionDisconnect // ILocationRequest") && disconnectProto.Contains("M2G_SessionDisconnect // ILocationResponse"), "disconnect save acknowledgement removed");
         Assert(roleRepository.Contains("account.DefaultRoleId") && roleRepository.Contains("SaveProgress"), "stable role reload/save path removed");
         Assert(roleRepository.Contains("SaveRoleAndAccountTransaction") && roleRepository.Contains("WithTransactionAsync"), "production account-role transaction removed");
@@ -773,19 +776,29 @@ internal static class Program
         Parallel.For(0,1000,_=>{metrics.RecordGateLoginAttempt();metrics.RecordGateLoginSuccess();});
         Parallel.For(0,1000,_=>metrics.RecordGateLoginFailure(LoginFailureKind.Rejected));
         Parallel.For(0,1000,_=>metrics.RecordGateLoginFailure(LoginFailureKind.ServiceError));
+        Parallel.For(0,1000,_=>{metrics.RecordMapEntryAttempt();metrics.RecordMapEntryRejected();});
+        Parallel.For(0,1000,_=>{metrics.RecordMapEntryAttempt();metrics.RecordMapEntryServiceError();});
+        Parallel.For(0,1000,_=>{metrics.RecordMapEntryAttempt();metrics.StartMapTransfer();metrics.FinishMapTransfer(true);});
+        metrics.RecordMapEntryAttempt();metrics.StartMapTransfer();
+        metrics.RecordMapEntryAttempt();metrics.StartMapTransfer();metrics.FinishMapTransfer(false);
         foreach(var metric in Enum.GetValues<SecurityMetric>().Where(v=>v!=SecurityMetric.Count))metrics.RecordSecurity(metric);
         string text=metrics.ExportPrometheus();
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+32,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+39,"Metric count changed unexpectedly");
         Assert(text.Contains("et_login_failures_total 2000\n")&&text.Contains("# TYPE et_login_rejections_total counter\n")&&
             text.Contains("et_login_rejections_total 1000\n")&&text.Contains("# TYPE et_login_service_errors_total counter\n")&&
             text.Contains("et_login_service_errors_total 1000\n"),"Login rejection and service-error counters are not isolated");
         Assert(text.Contains("et_gate_login_attempts_total 1000\n")&&text.Contains("et_gate_login_successes_total 1000\n")&&
             text.Contains("et_gate_login_failures_total 2000\n")&&text.Contains("et_gate_login_rejections_total 1000\n")&&
             text.Contains("et_gate_login_service_errors_total 1000\n"),"Gate login outcome counters are not isolated");
+        Assert(text.Contains("et_map_entry_attempts_total 3002\n")&&text.Contains("et_map_entry_accepted_total 1002\n")&&
+            text.Contains("et_map_entry_rejections_total 1000\n")&&text.Contains("et_map_entry_service_errors_total 1000\n")&&
+            text.Contains("et_map_transfers_inflight 1\n")&&text.Contains("et_map_transfer_successes_total 1000\n")&&
+            text.Contains("et_map_transfer_failures_total 1\n"),"Map entry acceptance and transfer terminal counters are inconsistent");
+        metrics.FinishMapTransfer(true);
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
@@ -800,6 +813,7 @@ internal static class Program
         try {metrics.RecordGateLoginFailure((LoginFailureKind)999);}
         catch(ArgumentOutOfRangeException){rejected=true;}
         Assert(rejected,"Unknown Gate login failure kind accepted");
+        AssertThrows(()=>metrics.FinishMapTransfer(false),"Map transfer completion without an in-flight transfer was accepted");
     }
 
     private static void TestHandlerLatency()

@@ -55,6 +55,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
         string account = Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT") ?? throw new InvalidOperationException("Test account missing");
         string password = Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD") ?? throw new InvalidOperationException("Test password missing");
         long gateSuccessesBefore=Metric("et_gate_login_successes_total"),gateRejectionsBefore=Metric("et_gate_login_rejections_total"),gateServiceErrorsBefore=Metric("et_gate_login_service_errors_total");
+        long mapAcceptedBefore=Metric("et_map_entry_accepted_total"),mapRejectionsBefore=Metric("et_map_entry_rejections_total");
+        long mapTransferSuccessesBefore=Metric("et_map_transfer_successes_total"),mapTransferFailuresBefore=Metric("et_map_transfer_failures_total");
         Stopwatch watch = Stopwatch.StartNew();
 
         using R2C_Login firstKey = await RealmLogin(net, realm, account, password);
@@ -91,7 +93,11 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(enter.Error == 0 && enter.MyId == firstLogin.PlayerId, $"EnterMap failed: {enter.Error}");
         await client.GetComponent<TimerComponent>().WaitAsync(1500);
         await Echo(first, 101);
+        Check(Metric("et_map_entry_accepted_total")==mapAcceptedBefore+1&&Metric("et_map_transfer_successes_total")==mapTransferSuccessesBefore+1&&
+            Metric("et_map_transfer_failures_total")==mapTransferFailuresBefore&&Metric("et_map_transfers_inflight")==0,
+            "Real map transfer did not reach one successful terminal outcome");
         Console.WriteLine("GAMEPLAY_PASS gate-map-rpc");
+        Console.WriteLine("GAMEPLAY_PASS map-entry-accepted-and-transfer-succeeded");
         if(outage)
         {
             string directory=Environment.GetEnvironmentVariable("ET_LOCAL_MONGO_ROOT");
@@ -148,6 +154,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         }
         using G2C_EnterMap repeatedEnter = (G2C_EnterMap)await first.Call(C2G_EnterMap.Create(),10000);
         Check(repeatedEnter.Error == ErrorCore.ERR_PlayerStateConflict, "Already-entered player can enter map twice");
+        Check(Metric("et_map_entry_rejections_total")==mapRejectionsBefore+1,"Repeated map entry was not classified as rejection");
         Console.WriteLine("GAMEPLAY_PASS duplicate-enter-map-rejected");
 
         using R2C_Login secondKey = await RealmLogin(net, realm, account, password);
@@ -436,6 +443,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
     {
         await CoroutineLockLifecycle(parent);
         await MapMailboxObservation(parent);
+        await MapTransferFailureRecovery(parent);
         long id=IdGenerater.Instance.GenerateId();
         using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"SelfCredentialTest");
         var net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
@@ -556,6 +564,38 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE",previousRing);
             if(File.Exists(keyPath))File.Delete(keyPath);
         }
+    }
+
+    private static async ETTask MapTransferFailureRecovery(Scene parent)
+    {
+        long id=IdGenerater.Instance.GenerateId();
+        using Scene scope=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"MapTransferFailureTest");
+        PlayerComponent players=scope.AddComponent<PlayerComponent>();
+        Player player=players.AddChildWithId<Player,string>(IdGenerater.Instance.GenerateId(),"map-transfer-fault");
+        long failures=Metric("et_map_transfer_failures_total"),successes=Metric("et_map_transfer_successes_total"),accepted=Metric("et_map_entry_accepted_total");
+
+        player.MapEntered=true;
+        GateMapComponent failedComponent=player.AddComponent<GateMapComponent>();
+        OperationalMetrics.Instance.StartMapTransfer();
+        bool failed=false;
+        try
+        {
+            await C2G_EnterMapHandler.TransferAndCleanup(player,failedComponent,null,default,string.Empty,
+                ()=>throw new InvalidOperationException("Injected map transfer failure"));
+        }
+        catch(InvalidOperationException exception) when(exception.Message=="Injected map transfer failure") {failed=true;}
+        Check(failed&&!player.MapEntered&&player.GetComponent<GateMapComponent>()==null,
+            "Failed map transfer did not restore retryable player state");
+
+        player.MapEntered=true;
+        GateMapComponent retryComponent=player.AddComponent<GateMapComponent>();
+        OperationalMetrics.Instance.StartMapTransfer();
+        async ETTask CompleteRetry() {await ETTask.CompletedTask;}
+        await C2G_EnterMapHandler.TransferAndCleanup(player,retryComponent,null,default,string.Empty,CompleteRetry);
+        Check(player.MapEntered&&player.GetComponent<GateMapComponent>()==null&&Metric("et_map_transfers_inflight")==0&&
+            Metric("et_map_entry_accepted_total")==accepted+2&&Metric("et_map_transfer_failures_total")==failures+1&&
+            Metric("et_map_transfer_successes_total")==successes+1,"Retried map transfer did not reach one clean terminal outcome");
+        Console.WriteLine("GAMEPLAY_PASS map-transfer-failure-state-reset-and-retry-success");
     }
 
     private static async ETTask SessionJournalBurst(Scene parent, DBComponent db)

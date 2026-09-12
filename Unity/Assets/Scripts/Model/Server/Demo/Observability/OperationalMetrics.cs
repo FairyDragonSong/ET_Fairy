@@ -28,6 +28,14 @@ namespace ET.Server
         private long gateLoginSuccesses;
         private long gateLoginRejections;
         private long gateLoginServiceErrors;
+        private long mapEntryAttempts;
+        private long mapEntryAccepted;
+        private long mapEntryRejections;
+        private long mapEntryServiceErrors;
+        private long mapTransfersInflight;
+        private long mapTransferSuccesses;
+        private long mapTransferFailures;
+        private readonly object mapTransferSync = new();
         private long roleSaveSuccesses;
         private long roleSaveFailures;
         private readonly long[] mapMailboxInflight = new long[2];
@@ -177,6 +185,30 @@ namespace ET.Server
             }
         }
 
+        public void RecordMapEntryAttempt() => Interlocked.Increment(ref this.mapEntryAttempts);
+        public void RecordMapEntryRejected() => Interlocked.Increment(ref this.mapEntryRejections);
+        public void RecordMapEntryServiceError() => Interlocked.Increment(ref this.mapEntryServiceErrors);
+
+        public void StartMapTransfer()
+        {
+            lock (this.mapTransferSync)
+            {
+                ++this.mapEntryAccepted;
+                ++this.mapTransfersInflight;
+            }
+        }
+
+        public void FinishMapTransfer(bool success)
+        {
+            lock (this.mapTransferSync)
+            {
+                if (this.mapTransfersInflight <= 0) throw new InvalidOperationException("No map transfer is in flight");
+                --this.mapTransfersInflight;
+                if (success) ++this.mapTransferSuccesses;
+                else ++this.mapTransferFailures;
+            }
+        }
+
         public void RecordRoleSave(bool success)
         {
             if (success)
@@ -244,6 +276,23 @@ namespace ET.Server
             Append(text, "et_gate_login_rejections_total", gateLoginRejectionsSnapshot);
             text.Append("# TYPE et_gate_login_service_errors_total counter\n");
             Append(text, "et_gate_login_service_errors_total", gateLoginServiceErrorsSnapshot);
+            text.Append("# TYPE et_map_entry_attempts_total counter\n");
+            Append(text, "et_map_entry_attempts_total", Interlocked.Read(ref this.mapEntryAttempts));
+            text.Append("# TYPE et_map_entry_rejections_total counter\n");
+            Append(text, "et_map_entry_rejections_total", Interlocked.Read(ref this.mapEntryRejections));
+            text.Append("# TYPE et_map_entry_service_errors_total counter\n");
+            Append(text, "et_map_entry_service_errors_total", Interlocked.Read(ref this.mapEntryServiceErrors));
+            lock (this.mapTransferSync)
+            {
+                text.Append("# TYPE et_map_entry_accepted_total counter\n");
+                Append(text, "et_map_entry_accepted_total", this.mapEntryAccepted);
+                text.Append("# TYPE et_map_transfers_inflight gauge\n");
+                Append(text, "et_map_transfers_inflight", this.mapTransfersInflight);
+                text.Append("# TYPE et_map_transfer_successes_total counter\n");
+                Append(text, "et_map_transfer_successes_total", this.mapTransferSuccesses);
+                text.Append("# TYPE et_map_transfer_failures_total counter\n");
+                Append(text, "et_map_transfer_failures_total", this.mapTransferFailures);
+            }
             Append(text, "et_role_save_successes_total", Interlocked.Read(ref this.roleSaveSuccesses));
             Append(text, "et_role_save_failures_total", Interlocked.Read(ref this.roleSaveFailures));
             text.Append("# TYPE et_gate_bound_sessions gauge\n");
