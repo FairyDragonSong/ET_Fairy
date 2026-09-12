@@ -1,4 +1,6 @@
 using ET.Server;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Unity.Mathematics;
 
 namespace ET.Tests;
@@ -16,6 +18,7 @@ internal static class Program
         ("角色快照保留地图与坐标", TestRoleSnapshot),
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
         ("商业模式启动配置门禁", TestProductionStartupValidation),
+        ("生产 Secret 根目录与凭据门禁", TestProductionSecretPolicy),
         ("认证敏感消息统一标记", TestSensitiveMessages),
         ("消息日志使用具体 BSON 类型", TestConcreteMessageLogging),
         ("登录与持久化安全架构回归", TestSourceGuards),
@@ -213,6 +216,89 @@ internal static class Program
             new DatabaseConnectionSettings("mongodb://127.0.0.1", "ET_DEV", false));
     }
 
+    private static void TestProductionSecretPolicy()
+    {
+        string[] variables =
+        [
+            "ET_SECRET_ROOT", "ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", "ET_METRICS_PORT", "ET_METRICS_TOKEN_FILE",
+            "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
+            "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
+        ];
+        Dictionary<string, string> previous = variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        string root = Path.Combine(Path.GetTempPath(), "et-secret-policy-" + Guid.NewGuid().ToString("N"));
+        string escape = Path.Combine(Path.GetTempPath(), "et-secret-escape-" + Guid.NewGuid().ToString("N") + ".pem");
+        Directory.CreateDirectory(root);
+        string passwordKey = Path.Combine(root, "password-private.pem");
+        string metricsToken = Path.Combine(root, "metrics-token");
+        string adminTrust = Path.Combine(root, "admin-trust.json");
+        string adminUri = Path.Combine(root, "admin-mongo-uri");
+        using RSA passwordRsa = RSA.Create(4096);
+        using RSA operatorRsa = RSA.Create(3072);
+        string privatePem = passwordRsa.ExportPkcs8PrivateKeyPem();
+        try
+        {
+            foreach (string variable in variables) Environment.SetEnvironmentVariable(variable, null);
+            File.WriteAllText(passwordKey, privatePem);
+            File.WriteAllText(metricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+            File.WriteAllText(adminUri, "mongodb://admin:secret@db1,db2/?tls=true&replicaSet=rs0");
+            File.WriteAllText(adminTrust, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    Id = "operations", PublicKeyPem = operatorRsa.ExportSubjectPublicKeyInfoPem(),
+                    Database = "ET_PROD", DeploymentId = "prod-1", Zone = 1,
+                    Actions = new[] { "disable" }, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
+                },
+            }));
+
+            Environment.SetEnvironmentVariable("ET_SECRET_ROOT", root);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", passwordKey);
+            Environment.SetEnvironmentVariable("ET_METRICS_PORT", "30491");
+            Environment.SetEnvironmentVariable("ET_METRICS_TOKEN_FILE", metricsToken);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_TRUST_FILE", adminTrust);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI_FILE", adminUri);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_DATABASE", "ET_PROD");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_ZONE", "1");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_DEPLOYMENT_ID", "prod-1");
+            Options production = new() { Develop = 0, PasswordLoginEnabled = 1, PasswordLoginTransportSecure = 1 };
+            ProductionSecretPolicy.Validate(production);
+            ProductionSecretPolicy.ValidatePasswordLogin(production);
+
+            File.WriteAllText(passwordKey, passwordRsa.ExportSubjectPublicKeyInfoPem());
+            AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "public key was accepted as the password decryption key");
+            File.WriteAllText(passwordKey, privatePem);
+
+            File.WriteAllText(escape, privatePem);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", escape);
+            AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "Secret path outside the managed root was accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", passwordKey);
+
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI", "mongodb://duplicate:secret@db1,db2/?tls=true&replicaSet=rs0");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "conflicting administration URI sources were accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI", null);
+
+            File.WriteAllText(adminUri, "mongodb://admin:secret@db1,db2/?replicaSet=rs0");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "non-TLS administration database was accepted");
+            File.WriteAllText(adminUri, "mongodb://admin:secret@db1,db2/?tls=true&replicaSet=rs0");
+
+            File.WriteAllText(metricsToken, "not-a-random-token");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "invalid metrics credential was accepted");
+            File.WriteAllText(metricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+
+            Environment.SetEnvironmentVariable("ET_SECRET_ROOT", null);
+            AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "production Secret files without a managed root were accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", null);
+            AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "production password Gate without a private key was accepted");
+            ProductionSecretPolicy.ValidatePasswordLogin(new Options { Develop = 1, PasswordLoginEnabled = 1 });
+        }
+        finally
+        {
+            foreach ((string name, string value) in previous) Environment.SetEnvironmentVariable(name, value);
+            if (File.Exists(escape)) File.Delete(escape);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
     private static void TestSensitiveMessages()
     {
         object[] messages =
@@ -244,8 +330,10 @@ internal static class Program
         string keyHandler = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/R2G_GetLoginKeyHandler.cs");
         string passwordAuthenticator = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/Authentication/PasswordAccountAuthenticator.cs");
         string realmInit = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/FiberInit_Realm.cs");
+        string gateInit = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/FiberInit_Gate.cs");
         string serverStartup = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/EntryEvent2_InitServer.cs");
         string databaseAudit = Read(root, "Tools/ServerOps/Audit-Mongo.js");
+        string databaseResolver = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Module/DB/DatabaseConnectionResolver.cs");
         string messageLogger = Read(root, "Unity/Assets/Scripts/Model/Share/Module/Message/LogMsg.cs");
         string sessionMonitor = Read(root, "DotNet/Hotfix/AccountSessionMonitorSystem.cs");
 
@@ -271,6 +359,8 @@ internal static class Program
                !roleRepository.Contains("database.Save(accountLockKey, account)"), "role creation can overwrite concurrent account changes");
         Assert(realmInit.IndexOf("ProductionStartupValidator.ValidateRealm", StringComparison.Ordinal) <
                realmInit.IndexOf("DatabaseMigration.Apply", StringComparison.Ordinal), "production validation no longer runs before database startup");
+        Assert(gateInit.IndexOf("ProductionSecretPolicy.ValidatePasswordLogin", StringComparison.Ordinal) <
+               gateInit.IndexOf("AccountSessionJournal.Initialize", StringComparison.Ordinal), "Gate password Secret validation no longer precedes database startup");
         Assert(serverStartup.Contains("StartupCoordinator.Instance.MarkFailed()"), "required Fiber startup failures no longer terminate the process");
         Assert(gateLogin.Contains("CoroutineLockType.PlayerSession") && gateLogin.Contains("BindSession(player, session, accountStateVersion)"), "duplicate-login serialization or session binding removed");
         Assert(gateLogin.Contains("DetachOldSession(player)") && gateLogin.Contains("ApplyRoleSnapshot(player"), "old-session eviction or persisted snapshot reload removed");
@@ -282,6 +372,8 @@ internal static class Program
         Assert(roleRepository.Contains("SaveRoleAndAccountTransaction") && roleRepository.Contains("WithTransactionAsync"), "production account-role transaction removed");
         Assert(roleRepository.Contains("WriteConcern.WMajority") && roleRepository.Contains("ReadConcern.Snapshot"), "production transaction durability weakened");
         Assert(databaseAudit.Contains("accountsMissingRoles") && databaseAudit.Contains("orphanRoles") && databaseAudit.Contains("quit(2)"), "account-role consistency audit weakened");
+        Assert(databaseResolver.Contains("ET_MONGO_URI_FILE") && databaseResolver.Contains("ProductionSecretPolicy.ReadManagedFile") &&
+               databaseResolver.Contains("cannot both be configured"), "MongoDB Secret file injection or ambiguity rejection removed");
         Assert(messageLogger.Contains("msg is ISensitiveMessage") && messageLogger.Contains("sensitive payload redacted"), "framework-level sensitive message redaction removed");
         Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");
         Assert(shutdown.Contains("saver.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");

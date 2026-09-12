@@ -25,6 +25,14 @@ namespace ET
             
             Init init = new();
             init.Start();
+            try { ProductionSecretPolicy.Validate(Options.Instance); }
+            catch (Exception)
+            {
+                Console.Error.WriteLine("Production Secret startup validation failed");
+                Environment.ExitCode = 3;
+                World.Instance.Dispose();
+                return;
+            }
             LocalMetricsExporter metricsExporter;
             try {metricsExporter=LocalMetricsExporter.FromEnvironment();}
             catch(Exception)

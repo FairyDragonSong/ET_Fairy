@@ -21,6 +21,9 @@ public sealed class AccountAdminConsole : IConsoleHandler
             string trustPath=Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_TRUST_FILE");
             if(string.IsNullOrWhiteSpace(trustPath))throw new InvalidOperationException("Administration disabled");
             string uri=Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI");
+            string uriFile=Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI_FILE");
+            if(!string.IsNullOrWhiteSpace(uriFile))
+                uri=ProductionSecretPolicy.ReadManagedFile(uriFile,8192,Options.Instance.Develop==0).Trim();
             string database=Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_DATABASE");
             if(string.IsNullOrWhiteSpace(uri)||string.IsNullOrWhiteSpace(database)||
                 !int.TryParse(Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_ZONE"),out int zone)||zone<=0)
@@ -36,7 +39,8 @@ public sealed class AccountAdminConsole : IConsoleHandler
             if(!AccountAdminRateLimiter.ProcessLimiter.TryAcquire(Environment.TickCount64))throw new InvalidOperationException("Administration rate limited");
             stage="authorization";
             string path=content.Substring("account-admin".Length).Trim();
-            command=AccountAdminAuthorization.Verify(ReadBounded(path,32768),ReadBounded(trustPath,131072),DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            command=AccountAdminAuthorization.Verify(ReadBounded(path,32768),
+                ProductionSecretPolicy.ReadManagedFile(trustPath,131072,Options.Instance.Develop==0),DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             if(command.DeploymentId!=Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_DEPLOYMENT_ID"))
                 throw new InvalidOperationException("Wrong deployment");
             if(command.Zone!=zone||command.Database!=database)throw new InvalidOperationException("Wrong administration scope");
@@ -46,7 +50,8 @@ public sealed class AccountAdminConsole : IConsoleHandler
             {
                 stage="credential_envelope";
                 string keyPath=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
-                passwordHash=AccountPasswordEnvelope.DecryptAndHash(command.EncryptedPassword,ReadBounded(keyPath,16384));
+                passwordHash=AccountPasswordEnvelope.DecryptAndHash(command.EncryptedPassword,
+                    ProductionSecretPolicy.ReadManagedFile(keyPath,16384,Options.Instance.Develop==0));
                 credentialDigest=AccountPasswordEnvelope.Digest(command.EncryptedPassword);
             }
             stage="execution";

@@ -21,9 +21,7 @@ internal sealed class LocalMetricsExporter : IDisposable
         if(string.IsNullOrEmpty(portText)&&string.IsNullOrEmpty(file))return null;
         if(!int.TryParse(portText,out int port)||port<1024||port>65535||string.IsNullOrEmpty(file)||!Path.IsPathFullyQualified(file))
             throw new InvalidOperationException("Invalid local metrics configuration");
-        var info=new FileInfo(file);
-        if(!info.Exists||info.Length>128)throw new InvalidOperationException("Invalid metrics credential file");
-        string token=File.ReadAllText(file).Trim();
+        string token=ProductionSecretPolicy.ReadManagedFile(file,128,Options.Instance?.Develop==0).Trim();
         if(token.Length!=64)throw new InvalidOperationException("Metrics token must be 32 random bytes encoded as hex");
         foreach(char c in token)if(!Uri.IsHexDigit(c))throw new InvalidOperationException("Invalid metrics token encoding");
         return new LocalMetricsExporter(port,token);

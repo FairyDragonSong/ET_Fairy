@@ -1,6 +1,6 @@
 # 服务器运维脚本
 
-本目录只保存不含凭据的操作脚本。MongoDB URI 必须通过当前进程的 `ET_MONGO_URI` 环境变量注入。
+本目录只保存不含凭据的操作脚本。MongoDB URI 可由 Secret Manager 注入当前进程的 `ET_MONGO_URI`，生产服务器也支持从 `ET_SECRET_ROOT` 下由 `ET_MONGO_URI_FILE` 指定的受限文件读取；不得把真实 URI 写入仓库。
 
 ## 登录与生产启动模式
 
@@ -10,9 +10,9 @@
 .\App.exe --Develop=1 --PasswordLoginEnabled=1 --AccountAutoRegister=1
 ```
 
-商业模式（`--Develop=0`）默认关闭密码登录，并要求 MongoDB URI 来自环境变量且同时具备认证、有效 TLS、Replica Set/SRV/负载均衡部署。按区可使用 `ET_MONGO_URI_ZONE_1`、`ET_MONGO_DATABASE_ZONE_1`；未按区配置时使用 `ET_MONGO_URI`、`ET_MONGO_DATABASE`。
+商业模式（`--Develop=0`）默认关闭密码登录，并要求 MongoDB URI 来自 Secret 注入且同时具备认证、有效 TLS、Replica Set/SRV/负载均衡部署。按区可使用 `ET_MONGO_URI_ZONE_1` 或 `ET_MONGO_URI_FILE_ZONE_1` 以及 `ET_MONGO_DATABASE_ZONE_1`；未按区配置时使用 `ET_MONGO_URI` 或 `ET_MONGO_URI_FILE`、`ET_MONGO_DATABASE`。同一层级的 URI 值和文件不能同时配置。
 
-只有完整客户端链路已经通过 WSS/TLS 等方式加密时，才可同时设置 `--PasswordLoginEnabled=1 --PasswordLoginTransportSecure=1`。该参数是部署方安全确认，不会自动给 UDP/KCP 增加加密；原生 UDP 登录不得把它设置为 1。生产凭据应由 Secret Manager 注入，不应写入仓库、启动脚本或日志。
+只有完整客户端链路已经通过 WSS/TLS 等方式加密时，才可同时设置 `--PasswordLoginEnabled=1 --PasswordLoginTransportSecure=1`。该参数是部署方安全确认，不会自动给 UDP/KCP 增加加密；原生 UDP 登录不得把它设置为 1。生产密码登录还必须设置应用目录外的 `ET_SECRET_ROOT`，并通过 `ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE` 挂载 RSA-4096 私钥。完整约束见 [020.6](../../Book/服务器上线升级/020.6-生产Secret部署契约与启动门禁.md)。
 
 ## 备份
 

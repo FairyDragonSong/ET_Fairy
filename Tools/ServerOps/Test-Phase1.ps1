@@ -88,3 +88,35 @@ finally {
     }
     $guardProcess.Dispose()
 }
+
+$secretGuardInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$secretGuardInfo.FileName = (Join-Path $repositoryRoot "Bin\App.exe")
+$secretGuardInfo.WorkingDirectory = (Join-Path $repositoryRoot "Bin")
+$secretGuardInfo.Arguments = "--Process=1 --StartConfig=StartConfig/Release --Console=0 --Develop=0 --PasswordLoginEnabled=1 --PasswordLoginTransportSecure=1"
+$secretGuardInfo.UseShellExecute = $false
+$secretGuardInfo.RedirectStandardOutput = $true
+$secretGuardInfo.RedirectStandardError = $true
+$secretGuardInfo.Environment.Remove("ET_SECRET_ROOT") | Out-Null
+$secretGuardInfo.Environment.Remove("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE") | Out-Null
+$secretGuardProcess = [System.Diagnostics.Process]::new()
+$secretGuardProcess.StartInfo = $secretGuardInfo
+try {
+    if (-not $secretGuardProcess.Start()) { throw "failed to start production Secret guard process" }
+    if (-not $secretGuardProcess.WaitForExit(10000)) { throw "missing production Secret did not terminate" }
+    if ($secretGuardProcess.ExitCode -ne 3) {
+        $secretGuardError = $secretGuardProcess.StandardError.ReadToEnd()
+        throw "production Secret guard expected exit 3 but received $($secretGuardProcess.ExitCode): $secretGuardError"
+    }
+    $secretGuardError = $secretGuardProcess.StandardError.ReadToEnd()
+    if ($secretGuardError.Contains("PRIVATE KEY") -or $secretGuardError.Contains("BEGIN ")) {
+        throw "production Secret guard output disclosed credential details"
+    }
+    Write-Host "PASS missing production password Secret failed closed with exit code 3"
+}
+finally {
+    if (-not $secretGuardProcess.HasExited) {
+        $secretGuardProcess.Kill($true)
+        $secretGuardProcess.WaitForExit()
+    }
+    $secretGuardProcess.Dispose()
+}

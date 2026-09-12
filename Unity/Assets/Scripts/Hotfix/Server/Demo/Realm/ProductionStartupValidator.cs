@@ -25,7 +25,7 @@ namespace ET.Server
 
             if (!database.ConnectionFromEnvironment)
             {
-                throw new InvalidOperationException("production MongoDB connection must be injected through ET_MONGO_URI[_ZONE_n]");
+                throw new InvalidOperationException("production MongoDB connection must be injected through an ET_MONGO_URI value or Secret file");
             }
 
             if (string.IsNullOrWhiteSpace(database.DatabaseName))

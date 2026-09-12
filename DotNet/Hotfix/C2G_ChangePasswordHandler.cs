@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -21,8 +20,8 @@ public sealed class C2G_ChangePasswordHandler : MessageSessionHandler<C2G_Change
                 response.Error=ErrorCore.ERR_LoginRateLimited;response.Message="操作过于频繁";return;
             }
             string keyPath=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
-            if(string.IsNullOrEmpty(keyPath)||new FileInfo(keyPath).Length>16384)throw new AccountStateConflictException();
-            var change=SelfPasswordCipher.Decrypt(request.Envelope,File.ReadAllText(keyPath));
+            string privateKey=ProductionSecretPolicy.ReadManagedFile(keyPath,16384,Options.Instance.Develop==0);
+            var change=SelfPasswordCipher.Decrypt(request.Envelope,privateKey);
             if(change.LoginName!=player.Account)throw new AccountStateConflictException();
             long playerInstance=player.InstanceId,sessionInstance=session.InstanceId;
             using(await session.Root().GetComponent<CoroutineLockComponent>().Wait(CoroutineLockType.PlayerSession,player.Account.GetLongHashCode()))

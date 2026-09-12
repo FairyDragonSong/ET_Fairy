@@ -22,9 +22,23 @@ namespace ET.Server
         {
             StartZoneConfig config = StartZoneConfigCategory.Instance.Get(zone);
             string zoneConnection = Environment.GetEnvironmentVariable($"ET_MONGO_URI_ZONE_{zone}");
+            string zoneConnectionFile = Environment.GetEnvironmentVariable($"ET_MONGO_URI_FILE_ZONE_{zone}");
             string sharedConnection = Environment.GetEnvironmentVariable("ET_MONGO_URI");
-            string connection = string.IsNullOrWhiteSpace(zoneConnection) ? sharedConnection : zoneConnection;
-            bool fromEnvironment = !string.IsNullOrWhiteSpace(connection);
+            string sharedConnectionFile = Environment.GetEnvironmentVariable("ET_MONGO_URI_FILE");
+            if ((!string.IsNullOrWhiteSpace(zoneConnection) && !string.IsNullOrWhiteSpace(zoneConnectionFile)) ||
+                (!string.IsNullOrWhiteSpace(sharedConnection) && !string.IsNullOrWhiteSpace(sharedConnectionFile)))
+            {
+                throw new InvalidOperationException("MongoDB URI value and Secret file cannot both be configured");
+            }
+
+            bool zoneConfigured = !string.IsNullOrWhiteSpace(zoneConnection) || !string.IsNullOrWhiteSpace(zoneConnectionFile);
+            string connection = zoneConfigured ? zoneConnection : sharedConnection;
+            string connectionFile = zoneConfigured ? zoneConnectionFile : sharedConnectionFile;
+            bool fromEnvironment = !string.IsNullOrWhiteSpace(connection) || !string.IsNullOrWhiteSpace(connectionFile);
+            if (!string.IsNullOrWhiteSpace(connectionFile))
+            {
+                connection = ProductionSecretPolicy.ReadManagedFile(connectionFile, 8192, Options.Instance.Develop == 0).Trim();
+            }
             if (!fromEnvironment)
             {
                 connection = config.DBConnection;

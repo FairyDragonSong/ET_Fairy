@@ -8,6 +8,7 @@ namespace ET.Server
         public override async ETTask Handle(FiberInit fiberInit)
         {
             Scene root = fiberInit.Fiber.Root;
+            ProductionSecretPolicy.ValidatePasswordLogin(Options.Instance);
             root.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.UnOrderedMessage);
             root.AddComponent<TimerComponent>();
             root.AddComponent<CoroutineLockComponent>();
