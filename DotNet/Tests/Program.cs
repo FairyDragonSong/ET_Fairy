@@ -18,6 +18,7 @@ internal static class Program
         ("商业模式启动配置门禁", TestProductionStartupValidation),
         ("认证敏感消息统一标记", TestSensitiveMessages),
         ("登录与持久化安全架构回归", TestSourceGuards),
+        ("管理签名与权限边界", TestAdminAuthorization),
     ];
 
     private static int Main()
@@ -274,6 +275,37 @@ internal static class Program
             directory = directory.Parent;
         }
         throw new InvalidOperationException("repository root not found");
+    }
+
+    private static void TestAdminAuthorization()
+    {
+        using var rsa=System.Security.Cryptography.RSA.Create(3072);
+        long now=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var identity=new AccountAdminOperator {Id="test-operator",PublicKeyPem=rsa.ExportSubjectPublicKeyInfoPem(),Database="test",DeploymentId="test-deployment",Zone=1,Actions=["disable"],ExpiresAt=now+3600};
+        string trust=System.Text.Json.JsonSerializer.Serialize(new[]{identity});
+        var command=new AccountAdminCommand {OperatorId=identity.Id,Database="test",DeploymentId="test-deployment",Zone=1,Action="disable",AccountId=123,ConfirmAccountId=123,ExpectedVersion=0,OperationId=Guid.NewGuid().ToString("N"),ReasonCode="test",IssuedAt=now,ExpiresAt=now+300};
+        string Sign()
+        {
+            byte[] payload=System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(command);
+            return System.Text.Json.JsonSerializer.Serialize(new AccountAdminEnvelope {OperatorId=identity.Id,Payload=Convert.ToBase64String(payload),Signature=Convert.ToBase64String(rsa.SignData(payload,System.Security.Cryptography.HashAlgorithmName.SHA256,System.Security.Cryptography.RSASignaturePadding.Pss))});
+        }
+        string valid=Sign();
+        Assert(AccountAdminAuthorization.Verify(valid,trust,now).AccountId==123,"valid signature rejected");
+        AssertThrows(()=>AccountAdminAuthorization.Verify(valid,trust,now+301),"expired command accepted");
+        command.Action="enable";
+        AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"unauthorized action accepted");
+        command.Action="disable";command.Database="production";
+        AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"wrong database accepted");
+        command.Database="test";command.DeploymentId="another-deployment";
+        AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"wrong deployment accepted");
+        command.DeploymentId="test-deployment";command.ConfirmAccountId=124;
+        AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"missing account confirmation accepted");
+        command.ConfirmAccountId=123;
+        var envelope=System.Text.Json.JsonSerializer.Deserialize<AccountAdminEnvelope>(valid);
+        byte[] altered=Convert.FromBase64String(envelope.Payload);altered[0]^=1;
+        envelope.Payload=Convert.ToBase64String(altered);
+        AssertThrows(()=>AccountAdminAuthorization.Verify(System.Text.Json.JsonSerializer.Serialize(envelope),trust,now),"tampered payload accepted");
+        AssertThrows(()=>AccountAdminAuthorization.Verify(valid,"[]",now),"removed operator accepted");
     }
 
     private static string Read(string root, string relativePath) =>
