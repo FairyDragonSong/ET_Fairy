@@ -18,6 +18,17 @@ namespace ET
 #endif
             LogManager.Configuration = new NLog.Config.XmlLoggingConfiguration(configFile);
             LogManager.Configuration.Variables["currentDir"] = Environment.CurrentDirectory;
+#if DOTNET
+            string configuredLogRoot = Environment.GetEnvironmentVariable("ET_LOG_ROOT");
+            if (!string.IsNullOrWhiteSpace(configuredLogRoot))
+            {
+                if (!System.IO.Path.IsPathFullyQualified(configuredLogRoot))
+                    throw new InvalidOperationException("ET_LOG_ROOT must be an absolute path");
+                configuredLogRoot = System.IO.Path.Combine(System.IO.Path.GetFullPath(configuredLogRoot), Environment.ProcessId.ToString());
+                System.IO.Directory.CreateDirectory(configuredLogRoot);
+                LogManager.Configuration.Variables["logRoot"] = configuredLogRoot;
+            }
+#endif
         }
 
         public NLogger(string name, int process, int fiber)

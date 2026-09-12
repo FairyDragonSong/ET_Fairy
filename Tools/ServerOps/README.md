@@ -87,6 +87,12 @@
 
 候选暂存还必须提供候选槽位、双签计划、请求/批准/监控公钥与 Key ID。每次读取或启动前调用 `Test-ServerDeploymentState.ps1`，它会校验当前签名和从第 1 代开始的完整审计链。完整参数、权限边界和故障恢复见 [020.12](../../Book/服务器上线升级/020.12-签名部署状态与审计链.md)。
 
+`Invoke-ServerSlotSupervisor.ps1` 在签名状态为 CandidateStaged 时执行真实单机切换：先启动并确认 Current，就监控观察请求 `PROMOTE`，排空 Current 后启动 Candidate；候选未就绪会恢复 Previous。它固定把日志写到 releases 外的 RuntimeRoot，紧急停服优先于任何新槽位启动。生产参数与失败语义见 [020.13](../../Book/服务器上线升级/020.13-单机监督切换与真实回滚.md)，端到端本机验证仍使用：
+
+```powershell
+.\Test-ServerRollout.ps1
+```
+
 ## 备份
 
 ```powershell

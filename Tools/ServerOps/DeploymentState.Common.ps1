@@ -37,6 +37,31 @@ function Test-DeploymentStateSignature([byte[]]$Bytes,[byte[]]$Signature,[string
     finally{$rsa.Dispose()}
 }
 
+function Assert-DeploymentStateShape($State,[string]$ExpectedKeyId,[string]$Fingerprint){
+    $slotPattern='^[0-9A-Za-z.-]+-[a-f0-9]{12}$';$hashPattern='^[a-f0-9]{64}$'
+    if($State.SchemaVersion -ne 1 -or $State.Product -ne 'ET.Server' -or
+       $State.StateSignerKeyId -cne $ExpectedKeyId -or $State.StateSignerPublicKeySha256 -cne $Fingerprint -or
+       [int64]$State.Generation -lt 1 -or $State.DeploymentId -notmatch '^[0-9A-Za-z._-]{3,80}$' -or
+       $State.Phase -notin @('Stable','CandidateStaged','SwitchPending','RollbackPending','Stopped') -or
+       $State.ActiveSlot -notmatch $slotPattern -or $State.DesiredSlot -notmatch $slotPattern){
+        throw 'Deployment state identity or schema is invalid'
+    }
+    if($State.Phase -eq 'Stable' -and ($State.ActiveSlot -cne $State.DesiredSlot -or $State.CandidateSlot)){
+        throw 'Stable deployment state invariant is invalid'
+    }
+    if($State.Phase -eq 'CandidateStaged' -and ($State.ActiveSlot -cne $State.DesiredSlot -or
+       $State.PreviousSlot -or $State.CandidateSlot -notmatch $slotPattern -or
+       $State.PlanSha256 -notmatch $hashPattern -or $State.DecisionObservationSha256)){
+        throw 'Candidate-staged deployment state invariant is invalid'
+    }
+    if($State.Phase -eq 'SwitchPending' -and ($State.PreviousSlot -cne $State.ActiveSlot -or
+       $State.CandidateSlot -notmatch $slotPattern -or $State.DesiredSlot -cne $State.CandidateSlot -or
+       $State.PlanSha256 -notmatch $hashPattern -or $State.DecisionObservationSha256 -notmatch $hashPattern)){
+        throw 'Switch-pending deployment state invariant is invalid'
+    }
+    if($State.PreviousSlot -and $State.PreviousSlot -notmatch $slotPattern){throw 'Previous slot id is invalid'}
+}
+
 function Get-DeploymentState([string]$DeploymentRoot,[string]$PublicKeyFile,[string]$ExpectedKeyId){
     $stateRoot=Join-Path $DeploymentRoot 'state'
     $currentFile=Join-Path $stateRoot 'current.json'
@@ -51,12 +76,7 @@ function Get-DeploymentState([string]$DeploymentRoot,[string]$PublicKeyFile,[str
     try{$state=$script:DeploymentStateUtf8.GetString($bytes)|ConvertFrom-Json -Depth 12 -DateKind String}
     catch{throw 'Deployment state JSON is invalid'}
     $fingerprint=Get-RsaPublicFingerprint $PublicKeyFile
-    if($state.SchemaVersion -ne 1 -or $state.Product -ne 'ET.Server' -or
-       $state.StateSignerKeyId -cne $ExpectedKeyId -or $state.StateSignerPublicKeySha256 -cne $fingerprint -or
-       [int64]$state.Generation -lt 1 -or $state.DeploymentId -notmatch '^[0-9A-Za-z._-]{3,80}$' -or
-       $state.Phase -notin @('Stable','CandidateStaged','SwitchPending','RollbackPending','Stopped')){
-        throw 'Deployment state identity or schema is invalid'
-    }
+    Assert-DeploymentStateShape $state $ExpectedKeyId $fingerprint
     $hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
     $auditRoot=Join-Path $stateRoot 'audit'
     $auditFiles=@(Get-ChildItem -LiteralPath $auditRoot -File -Filter '*.json'|Sort-Object Name)
@@ -75,6 +95,7 @@ function Get-DeploymentState([string]$DeploymentRoot,[string]$PublicKeyFile,[str
             throw 'Deployment state audit signature is invalid'
         }
         $audit=$script:DeploymentStateUtf8.GetString($auditBytes)|ConvertFrom-Json -Depth 12 -DateKind String
+        Assert-DeploymentStateShape $audit $ExpectedKeyId $fingerprint
         if([int64]$audit.Generation -ne $expectedGeneration -or $audit.DeploymentId -cne $state.DeploymentId -or
            $audit.StateSignerKeyId -cne $ExpectedKeyId -or $audit.PreviousStateSha256 -cne $previous){
             throw 'Deployment state audit hash chain is invalid'

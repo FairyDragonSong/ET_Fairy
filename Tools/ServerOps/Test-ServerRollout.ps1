@@ -7,7 +7,7 @@ $utf8=[Text.UTF8Encoding]::new($false)
 New-Item -ItemType Directory -Path $fixture|Out-Null
 try{
     $keys=@{}
-    foreach($name in @('release-current','release-candidate','requester','approver','monitor','deployment-state')){
+    foreach($name in @('release-current','release-candidate','requester','approver','monitor','deployment-state','emergency')){
         $rsa=[Security.Cryptography.RSA]::Create(3072)
         try{
             $private=Join-Path $fixture "$name.private.pem"
@@ -98,6 +98,7 @@ try{
         @{Name='hold';Minutes=1;Samples=1;Crashes=0;Expected=2;Decision='HOLD'},
         @{Name='rollback';Minutes=5;Samples=5;Crashes=1;Expected=3;Decision='ROLLBACK'})){
         $observation=New-Observation $case.Name $case.Minutes $case.Samples $case.Crashes
+        if($case.Name -eq 'promote'){$promoteObservation=$observation}
         $raw=& pwsh -NoProfile -File $decisionScript @decisionBase -ObservationFile $observation `
             -ObservationSignatureFile "$observation.sig" 2>&1
         $actualExit=$LASTEXITCODE
@@ -208,6 +209,82 @@ try{
     try{& "$PSScriptRoot/Set-ServerDeploymentState.ps1" -Action Bootstrap @stateCommon|Out-Null}catch{$rejected=$true}
     if(-not $rejected){throw 'Existing deployment state was overwritten by bootstrap'}
 
+    $supervisorArguments=@('-DeploymentRoot',$deploymentRoot,'-ConfirmDeploymentRoot',[IO.Path]::GetFullPath($deploymentRoot),
+        '-DeploymentId','rollout-state-test','-SecretRoot',$fixture,'-StatePrivateKeyFile',$keys['deployment-state'].Private,
+        '-StatePublicKeyFile',$keys['deployment-state'].Public,'-StateSignerKeyId','deployment-state-test',
+        '-CurrentSlotDirectory',$currentInstalled.SlotDirectory,'-CurrentTrustedPublicKeyFile',$keys['release-current'].Public,
+        '-CurrentExpectedSigningKeyId','release-current','-CandidateSlotDirectory',$installed.SlotDirectory,
+        '-CandidateTrustedPublicKeyFile',$keys['release-candidate'].Public,'-CandidateExpectedSigningKeyId','release-candidate',
+        '-ExpectedPackageSupplier','ET Local Test','-ExpectedSbomNamespaceBase','https://example.invalid/et-rollout',
+        '-PlanFile',$planFile,'-RequesterPublicKeyFile',$keys.requester.Public,'-ExpectedRequesterKeyId','requester-test',
+        '-ApproverPublicKeyFile',$keys.approver.Public,'-ExpectedApproverKeyId','approver-test',
+        '-MonitoringPublicKeyFile',$keys.monitor.Public,'-ExpectedMonitoringKeyId','monitor-test',
+        '-ObservationFile',$promoteObservation,'-ObservationSignatureFile',"$promoteObservation.sig",'-ExpectedWavePercent','5',
+        '-ServerArguments','--Process=8 --StartConfig=StartConfig/Release --Console=1 --Develop=1 --ShutdownTimeoutSeconds=5',
+        '-StartupTimeoutSeconds','8','-CandidateStabilitySeconds','1',
+        '-ExitAfterSuccessfulSwitch','-AllowTestPlan')
+    if($AllowDirtyTestArtifacts){$supervisorArguments+='-AllowDirtyTestArtifact'}
+    $supervisorScript=Join-Path $PSScriptRoot 'Invoke-ServerSlotSupervisor.ps1'
+    $emergencyTrust=Join-Path $fixture 'emergency-trust.json';$emergencyCommand=Join-Path $fixture 'emergency-stop.json'
+    $emergencyRsa=[Security.Cryptography.RSA]::Create()
+    try{
+        $emergencyRsa.ImportFromPem([IO.File]::ReadAllText($keys.emergency.Public));$now=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        ConvertTo-Json -InputObject @([ordered]@{KeyId='emergency-rollout-test';PublicKeyPem=$emergencyRsa.ExportSubjectPublicKeyInfoPem();
+            DeploymentId='rollout-state-test';NotBefore=$now-60;NotAfter=$now+3600}) -Depth 4|
+            Set-Content -LiteralPath $emergencyTrust -Encoding utf8NoBOM
+    }finally{$emergencyRsa.Dispose()}
+    & "$PSScriptRoot/New-EmergencyStopCommand.ps1" -PrivateKeyFile $keys.emergency.Private -KeyId 'emergency-rollout-test' `
+        -DeploymentId 'rollout-state-test' -ReasonCode 'rollout-test' -ValidMinutes 10 `
+        -ConfirmDeploymentId 'rollout-state-test' -OutputFile $emergencyCommand|Out-Null
+    $emergencyRaw=& pwsh -NoProfile -File $supervisorScript @supervisorArguments `
+        -EmergencyStopFile $emergencyCommand -EmergencyStopTrustFile $emergencyTrust 2>&1
+    if($LASTEXITCODE -ne 4){throw "Supervisor ignored startup emergency stop: $($emergencyRaw -join ' ')"}
+    $emergencyResult=($emergencyRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($emergencyResult.CurrentStarted -or $emergencyResult.CandidateStarted -or
+       (Get-NetTCPConnection -LocalPort 30300 -State Listen -ErrorAction SilentlyContinue)){
+        throw 'Emergency-stopped supervisor opened a server listener'
+    }
+
+    $drainRaw=& pwsh -NoProfile -File $supervisorScript @supervisorArguments `
+        -TestOnlySuppressCurrentShutdown -DrainTimeoutSeconds 1 2>&1
+    if($LASTEXITCODE -ne 2){throw "Supervisor drain-failure exit was $LASTEXITCODE`: $($drainRaw -join ' ')"}
+    $drainResult=($drainRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($drainResult.CandidateStarted -or -not $drainResult.PreviousRestored){throw 'Drain failure started candidate or failed to restore previous'}
+    $afterDrainRaw=& "$PSScriptRoot/Test-ServerDeploymentState.ps1" @stateVerify
+    $afterDrain=($afterDrainRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($afterDrain.Generation -ne 4 -or $afterDrain.ActiveSlot -ne $currentInstalled.SlotId){throw 'Drain failure state is invalid'}
+    $restageAfterDrain=& "$PSScriptRoot/Set-ServerDeploymentState.ps1" -Action StageCandidate @stageParameters
+    if((($restageAfterDrain -join [Environment]::NewLine)|ConvertFrom-Json).Generation -ne 5){throw 'Restage after drain failure failed'}
+
+    $rollbackRaw=& pwsh -NoProfile -File $supervisorScript @supervisorArguments `
+        -CandidateHealthUri 'http://127.0.0.1:30301/health/ready' 2>&1
+    if($LASTEXITCODE -ne 3){throw "Supervisor rollback exit was $LASTEXITCODE`: $($rollbackRaw -join ' ')"}
+    $rollbackResult=($rollbackRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($rollbackResult.Outcome -ne 'RolledBack' -or -not $rollbackResult.PreviousRestored){throw 'Previous slot was not restored'}
+    $afterRollbackRaw=& "$PSScriptRoot/Test-ServerDeploymentState.ps1" @stateVerify
+    $afterRollback=($afterRollbackRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($afterRollback.Generation -ne 7 -or $afterRollback.Phase -ne 'Stable' -or
+       $afterRollback.ActiveSlot -ne $currentInstalled.SlotId){throw 'Rollback state was not committed safely'}
+
+    $restageRaw=& "$PSScriptRoot/Set-ServerDeploymentState.ps1" -Action StageCandidate @stageParameters
+    $restaged=($restageRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($restaged.Generation -ne 8){throw 'Candidate could not be restaged after verified rollback'}
+    $switchRaw=& pwsh -NoProfile -File $supervisorScript @supervisorArguments 2>&1
+    if($LASTEXITCODE -ne 0){throw "Supervisor switch exit was $LASTEXITCODE`: $($switchRaw -join ' ')"}
+    $switchResult=($switchRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if(-not $switchResult.Passed -or $switchResult.Outcome -ne 'Switched'){throw 'Candidate switch did not complete'}
+    $afterSwitchRaw=& "$PSScriptRoot/Test-ServerDeploymentState.ps1" @stateVerify
+    $afterSwitch=($afterSwitchRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if($afterSwitch.Generation -ne 10 -or $afterSwitch.Phase -ne 'Stable' -or
+       $afterSwitch.ActiveSlot -ne $installed.SlotId -or $afterSwitch.PreviousSlot -ne $currentInstalled.SlotId){
+        throw 'Successful switch state does not preserve active and previous slots'
+    }
+    foreach($runtimeSlot in @($currentInstalled.SlotDirectory,$installed.SlotDirectory)){
+        if(Test-Path -LiteralPath (Join-Path $runtimeSlot 'package/Logs')){throw 'Runtime logs polluted an immutable release slot'}
+    }
+    $runtimeLogs=@(Get-ChildItem -LiteralPath (Join-Path $deploymentRoot 'runtime/logs/rollout-state-test') -File -Recurse)
+    if($runtimeLogs.Count -lt 1){throw 'Supervisor did not route server logs to RuntimeRoot'}
+
     $hotfix=Join-Path $installed.SlotDirectory 'package/Bin/Hotfix.dll'
     $stream=[IO.File]::Open($hotfix,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try{$stream.Position=0;$value=$stream.ReadByte();$stream.Position=0;$stream.WriteByte($value-bxor1)}finally{$stream.Dispose()}
@@ -222,7 +299,10 @@ try{
         MonitoringKeyReuseRejected=$true;ImmutableSlotVerified=$true;DuplicateSlotRejected=$true;
         TamperedSlotRejected=$true;SignedDeploymentStateVerified=$true;DeploymentStateGeneration=2;
         TamperedDeploymentStateRejected=$true;MissingDeploymentAuditRejected=$true;
-        DeploymentStateRebootstrapRejected=$true}|ConvertTo-Json -Depth 5
+        DeploymentStateRebootstrapRejected=$true;CandidateReadinessRollbackVerified=$true;
+        PreviousSlotRestored=$true;CurrentDrainFailureBlockedCandidate=$true;EmergencyStopBlockedAllSlots=$true;
+        RealSlotSwitchVerified=$true;ImmutableSlotsRemainClean=$true;ExternalRuntimeLogsVerified=$true;
+        FinalDeploymentStateGeneration=10}|ConvertTo-Json -Depth 5
 }
 finally{
     $tempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
