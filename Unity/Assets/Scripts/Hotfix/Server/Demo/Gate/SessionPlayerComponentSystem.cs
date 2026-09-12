@@ -1,11 +1,17 @@
 ﻿namespace ET.Server
 {
     [EntitySystemOf(typeof(SessionPlayerComponent))]
+    [FriendOf(typeof(SessionPlayerComponent))]
     public static partial class SessionPlayerComponentSystem
     {
         [EntitySystem]
         private static void Destroy(this SessionPlayerComponent self)
         {
+            if(self.MetricsBound)
+            {
+                self.MetricsBound=false;
+                OperationalMetrics.Instance?.RecordGateSession(false);
+            }
             Scene root = self.Root();
             if (root.IsDisposed)
             {
@@ -30,7 +36,14 @@
         [EntitySystem]
         private static void Awake(this SessionPlayerComponent self)
         {
+            self.MetricsBound=false;
+        }
 
+        public static void TrackBinding(this SessionPlayerComponent self)
+        {
+            if(self.MetricsBound)return;
+            OperationalMetrics.Instance.RecordGateSession(true);
+            self.MetricsBound=true;
         }
     }
 

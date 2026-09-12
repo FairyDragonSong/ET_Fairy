@@ -333,6 +333,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             }
             Check(errors.Count==0,$"Concurrent clients failed: {string.Join(';',errors)}");
             Check(sessions.Count==count,"Concurrent connection count mismatch");
+            Check(Metric("et_gate_bound_sessions")==count,"Online Gate gauge differs from connected baseline clients");
             Stopwatch sustained=Stopwatch.StartNew();
             do
             {
@@ -346,6 +347,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Array.Sort(latency);
             long saveFailures=Metric("et_role_save_failures_total")-failuresBefore;
             Check(saveFailures==0,"Role saving failed during load test");
+            Check(Metric("et_gate_bound_sessions")==count,"Online Gate gauge drifted during baseline");
+            Console.WriteLine($"GAMEPLAY_PASS gate-online-gauge count={count}");
             Console.WriteLine($"GAMEPLAY_PASS concurrent-clients count={count} errors=0 flow_p95_ms={latency[(int)Math.Ceiling(count*0.95)-1]} total_ms={total.ElapsedMilliseconds} sustained_ms={sustained.ElapsedMilliseconds} rpc_count={requests} rpc_max_ms={maxRpcMs} peak_sampled_working_set_bytes={peakWorkingSet} cpu_ms={(long)(process.TotalProcessorTime-cpuBefore).TotalMilliseconds} role_saves={Metric("et_role_save_successes_total")-savesBefore} role_save_failures={saveFailures}");
         }
         finally{foreach(Session session in sessions)session.Dispose();}
@@ -409,9 +412,11 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",keyPath);
             using R2C_Login initial=await RealmLogin(net,realm,name,oldPassword);
             Check(initial.Error==0,"Self credential registration failed");
+            Check(Metric("et_gate_bound_sessions")==0,"Realm authentication counted as Gate online session");
             using Session current=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
             using G2C_LoginGate login=await GateLogin(current,initial);
             Check(login.Error==0,"Self credential Gate failed");
+            Check(Metric("et_gate_bound_sessions")==1,"Gate binding not counted");
             using R2C_Login pending=await RealmLogin(net,realm,name,oldPassword);
             var before=await accounts.Find(a=>a.LoginName==name).SingleAsync();
             await SelfPasswordTransactions(db,name,oldPassword,before.StateVersion);
@@ -432,6 +437,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             // Reauthenticate before retry: revocation may race the first success response.
             for(int i=0;i<100&&!current.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
             Check(current.IsDisposed,"Self change retained old session");
+            Check(Metric("et_gate_bound_sessions")==0,"Revoked Gate session retained online count");
             using Session stale=net.Create(NetworkHelper.ToIPEndPoint(pending.Address));
             using G2C_LoginGate staleResult=await GateLogin(stale,pending);
             Check(staleResult.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Old Gate ticket accepted");
@@ -441,6 +447,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             using Session renewed=net.Create(NetworkHelper.ToIPEndPoint(fresh.Address));
             using G2C_LoginGate renewedLogin=await GateLogin(renewed,fresh);
             Check(renewedLogin.Error==0&&renewedLogin.PlayerId==login.PlayerId,"Role identity changed");
+            Check(Metric("et_gate_bound_sessions")==1,"Fresh session count incorrect");
             Check(await ChangePassword(renewed,valid)==0,"Idempotent retry failed");
             Check(await ChangePassword(renewed,valid)==ErrorCore.ERR_LoginRateLimited,"Account rate limit missing");
             var saved=await accounts.Find(a=>a.Id==before.Id).SingleAsync();
@@ -475,6 +482,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(Metric("et_session_journal_admission_failures_total")==0&&Metric("et_session_journal_end_failures_total")==1,
                 "Unexpected session journal failures");
             Console.WriteLine("GAMEPLAY_PASS security-metrics-match-password-and-session-events");
+            Check(Metric("et_gate_bound_sessions")==0&&Metric("et_gate_session_bindings_total")==2&&Metric("et_gate_session_unbindings_total")==2,"Disconnected sessions retained online gauge or duplicate accounting");
+            Console.WriteLine("GAMEPLAY_PASS live-gate-gauge-login-revoke-relogin-disconnect");
         }
         finally
         {

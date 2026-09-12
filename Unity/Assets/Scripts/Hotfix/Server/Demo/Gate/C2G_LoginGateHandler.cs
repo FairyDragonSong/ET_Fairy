@@ -161,6 +161,7 @@ namespace ET.Server
                     session.AddComponent<SessionPlayerComponent>();
             sessionPlayerComponent.Player = player;
             playerSessionComponent.Session = session;
+            sessionPlayerComponent.TrackBinding();
 
             if (previousSession != null && previousSession != session && !previousSession.IsDisposed)
             {

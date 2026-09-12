@@ -4,6 +4,7 @@
 	public class SessionPlayerComponent : Entity, IAwake, IDestroy
 	{
 		private EntityRef<Player> player;
+		public bool MetricsBound;
 
 		public Player Player
 		{

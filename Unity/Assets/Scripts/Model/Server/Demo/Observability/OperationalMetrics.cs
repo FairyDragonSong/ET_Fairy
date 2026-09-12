@@ -23,6 +23,23 @@ namespace ET.Server
         private long loginFailures;
         private long roleSaveSuccesses;
         private long roleSaveFailures;
+        private long gateBoundSessions;
+        private long gateSessionBindings;
+        private long gateSessionUnbindings;
+
+        public void RecordGateSession(bool bound)
+        {
+            if(bound)
+            {
+                Interlocked.Increment(ref this.gateBoundSessions);
+                Interlocked.Increment(ref this.gateSessionBindings);
+            }
+            else
+            {
+                Interlocked.Decrement(ref this.gateBoundSessions);
+                Interlocked.Increment(ref this.gateSessionUnbindings);
+            }
+        }
         private readonly long[] securityCounters = new long[(int)SecurityMetric.Count];
 
         public void RecordSecurity(SecurityMetric metric)
@@ -95,6 +112,12 @@ namespace ET.Server
             Append(text, "et_login_failures_total", Interlocked.Read(ref this.loginFailures));
             Append(text, "et_role_save_successes_total", Interlocked.Read(ref this.roleSaveSuccesses));
             Append(text, "et_role_save_failures_total", Interlocked.Read(ref this.roleSaveFailures));
+            text.Append("# TYPE et_gate_bound_sessions gauge\n");
+            Append(text,"et_gate_bound_sessions",Interlocked.Read(ref this.gateBoundSessions));
+            text.Append("# TYPE et_gate_session_bindings_total counter\n");
+            Append(text,"et_gate_session_bindings_total",Interlocked.Read(ref this.gateSessionBindings));
+            text.Append("# TYPE et_gate_session_unbindings_total counter\n");
+            Append(text,"et_gate_session_unbindings_total",Interlocked.Read(ref this.gateSessionUnbindings));
             for (int i = 0; i < this.securityCounters.Length; i++)
             {
                 string name = SecurityName((SecurityMetric)i);

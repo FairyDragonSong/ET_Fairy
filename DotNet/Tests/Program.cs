@@ -382,13 +382,16 @@ internal static class Program
     {
         var metrics=new OperationalMetrics();metrics.Awake();
         Parallel.For(0,1000,_=>metrics.RecordSecurity(SecurityMetric.PasswordChangeAccepted));
+        Parallel.For(0,1000,_=>{metrics.RecordGateSession(true);metrics.RecordGateSession(false);});
         foreach(var metric in Enum.GetValues<SecurityMetric>().Where(v=>v!=SecurityMetric.Count))metrics.RecordSecurity(metric);
         string text=metrics.ExportPrometheus();
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(!text.Contains('{')&&!text.Contains('}'),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count,"Security metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+3,"Metric count changed unexpectedly");
+        Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
+            text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
         try {metrics.RecordSecurity((SecurityMetric)999);}
         catch(ArgumentOutOfRangeException){rejected=true;}
