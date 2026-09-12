@@ -128,6 +128,12 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 
 完整信任边界和验证结果见 [020.14](../../Book/服务器上线升级/020.14-签名备份与双人恢复授权.md)。生产备份还必须复制到服务器外的加密、不可变存储，并定期在隔离环境恢复；签名提供完整性与来源认证，不提供静态加密。
 
+使用 `New-DisasterRecoveryPolicy.ps1` 将 Database、DeploymentId、RPO、RTO、备份间隔和最大演练年龄双签固化。恢复完成后由独立观察身份运行 `New-RestoreDrillEvidence.ps1`，绑定签名备份、Completed 操作账本及 `PASS_DATABASE_CHECKS` 原始报告；上线检查使用 `Test-RestoreDrillEvidence.ps1` 重新验证整条证据链。参数与边界见 [020.15](../../Book/服务器上线升级/020.15-双签RPO-RTO策略与恢复演练证据.md)，离线自检：
+
+```powershell
+.\Test-DisasterRecoveryGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

@@ -103,3 +103,7 @@ jobs:
       - name: Verify signed backup and restore authorization gates
         shell: pwsh
         run: ./Tools/ServerOps/Test-BackupRestoreSecurity.ps1
+
+      - name: Verify disaster recovery objectives and drill evidence
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-DisasterRecoveryGovernance.ps1
