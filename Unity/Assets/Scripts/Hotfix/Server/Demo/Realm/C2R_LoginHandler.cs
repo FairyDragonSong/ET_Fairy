@@ -9,6 +9,9 @@ namespace ET.Server
 	{
 		protected override async ETTask Run(Session session, C2R_Login request, R2C_Login response)
 		{
+			long started=System.Diagnostics.Stopwatch.GetTimestamp();
+			try
+			{
 			OperationalMetrics.Instance.RecordLoginAttempt();
 			string traceId = $"{session.Id:x}-{request.RpcId}";
 			string ipAddress = session.RemoteAddress?.Address.ToString() ?? "unknown";
@@ -64,6 +67,11 @@ namespace ET.Server
 			Log.Info($"event=login_succeeded trace_id={traceId} gate_id={response.GateId}");
 			
 			CloseSession(session).Coroutine();
+			}
+			finally
+			{
+				OperationalMetrics.Instance?.RecordHandlerDuration(HandlerLatency.RealmLogin,(System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency);
+			}
 		}
 
 		private async ETTask CloseSession(Session session)

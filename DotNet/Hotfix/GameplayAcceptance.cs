@@ -484,6 +484,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Console.WriteLine("GAMEPLAY_PASS security-metrics-match-password-and-session-events");
             Check(Metric("et_gate_bound_sessions")==0&&Metric("et_gate_session_bindings_total")==2&&Metric("et_gate_session_unbindings_total")==2,"Disconnected sessions retained online gauge or duplicate accounting");
             Console.WriteLine("GAMEPLAY_PASS live-gate-gauge-login-revoke-relogin-disconnect");
+            Check(Metric("et_realm_login_handler_seconds_count")==Metric("et_login_attempts_total")&&
+                Metric("et_gate_login_handler_seconds_count")==3&&Metric("et_password_change_handler_seconds_count")==7,
+                "Handler latency samples do not include every success/rejection/early return");
+            Console.WriteLine("GAMEPLAY_PASS handler-latency-samples-include-rejections-and-rate-limit");
         }
         finally
         {

@@ -10,6 +10,7 @@ public sealed class C2G_ChangePasswordHandler : MessageSessionHandler<C2G_Change
 {
     protected override async ETTask Run(Session session,C2G_ChangePassword request,G2C_ChangePassword response)
     {
+        long started=System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
             Player player=session.GetComponent<SessionPlayerComponent>()?.Player;
@@ -40,6 +41,10 @@ public sealed class C2G_ChangePasswordHandler : MessageSessionHandler<C2G_Change
             response.Error=ErrorCore.ERR_InvalidAccountOrPassword;
             response.Message="密码修改未确认成功，请核对凭据后重试";
             Log.Warning("event=user_password_change_rejected");
+        }
+        finally
+        {
+            OperationalMetrics.Instance?.RecordHandlerDuration(HandlerLatency.PasswordChange,(System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency);
         }
     }
 }

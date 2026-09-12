@@ -8,6 +8,9 @@ namespace ET.Server
     {
         protected override async ETTask Run(Session session, C2G_LoginGate request, G2C_LoginGate response)
         {
+            long started=System.Diagnostics.Stopwatch.GetTimestamp();
+            try
+            {
             Scene root = session.Root();
             GateLoginTicket ticket = root.GetComponent<GateSessionKeyComponent>().Take(request.Key);
             if (ticket == null)
@@ -118,6 +121,11 @@ namespace ET.Server
 
                 session.RemoveComponent<SessionAcceptTimeoutComponent>();
                 response.PlayerId = player.Id;
+            }
+            }
+            finally
+            {
+                OperationalMetrics.Instance?.RecordHandlerDuration(HandlerLatency.GateLogin,(System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency);
             }
         }
 

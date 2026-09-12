@@ -5,6 +5,7 @@ using System.Threading;
 
 namespace ET.Server
 {
+    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, Count }
     public enum SecurityMetric
     {
         PasswordChangeAccepted, PasswordChangeUnconfirmed, PasswordChangeRateLimited,
@@ -23,6 +24,46 @@ namespace ET.Server
         private long loginFailures;
         private long roleSaveSuccesses;
         private long roleSaveFailures;
+        [StaticField] private static readonly double[] latencyBoundsMs={1,5,10,25,50,100,250,500,1000,2500,5000};
+        private readonly long[,] handlerLatencyBuckets=new long[(int)HandlerLatency.Count,12];
+        private readonly long[] handlerLatencyMicroseconds=new long[(int)HandlerLatency.Count];
+
+        public void RecordHandlerDuration(HandlerLatency operation,double milliseconds)
+        {
+            if((uint)operation>=(uint)HandlerLatency.Count||double.IsNaN(milliseconds)||double.IsInfinity(milliseconds)||milliseconds<0||milliseconds>TimeSpan.MaxValue.TotalMilliseconds)
+                throw new ArgumentOutOfRangeException(nameof(milliseconds));
+            lock(this.handlerLatencyBuckets)
+            {
+                for(int i=0;i<latencyBoundsMs.Length;i++)if(milliseconds<=latencyBoundsMs[i])this.handlerLatencyBuckets[(int)operation,i]++;
+                this.handlerLatencyBuckets[(int)operation,latencyBoundsMs.Length]++;
+                this.handlerLatencyMicroseconds[(int)operation]+=(long)(milliseconds*1000);
+            }
+        }
+
+        private void AppendHandlerLatency(StringBuilder text)
+        {
+            lock(this.handlerLatencyBuckets)
+            {
+                for(int operation=0;operation<(int)HandlerLatency.Count;operation++)
+                {
+                    string name=(HandlerLatency)operation switch
+                    {
+                        HandlerLatency.RealmLogin=>"et_realm_login_handler_seconds",
+                        HandlerLatency.GateLogin=>"et_gate_login_handler_seconds",
+                        HandlerLatency.PasswordChange=>"et_password_change_handler_seconds",
+                        _=>throw new InvalidOperationException()
+                    };
+                    text.Append("# TYPE ").Append(name).Append(" histogram\n");
+                    for(int i=0;i<=latencyBoundsMs.Length;i++)
+                    {
+                        string bound=i==latencyBoundsMs.Length?"+Inf":(latencyBoundsMs[i]/1000).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        text.Append(name).Append("_bucket{le=\"").Append(bound).Append("\"} ").Append(this.handlerLatencyBuckets[operation,i]).Append('\n');
+                    }
+                    Append(text,name+"_count",this.handlerLatencyBuckets[operation,latencyBoundsMs.Length]);
+                    text.Append(name).Append("_sum ").Append((this.handlerLatencyMicroseconds[operation]/1000000.0).ToString("R",System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+                }
+            }
+        }
         private long gateBoundSessions;
         private long gateSessionBindings;
         private long gateSessionUnbindings;
@@ -125,6 +166,7 @@ namespace ET.Server
                 Append(text, name, Interlocked.Read(ref this.securityCounters[i]));
             }
             Append(text, "et_shutdown_requested", ShutdownCoordinator.Instance.IsRequested ? 1 : 0);
+            this.AppendHandlerLatency(text);
             Append(text, "et_startup_ready", StartupCoordinator.Instance.IsReady ? 1 : 0);
             return text.ToString();
         }

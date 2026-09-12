@@ -196,6 +196,8 @@ try {
         Wait-Prom 'up{job="et-peer"}' '1'
         Wait-Prom 'et_process_id{job="et-primary"}' ([string]$process.Id)
         Wait-Prom 'et_process_id{job="et-peer"}' ([string]$peer.Id)
+        Wait-Prom 'count(et_gate_login_handler_seconds_bucket{job="et-primary"})' '12'
+        Wait-Prom 'et_gate_login_handler_seconds_count{job="et-primary"}' '0'
         if(@(Get-NetTCPConnection -LocalPort 30909 -State Listen|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Collector is not loopback-only'}
         $checks.Add('prometheus-two-authenticated-targets-and-identities')
         if($Alertmanager){

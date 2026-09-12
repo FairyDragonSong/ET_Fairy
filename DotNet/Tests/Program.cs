@@ -23,6 +23,7 @@ internal static class Program
         ("密码加密信封", TestPasswordEnvelope),
         ("自助改密混合加密与有效期", TestSelfPasswordCipher),
         ("安全指标固定基数与并发计数", TestSecurityMetrics),
+        ("处理耗时直方图边界与并发", TestHandlerLatency),
     ];
 
     private static int Main()
@@ -388,14 +389,37 @@ internal static class Program
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
-        Assert(!text.Contains('{')&&!text.Contains('}'),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+3,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_(realm_login|gate_login|password_change)_handler_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+6,"Metric count changed unexpectedly");
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
         try {metrics.RecordSecurity((SecurityMetric)999);}
         catch(ArgumentOutOfRangeException){rejected=true;}
         Assert(rejected,"Unknown metric accepted");
+    }
+
+    private static void TestHandlerLatency()
+    {
+        var metrics=new OperationalMetrics();metrics.Awake();
+        foreach(double value in new[]{0.0,1,2,6000})metrics.RecordHandlerDuration(HandlerLatency.RealmLogin,value);
+        Parallel.For(0,1000,_=>metrics.RecordHandlerDuration(HandlerLatency.GateLogin,5));
+        var culture=System.Globalization.CultureInfo.CurrentCulture;
+        string text;
+        try {System.Globalization.CultureInfo.CurrentCulture=new System.Globalization.CultureInfo("fr-FR");text=metrics.ExportPrometheus();}
+        finally {System.Globalization.CultureInfo.CurrentCulture=culture;}
+        Assert(text.Contains("et_realm_login_handler_seconds_bucket{le=\"0.001\"} 2\n")&&
+            text.Contains("et_realm_login_handler_seconds_bucket{le=\"5\"} 3\n")&&
+            text.Contains("et_realm_login_handler_seconds_bucket{le=\"+Inf\"} 4\n"),"Cumulative latency buckets incorrect");
+        Assert(text.Contains("et_realm_login_handler_seconds_count 4\n")&&text.Contains("et_realm_login_handler_seconds_sum 6.003\n"),"Latency sum/count or invariant formatting incorrect");
+        Assert(text.Contains("et_gate_login_handler_seconds_count 1000\n")&&text.Contains("et_gate_login_handler_seconds_sum 5\n"),"Concurrent latency observations lost");
+        foreach(double invalid in new[]{-1.0,double.NaN,double.PositiveInfinity})
+        {
+            bool rejected=false;
+            try {metrics.RecordHandlerDuration(HandlerLatency.GateLogin,invalid);}
+            catch(ArgumentOutOfRangeException){rejected=true;}
+            Assert(rejected,"Invalid latency sample accepted");
+        }
     }
 
     private static string Read(string root, string relativePath) =>
