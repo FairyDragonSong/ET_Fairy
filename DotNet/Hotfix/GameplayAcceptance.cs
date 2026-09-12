@@ -23,7 +23,12 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 throw new InvalidOperationException("Requires development mode and isolated ET_LOCAL_GAMEPLAY database");
             bool saveFailure=content.EndsWith(" save-failure",StringComparison.Ordinal);
             bool leaseExpiry=content.EndsWith(" lease-expiry",StringComparison.Ordinal);
-            if(content.EndsWith(" self-credentials",StringComparison.Ordinal)) await SelfCredentials(fiber.Root);
+            if(content.EndsWith(" metrics",StringComparison.Ordinal))
+            {
+                await Baseline(fiber.Root);
+                await MapMailboxObservation(fiber.Root, true);
+            }
+            else if(content.EndsWith(" self-credentials",StringComparison.Ordinal)) await SelfCredentials(fiber.Root);
             else if(content.EndsWith(" credentials",StringComparison.Ordinal)) await Credentials(fiber.Root);
             else if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
             else if(content.EndsWith(" baseline",StringComparison.Ordinal)) await Baseline(fiber.Root);
@@ -563,7 +568,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS coroutine-lock-destroy-timeout-replacement-and-component-disposal");
     }
 
-    private static async ETTask MapMailboxObservation(Scene parent)
+    private static async ETTask MapMailboxObservation(Scene parent, bool collectorHandshake = false)
     {
         long id = IdGenerater.Instance.GenerateId();
         using Scene scene = EntitySceneFactory.CreateScene(parent, id, id, SceneType.Map, "MailboxObservationTest");
@@ -582,6 +587,12 @@ public sealed class GameplayAcceptance : IConsoleHandler
             await timer.WaitAsync(150);
             Check(!pending.IsCompleted && Metric("et_map_ordered_mailbox_inflight") == gaugeBefore + 1 &&
                   Metric("et_map_ordered_mailbox_seconds_count") == before, "Lock-blocked mailbox not observed as unfinished");
+            if (collectorHandshake)
+            {
+                Console.WriteLine("GAMEPLAY_METRICS_HELD");
+                await WaitForMarker(parent, Path.Combine(Environment.GetEnvironmentVariable("ET_GAMEPLAY_METRICS_FIXTURE") ??
+                    throw new InvalidOperationException("Metrics fixture missing"), "release"));
+            }
         }
         await timer.WaitAsync(50);
         Check(pending.IsCompleted, "Released mailbox did not complete");
@@ -594,6 +605,11 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(Metric("et_map_unordered_mailbox_inflight") == unorderedBefore &&
               Metric("et_map_unordered_mailbox_exceptions_total") == unorderedErrors + 1, "Unordered failure leaked gauge");
         Console.WriteLine("GAMEPLAY_PASS map-mailbox-lock-wait-inflight-and-dispatch-exception-cleanup");
+        if (collectorHandshake)
+        {
+            Console.WriteLine("GAMEPLAY_METRICS_RELEASED");
+            await WaitForMarker(parent, Path.Combine(Environment.GetEnvironmentVariable("ET_GAMEPLAY_METRICS_FIXTURE"), "finish"));
+        }
     }
 
     private static async ETTask ExpectMissingHandler(ETTask task)

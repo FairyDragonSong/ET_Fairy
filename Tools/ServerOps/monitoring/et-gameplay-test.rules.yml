@@ -1,0 +1,12 @@
+groups:
+  - name: et-gameplay-acceptance
+    interval: 1s
+    rules:
+      - alert: ETLocalMapMailboxBacklog
+        expr: et_map_ordered_mailbox_inflight{job="et-gameplay"} > 0
+        for: 3s
+        labels:
+          severity: test
+        annotations:
+          summary: Controlled local Map mailbox wait
+          description: Acceptance fixture only; not a production threshold or notification policy.
