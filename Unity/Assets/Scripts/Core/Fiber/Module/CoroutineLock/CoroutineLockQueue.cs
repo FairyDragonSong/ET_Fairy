@@ -16,6 +16,10 @@ namespace ET
         [EntitySystem]
         private static void Destroy(this CoroutineLockQueue self)
         {
+            foreach (var waiter in self.queue)
+            {
+                waiter.AbandonTracking();
+            }
             self.queue.Clear();
             self.type = 0;
             self.isStart = false;

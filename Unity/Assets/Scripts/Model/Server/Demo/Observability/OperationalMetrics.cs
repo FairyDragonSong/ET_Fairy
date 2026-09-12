@@ -150,6 +150,17 @@ namespace ET.Server
             Append(text,"et_fiber_messages_pending",queues.Pending);
             text.Append("# TYPE et_fiber_messages_max_pending_per_queue gauge\n");
             Append(text,"et_fiber_messages_max_pending_per_queue",queues.Maximum);
+            var locks=CoroutineLockMetrics.GetSnapshot();
+            text.Append("# TYPE et_coroutine_lock_waiting gauge\n");
+            Append(text,"et_coroutine_lock_waiting",locks.Waiting);
+            text.Append("# TYPE et_coroutine_lock_waits_started_total counter\n");
+            Append(text,"et_coroutine_lock_waits_started_total",locks.Started);
+            text.Append("# TYPE et_coroutine_lock_waits_acquired_total counter\n");
+            Append(text,"et_coroutine_lock_waits_acquired_total",locks.Acquired);
+            text.Append("# TYPE et_coroutine_lock_waits_failed_total counter\n");
+            Append(text,"et_coroutine_lock_waits_failed_total",locks.Failed);
+            text.Append("# TYPE et_coroutine_lock_waits_abandoned_total counter\n");
+            Append(text,"et_coroutine_lock_waits_abandoned_total",locks.Abandoned);
             Append(text, "et_config_process_id", Options.Instance.Process);
             Append(text, "et_process_start_time_seconds", this.startedAtUnixSeconds);
             Append(text, "et_process_uptime_seconds", Math.Max(0, now - this.startedAtUnixSeconds));

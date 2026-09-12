@@ -25,6 +25,7 @@ internal static class Program
         ("安全指标固定基数与并发计数", TestSecurityMetrics),
         ("处理耗时直方图边界与并发", TestHandlerLatency),
         ("Fiber 投递队列积压快照", TestMessageQueueSnapshot),
+        ("协程锁等待计数与终态去重", TestCoroutineLockMetrics),
     ];
 
     private static int Main()
@@ -391,7 +392,7 @@ internal static class Program
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change)_handler|role_save_(success|failure))_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+11,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+16,"Metric count changed unexpectedly");
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
@@ -425,6 +426,43 @@ internal static class Program
             catch(ArgumentOutOfRangeException){rejected=true;}
             Assert(rejected,"Invalid latency sample accepted");
         }
+    }
+
+    private static void TestCoroutineLockMetrics()
+    {
+        var before = CoroutineLockMetrics.GetSnapshot();
+        var waiter = WaitCoroutineLock.Create();
+        var task = waiter.Wait();
+        Assert(CoroutineLockMetrics.GetSnapshot().Waiting == before.Waiting + 1, "waiting not counted");
+        waiter.SetResult(null);
+        task.GetAwaiter().GetResult();
+
+        var failed = WaitCoroutineLock.Create();
+        var failedTask = failed.Wait();
+        failed.SetException(new InvalidOperationException("expected lock failure"));
+        bool caught = false;
+        try { failedTask.GetAwaiter().GetResult(); }
+        catch (InvalidOperationException) { caught = true; }
+        Assert(caught, "exception propagation changed");
+
+        var abandoned = WaitCoroutineLock.Create();
+        var abandonedTask = abandoned.Wait();
+        abandoned.AbandonTracking();
+        abandoned.AbandonTracking();
+        abandoned.SetResult(null);
+        abandonedTask.GetAwaiter().GetResult();
+        Parallel.For(0, 1000, _ =>
+        {
+            var item = WaitCoroutineLock.Create();
+            var pending = item.Wait();
+            item.SetResult(null);
+            pending.GetAwaiter().GetResult();
+        });
+        var after = CoroutineLockMetrics.GetSnapshot();
+        Assert(after.Waiting == before.Waiting, "waiting leaked or double decremented");
+        Assert(after.Started - before.Started == 1003 && after.Acquired - before.Acquired == 1001 &&
+               after.Failed - before.Failed == 1 && after.Abandoned - before.Abandoned == 1,
+               "lock terminal counts incorrect");
     }
 
     private static void TestMessageQueueSnapshot()
