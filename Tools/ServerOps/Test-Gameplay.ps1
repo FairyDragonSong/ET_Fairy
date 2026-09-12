@@ -119,6 +119,7 @@ try {
                 $peer=$null;$peerStarted=$false
                 $recoveryRoleCreated=$false
                 $previousRecoveryUser=$env:ET_RECOVERY_TEST_USER;$previousRecoveryPassword=$env:ET_RECOVERY_TEST_PASSWORD;$previousRecoveryCleanup=$env:ET_RECOVERY_ROLE_CLEANUP
+                $previousRecoveryDeny=$env:ET_RECOVERY_ROLE_DENY_AUDIT;$previousRecoveryUpdate=$env:ET_RECOVERY_ROLE_UPDATE
                 try {
                     # Reuse the same process/config/ports with a fresh OS process and cohort.
                     $peerInfo=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
@@ -165,6 +166,7 @@ try {
                     $env:ET_RECOVERY_TEST_USER='et_recovery_test_'+[Guid]::NewGuid().ToString('N')
                     $env:ET_RECOVERY_TEST_PASSWORD=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
                     $env:ET_RECOVERY_ROLE_CLEANUP='0';$recoveryRoleCreated=$true
+                    $env:ET_RECOVERY_ROLE_DENY_AUDIT='1';$env:ET_RECOVERY_ROLE_UPDATE='0'
                     & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalRecoveryDatabaseRole.js"
                     if($LASTEXITCODE -ne 0){throw 'Recovery identity provisioning failed'}
                     $permissionOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Test-RecoveryDatabasePermissions.js"
@@ -174,6 +176,19 @@ try {
                     $env:ET_CRASH_RECOVERY_CONTEXT=([ordered]@{OperationId=[Guid]::NewGuid().ToString('N');HostProcessId=$ownedPid;
                         ExitObserved=$crashExitObserved;ProcessStartedAtUtc=$startedAt;ExitObservedAtUtc=$observedAt;
                         BeforeSha256=$beforeCrash.SnapshotSha256;GateInstanceIds=@($beforeCrash.GateInstanceIds)}|ConvertTo-Json -Compress)
+                    $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='0';$env:ET_CRASH_RECOVERY_TEST_FAIL='0'
+                    $deniedAuditOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    if($LASTEXITCODE -ne 13){throw 'Expected real audit insert permission denial was not observed'}
+                    $deniedAudit=($deniedAuditOutput -join "`n")|ConvertFrom-Json
+                    if(-not $deniedAudit.PermissionDenied -or $deniedAudit.Stage -ne 'audit_insert'){throw 'Permission denial did not occur at audit insertion'}
+                    $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='1'
+                    $deniedRollbackOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js"
+                    if($LASTEXITCODE -ne 0){throw 'Real audit denial did not roll back the transaction'}
+                    $deniedRollback=($deniedRollbackOutput -join "`n")|ConvertFrom-Json
+                    if(-not $deniedRollback.RolledBack){throw 'Real audit denial rollback evidence missing'}
+                    $env:ET_RECOVERY_ROLE_DENY_AUDIT='0';$env:ET_RECOVERY_ROLE_UPDATE='1'
+                    & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalRecoveryDatabaseRole.js"
+                    if($LASTEXITCODE -ne 0){throw 'Recovery audit insert permission enable failed'}
                     $env:ET_CRASH_RECOVERY_CHECK_ROLLBACK='0';$env:ET_CRASH_RECOVERY_TEST_FAIL='1'
                     $injectedOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-LocalRecoveryMongo.js" --file "$PSScriptRoot/Recover-LocalCrashJournal.js" 2>&1
                     if($LASTEXITCODE -eq 0 -or ($injectedOutput -join "`n") -notmatch 'Injected recovery audit failure'){throw 'Expected injected recovery audit failure was not observed'}
@@ -207,6 +222,7 @@ try {
                     if(-not $peerFinal.Passed){throw 'Replacement final journal failed'}
                     $crashReport.LiveReplacementIsolationVerified=$true
                     $crashReport.RestrictedRecoveryIdentityVerified=$true;$crashReport.RecoveryPermissions=$permissions
+                    $crashReport.RealAuditPermissionDenied=$deniedAudit;$crashReport.RealAuditDenialRollback=$deniedRollback
                     $crashReport.Replacement=[ordered]@{HostProcessId=$peer.Id;Cohort=$peerCohort;SameAccounts=$true;Before=$peerBefore;After=$peerAfter;Final=$peerFinal;ExitCode=$peer.ExitCode}
                     $crashReport.RecoveryVerified=$true;$crashReport.Recovery=$recovery;$crashReport.Replay=$replay;$crashReport.Rollback=$rollback;$crashReport.CollisionRejected=$true
                     $crashReport.CompletedAtUtc=[DateTime]::UtcNow.ToString('O')
@@ -227,6 +243,7 @@ try {
                             }
                         } finally {
                             $env:ET_RECOVERY_TEST_USER=$previousRecoveryUser;$env:ET_RECOVERY_TEST_PASSWORD=$previousRecoveryPassword;$env:ET_RECOVERY_ROLE_CLEANUP=$previousRecoveryCleanup
+                            $env:ET_RECOVERY_ROLE_DENY_AUDIT=$previousRecoveryDeny;$env:ET_RECOVERY_ROLE_UPDATE=$previousRecoveryUpdate
                             $env:ET_CRASH_RECOVERY_CONTEXT=$previousRecoveryContext;$env:ET_CRASH_RECOVERY_TEST_FAIL=$previousRecoveryFault;$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK=$previousRecoveryCheck
                         }
                     }

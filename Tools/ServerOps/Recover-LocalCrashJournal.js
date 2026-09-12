@@ -19,9 +19,10 @@ const hash=value=>require('crypto').createHash('sha256').update(value).digest('h
 const instances=[...new Set(context.GateInstanceIds)].sort();
 const fingerprint=hash(JSON.stringify({prefix,count,instances,pid:context.HostProcessId,started:+started,observed:+observed,before:context.BeforeSha256}));
 const session=db.getMongo().startSession();
-let result;
+let result,permissionDenied=false,stage='read';
 try {
     session.withTransaction(()=>{
+        stage='read';
         const target=session.getDatabase('ET_LOCAL_GAMEPLAY');
         const audit=target.getCollection('ET.Server.SessionJournalRecoveryAudit');
         const journal=target.getCollection('ET.Server.AccountSessionJournal');
@@ -45,15 +46,21 @@ try {
         if(process.env.ET_CRASH_RECOVERY_CHECK_ROLLBACK==='1'){
             result={Passed:true,RolledBack:true,Records:count};return;
         }
+        stage='update';
         const updated=journal.updateMany({...filter,GateInstanceId:{$in:instances},State:'admitted'},{$set:{
             State:'interrupted',InterruptedObservedAtUtc:observed,RecoveryOperationId:context.OperationId}});
         if(updated.modifiedCount!==count)throw new Error('Recovery update count mismatch');
         if(process.env.ET_CRASH_RECOVERY_TEST_FAIL==='1')throw new Error('Injected recovery audit failure');
         const resultSha256=hash(EJSON.stringify(journal.find(filter).sort({_id:1}).toArray()));
+        stage='audit_insert';
         audit.insertOne({_id:context.OperationId,Fingerprint:fingerprint,GateInstanceIds:instances,
             HostProcessId:context.HostProcessId,ProcessStartedAtUtc:started,ExitObservedAtUtc:observed,
             SourceSha256:context.BeforeSha256,ResultSha256:resultSha256,Recovered:count,Reason:'local_owned_process_crash',RecordedAtUtc:new Date()});
+        stage='commit';
         result={Passed:true,Recovered:count,Replay:false};
     },{readConcern:{level:'snapshot'},writeConcern:{w:'majority'}});
+} catch(error){
+    if(error.code===13)permissionDenied=true;else throw error;
 } finally {session.endSession();}
+if(permissionDenied){print(JSON.stringify({Passed:false,PermissionDenied:true,Code:13,Stage:stage}));quit(13);}
 print(JSON.stringify(result));
