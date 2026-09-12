@@ -24,6 +24,10 @@ namespace ET.Server
         private long loginSuccesses;
         private long loginRejections;
         private long loginServiceErrors;
+        private long gateLoginAttempts;
+        private long gateLoginSuccesses;
+        private long gateLoginRejections;
+        private long gateLoginServiceErrors;
         private long roleSaveSuccesses;
         private long roleSaveFailures;
         private readonly long[] mapMailboxInflight = new long[2];
@@ -156,6 +160,23 @@ namespace ET.Server
             }
         }
 
+        public void RecordGateLoginAttempt() => Interlocked.Increment(ref this.gateLoginAttempts);
+        public void RecordGateLoginSuccess() => Interlocked.Increment(ref this.gateLoginSuccesses);
+        public void RecordGateLoginFailure(LoginFailureKind kind)
+        {
+            switch (kind)
+            {
+                case LoginFailureKind.Rejected:
+                    Interlocked.Increment(ref this.gateLoginRejections);
+                    break;
+                case LoginFailureKind.ServiceError:
+                    Interlocked.Increment(ref this.gateLoginServiceErrors);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
         public void RecordRoleSave(bool success)
         {
             if (success)
@@ -211,6 +232,18 @@ namespace ET.Server
             Append(text, "et_login_rejections_total", loginRejectionsSnapshot);
             text.Append("# TYPE et_login_service_errors_total counter\n");
             Append(text, "et_login_service_errors_total", loginServiceErrorsSnapshot);
+            long gateLoginRejectionsSnapshot=Interlocked.Read(ref this.gateLoginRejections);
+            long gateLoginServiceErrorsSnapshot=Interlocked.Read(ref this.gateLoginServiceErrors);
+            text.Append("# TYPE et_gate_login_attempts_total counter\n");
+            Append(text, "et_gate_login_attempts_total", Interlocked.Read(ref this.gateLoginAttempts));
+            text.Append("# TYPE et_gate_login_successes_total counter\n");
+            Append(text, "et_gate_login_successes_total", Interlocked.Read(ref this.gateLoginSuccesses));
+            text.Append("# TYPE et_gate_login_failures_total counter\n");
+            Append(text, "et_gate_login_failures_total", gateLoginRejectionsSnapshot+gateLoginServiceErrorsSnapshot);
+            text.Append("# TYPE et_gate_login_rejections_total counter\n");
+            Append(text, "et_gate_login_rejections_total", gateLoginRejectionsSnapshot);
+            text.Append("# TYPE et_gate_login_service_errors_total counter\n");
+            Append(text, "et_gate_login_service_errors_total", gateLoginServiceErrorsSnapshot);
             Append(text, "et_role_save_successes_total", Interlocked.Read(ref this.roleSaveSuccesses));
             Append(text, "et_role_save_failures_total", Interlocked.Read(ref this.roleSaveFailures));
             text.Append("# TYPE et_gate_bound_sessions gauge\n");

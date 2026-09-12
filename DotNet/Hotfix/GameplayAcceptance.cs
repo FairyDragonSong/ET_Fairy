@@ -54,6 +54,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         if (!IPAddress.IsLoopback(realm.Address)) throw new InvalidOperationException("Only loopback endpoints allowed");
         string account = Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT") ?? throw new InvalidOperationException("Test account missing");
         string password = Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD") ?? throw new InvalidOperationException("Test password missing");
+        long gateSuccessesBefore=Metric("et_gate_login_successes_total"),gateRejectionsBefore=Metric("et_gate_login_rejections_total"),gateServiceErrorsBefore=Metric("et_gate_login_service_errors_total");
         Stopwatch watch = Stopwatch.StartNew();
 
         using R2C_Login firstKey = await RealmLogin(net, realm, account, password);
@@ -77,7 +78,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
         using Session replay = net.Create(NetworkHelper.ToIPEndPoint(firstKey.Address));
         using G2C_LoginGate replayResult = await GateLogin(replay, firstKey);
         Check(replayResult.Error == ErrorCore.ERR_ConnectGateKeyError, "Replayed Gate key accepted");
+        Check(Metric("et_gate_login_successes_total")==gateSuccessesBefore+1&&Metric("et_gate_login_rejections_total")==gateRejectionsBefore+1&&
+            Metric("et_gate_login_service_errors_total")==gateServiceErrorsBefore,"Gate success and replay rejection outcomes were not isolated");
         Console.WriteLine("GAMEPLAY_PASS gate-key-replay-rejected");
+        Console.WriteLine("GAMEPLAY_PASS gate-login-success-rejection-isolated-from-service-errors");
 
         using R2C_Login wrong = await RealmLogin(net, realm, account, password + "wrong");
         Check(wrong.Error == ErrorCore.ERR_InvalidAccountOrPassword, $"Wrong password result: {wrong.Error}");

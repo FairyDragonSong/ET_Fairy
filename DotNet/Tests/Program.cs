@@ -517,6 +517,7 @@ internal static class Program
         string root = FindRepositoryRoot();
         string realmLogin = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Realm/C2R_LoginHandler.cs");
         string gateLogin = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Gate/C2G_LoginGateHandler.cs");
+        string routerAddressClient = Read(root, "Unity/Assets/Scripts/Hotfix/Client/Demo/NetClient/Router/RouterAddressComponentSystem.cs");
         string disconnectProto = Read(root, "Unity/Assets/Config/Proto/InnerMessage_S_20001.proto");
         string migration = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/DatabaseMigration.cs");
         string shutdown = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Demo/Observability/GracefulShutdownComponentSystem.cs");
@@ -549,6 +550,12 @@ internal static class Program
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
+        Assert(routerAddressClient.Contains("RouterHttpUrl;") && routerAddressClient.Contains("/get_router\"") &&
+               !routerAddressClient.Contains("?v="), "Router client reintroduced a query rejected by the hardened HTTP contract");
+        Assert(gateLogin.Contains("RecordGateLoginAttempt()") && gateLogin.Contains("RecordGateLoginSuccess()") &&
+               gateLogin.Contains("RecordGateLoginFailure(LoginFailureKind.Rejected)") &&
+               gateLogin.Contains("RecordGateLoginFailure(LoginFailureKind.ServiceError)") && gateLogin.Contains("if(!outcomeRecorded)"),
+               "Gate login outcome classification removed");
         Assert(keyHandler.Contains(".Issue(request.Account, request.AccountStateVersion)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key lost version binding or cryptographic randomness");
         Assert(gateLogin.Contains("accounts[0].StateVersion != ticket.StateVersion") &&
                realmLogin.Contains("r2GGetLoginKey.AccountStateVersion = authenticationResult.StateVersion"), "authenticated version no longer reaches Gate validation");
@@ -763,16 +770,22 @@ internal static class Program
         Parallel.For(0,1000,_=>{metrics.RecordGateSession(true);metrics.RecordGateSession(false);});
         Parallel.For(0,1000,_=>metrics.RecordLoginFailure(LoginFailureKind.Rejected));
         Parallel.For(0,1000,_=>metrics.RecordLoginFailure(LoginFailureKind.ServiceError));
+        Parallel.For(0,1000,_=>{metrics.RecordGateLoginAttempt();metrics.RecordGateLoginSuccess();});
+        Parallel.For(0,1000,_=>metrics.RecordGateLoginFailure(LoginFailureKind.Rejected));
+        Parallel.For(0,1000,_=>metrics.RecordGateLoginFailure(LoginFailureKind.ServiceError));
         foreach(var metric in Enum.GetValues<SecurityMetric>().Where(v=>v!=SecurityMetric.Count))metrics.RecordSecurity(metric);
         string text=metrics.ExportPrometheus();
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+27,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+32,"Metric count changed unexpectedly");
         Assert(text.Contains("et_login_failures_total 2000\n")&&text.Contains("# TYPE et_login_rejections_total counter\n")&&
             text.Contains("et_login_rejections_total 1000\n")&&text.Contains("# TYPE et_login_service_errors_total counter\n")&&
             text.Contains("et_login_service_errors_total 1000\n"),"Login rejection and service-error counters are not isolated");
+        Assert(text.Contains("et_gate_login_attempts_total 1000\n")&&text.Contains("et_gate_login_successes_total 1000\n")&&
+            text.Contains("et_gate_login_failures_total 2000\n")&&text.Contains("et_gate_login_rejections_total 1000\n")&&
+            text.Contains("et_gate_login_service_errors_total 1000\n"),"Gate login outcome counters are not isolated");
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
@@ -783,6 +796,10 @@ internal static class Program
         try {metrics.RecordLoginFailure((LoginFailureKind)999);}
         catch(ArgumentOutOfRangeException){rejected=true;}
         Assert(rejected,"Unknown login failure kind accepted");
+        rejected=false;
+        try {metrics.RecordGateLoginFailure((LoginFailureKind)999);}
+        catch(ArgumentOutOfRangeException){rejected=true;}
+        Assert(rejected,"Unknown Gate login failure kind accepted");
     }
 
     private static void TestHandlerLatency()

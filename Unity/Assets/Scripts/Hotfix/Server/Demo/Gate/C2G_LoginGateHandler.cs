@@ -9,14 +9,18 @@ namespace ET.Server
         protected override async ETTask Run(Session session, C2G_LoginGate request, G2C_LoginGate response)
         {
             long started=System.Diagnostics.Stopwatch.GetTimestamp();
+            bool outcomeRecorded=false;
             try
             {
+            OperationalMetrics.Instance.RecordGateLoginAttempt();
             Scene root = session.Root();
             GateLoginTicket ticket = root.GetComponent<GateSessionKeyComponent>().Take(request.Key);
             if (ticket == null)
             {
                 response.Error = ErrorCore.ERR_ConnectGateKeyError;
                 response.Message = "Gate key验证失败!";
+                OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.Rejected);
+                outcomeRecorded=true;
                 return;
             }
             
@@ -37,6 +41,8 @@ namespace ET.Server
                     {
                         response.Error = ErrorCore.ERR_InvalidAccountOrPassword;
                         response.Message = "登录凭据已失效";
+                        OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.Rejected);
+                        outcomeRecorded=true;
                         return;
                     }
                     accountStateVersion = accounts[0].StateVersion;
@@ -46,6 +52,8 @@ namespace ET.Server
                 {
                     response.Error = ErrorCore.ERR_AccountStorageUnavailable;
                     response.Message = "账号服务暂时不可用";
+                    OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                    outcomeRecorded=true;
                     return;
                 }
 #if DOTNET
@@ -53,6 +61,8 @@ namespace ET.Server
                 {
                     response.Error=ErrorCore.ERR_AccountStorageUnavailable;
                     response.Message="会话服务暂时不可用";
+                    OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                    outcomeRecorded=true;
                     return;
                 }
 #endif
@@ -64,6 +74,8 @@ namespace ET.Server
                     {
                         response.Error = roleLoadResult.Error;
                         response.Message = roleLoadResult.Message;
+                        OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                        outcomeRecorded=true;
                         return;
                     }
 
@@ -86,6 +98,8 @@ namespace ET.Server
                     {
                         response.Error = ErrorCore.ERR_PlayerStateConflict;
                         response.Message = "玩家状态已变化，请重新登录";
+                        OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                        outcomeRecorded=true;
                         return;
                     }
 
@@ -103,6 +117,8 @@ namespace ET.Server
                         {
                             response.Error = ErrorCore.ERR_RoleStorageUnavailable;
                             response.Message = "角色保存尚未完成，请稍后重试";
+                            OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                            outcomeRecorded=true;
                             return;
                         }
 
@@ -111,6 +127,8 @@ namespace ET.Server
                         {
                             response.Error = roleLoadResult.Error;
                             response.Message = roleLoadResult.Message;
+                            OperationalMetrics.Instance.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                            outcomeRecorded=true;
                             return;
                         }
 
@@ -121,7 +139,14 @@ namespace ET.Server
 
                 session.RemoveComponent<SessionAcceptTimeoutComponent>();
                 response.PlayerId = player.Id;
+                OperationalMetrics.Instance.RecordGateLoginSuccess();
+                outcomeRecorded=true;
             }
+            }
+            catch
+            {
+                if(!outcomeRecorded)OperationalMetrics.Instance?.RecordGateLoginFailure(LoginFailureKind.ServiceError);
+                throw;
             }
             finally
             {

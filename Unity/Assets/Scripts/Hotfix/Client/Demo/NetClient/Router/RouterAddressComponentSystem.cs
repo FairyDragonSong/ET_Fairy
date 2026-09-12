@@ -29,9 +29,9 @@ namespace ET.Client
         private static async ETTask GetAllRouter(this RouterAddressComponent self)
         {
 #if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
-            string url = $"{MiniGameNetworkSettings.RouterHttpUrl}?v={RandomGenerator.RandUInt32()}";
+            string url = MiniGameNetworkSettings.RouterHttpUrl;
 #else
-            string url = $"http://{self.RouterManagerHost}:{self.RouterManagerPort}/get_router?v={RandomGenerator.RandUInt32()}";
+            string url = $"http://{self.RouterManagerHost}:{self.RouterManagerPort}/get_router";
 #endif
             Log.Debug($"start get router info: {url}");
             string routerInfo = await HttpClientHelper.Get(url);
