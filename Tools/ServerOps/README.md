@@ -95,21 +95,38 @@
 
 ## 备份
 
+备份必须写到仓库外目录，并由独立备份身份签署逐文件清单：
+
 ```powershell
 $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
-.\Backup-Mongo.ps1 -Database ET -OutputDirectory D:\Backups\ET
+.\Backup-Mongo.ps1 -Database ET -OutputDirectory D:\Backups\ET `
+  -SigningPrivateKeyFile '<仓库外备份私钥>' -SigningKeyId '<备份 Key ID>'
 ```
 
 ## 恢复演练
 
-恢复前先停止写入。默认不删除已有集合；灾难恢复需要覆盖数据时必须显式传入 `-DropExisting`，并通过 `-ConfirmDatabaseName` 再次确认目标库名。
+恢复前先停止写入。先用 `New-MongoRestoreAuthorization.ps1` 让不同的请求人与批准人对备份清单哈希、目标库、`DropExisting` 和有效期双签；三个角色的密钥必须各不相同。然后将授权文件和两个签名交给恢复入口。实际恢复还要求仓库外一次性操作账本；OperationId 无论成功或失败都不能复用。
 
 ```powershell
 $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
-.\Restore-Mongo.ps1 -Database ET_DR_TEST -BackupPath D:\Backups\ET\ET-20260823T010203Z -ConfirmDatabaseName ET_DR_TEST
+.\New-MongoRestoreAuthorization.ps1 -BackupPath '<备份目录>' `
+  -BackupTrustedPublicKeyFile '<备份公钥>' -BackupExpectedSigningKeyId '<备份 Key ID>' `
+  -TargetDatabase ET_DR_TEST -ConfirmTargetDatabase ET_DR_TEST -DropExisting `
+  -ConfirmRestoreMode 'DROP ET_DR_TEST' -OperationId '<唯一操作 ID>' `
+  -RequestedBy '<请求人>' -ApprovedBy '<批准人>' `
+  -RequesterPrivateKeyFile '<请求私钥>' -RequesterKeyId '<请求 Key ID>' `
+  -ApproverPrivateKeyFile '<批准私钥>' -ApproverKeyId '<批准 Key ID>' `
+  -OutputDirectory '<仓库外授权目录>'
+
+.\Restore-Mongo.ps1 -Database ET_DR_TEST -BackupPath '<备份目录>' `
+  -ConfirmDatabaseName ET_DR_TEST -DropExisting -AuthorizationFile '<授权 JSON>' `
+  -OperationId '<同一操作 ID>' -BackupTrustedPublicKeyFile '<备份公钥>' `
+  -BackupExpectedSigningKeyId '<备份 Key ID>' -RequesterPublicKeyFile '<请求公钥>' `
+  -ExpectedRequesterKeyId '<请求 Key ID>' -ApproverPublicKeyFile '<批准公钥>' `
+  -ExpectedApproverKeyId '<批准 Key ID>' -OperationLedgerDirectory '<仓库外账本目录>'
 ```
 
-生产备份必须写入服务器外的加密存储，并定期在隔离库执行恢复演练。脚本成功退出只代表工具执行成功，不替代恢复后的账号、角色数量和登录抽查。
+完整信任边界和验证结果见 [020.14](../../Book/服务器上线升级/020.14-签名备份与双人恢复授权.md)。生产备份还必须复制到服务器外的加密、不可变存储，并定期在隔离环境恢复；签名提供完整性与来源认证，不提供静态加密。
 
 ## 账号与角色一致性审计
 
@@ -136,7 +153,14 @@ $env:ET_MONGO_URI = "mongodb://user:password@node1,node2,node3/?authSource=admin
   -ConfirmRestoreDatabase ET_PREPRODUCTION_DR_TEST `
   -SourceWritesStopped `
   -BackupOutputDirectory D:\Backups\ET-Acceptance `
-  -EvidenceOutputDirectory D:\Evidence\ET-Acceptance
+  -EvidenceOutputDirectory D:\Evidence\ET-Acceptance `
+  -BackupSigningPrivateKeyFile '<备份私钥>' -BackupSigningPublicKeyFile '<备份公钥>' `
+  -BackupSigningKeyId '<备份 Key ID>' `
+  -RestoreRequesterPrivateKeyFile '<请求私钥>' -RestoreRequesterPublicKeyFile '<请求公钥>' `
+  -RestoreRequesterKeyId '<请求 Key ID>' -RestoreRequestedBy '<请求人>' `
+  -RestoreApproverPrivateKeyFile '<批准私钥>' -RestoreApproverPublicKeyFile '<批准公钥>' `
+  -RestoreApproverKeyId '<批准 Key ID>' -RestoreApprovedBy '<批准人>' `
+  -RestoreOperationLedgerDirectory D:\Evidence\ET-Restore-Ledger
 ```
 
 该入口执行第一阶段回归、MongoDB 认证/拓扑/会话检查、事务提交与回滚、索引及账号角色审计、备份、隔离恢复和恢复数据核对。证据 JSON 不包含连接串。MongoDB 切主、网络故障、多客户端重连和负载测试依赖具体部署平台，必须另外执行并附证据，不能由此脚本的 PASS 替代。

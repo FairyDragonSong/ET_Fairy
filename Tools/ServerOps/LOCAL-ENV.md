@@ -55,7 +55,13 @@ mongosh --nodb --quiet --file .\Tools\ServerOps\Connect-Mongo.js --file .\Tools\
   -ConfirmRestoreDatabase ET_LOCAL_ACCEPTANCE_DR_TEST `
   -SourceWritesStopped `
   -BackupOutputDirectory 'D:\Program Files\ET\_Env\mongo-local\backups' `
-  -EvidenceOutputDirectory 'D:\Program Files\ET\_Env\mongo-local\evidence'
+  -EvidenceOutputDirectory 'D:\Program Files\ET\_Env\mongo-local\evidence' `
+  -BackupSigningPrivateKeyFile '<本机验收备份私钥>' -BackupSigningPublicKeyFile '<对应公钥>' -BackupSigningKeyId 'local-backup' `
+  -RestoreRequesterPrivateKeyFile '<本机请求私钥>' -RestoreRequesterPublicKeyFile '<对应公钥>' `
+  -RestoreRequesterKeyId 'local-requester' -RestoreRequestedBy 'local-requester' `
+  -RestoreApproverPrivateKeyFile '<本机批准私钥>' -RestoreApproverPublicKeyFile '<对应公钥>' `
+  -RestoreApproverKeyId 'local-approver' -RestoreApprovedBy 'local-approver' `
+  -RestoreOperationLedgerDirectory 'D:\Program Files\ET\_Env\mongo-local\restore-ledger'
 
 # 故障演练，只允许 et-local-rs。
 mongosh --nodb --quiet --file .\Tools\ServerOps\Connect-Mongo.js --file .\Tools\ServerOps\Test-LocalMongoFailover.js
@@ -68,6 +74,6 @@ mongosh --nodb --quiet --file .\Tools\ServerOps\Connect-Mongo.js --file .\Tools\
 
 故障/安全演练会临时移除并恢复**本环境 CA** 在当前用户的信任，验证使用错误 CA 时连接失败；随后切主、强制重启三个节点，验证数据保持一致。最后改动并还原隔离恢复库的一个假数据字段，验证数量不变的内容损坏也会被检出。结果保存在 `mongo-local\evidence\local-recovery.json`。
 
-备份工具使用受限临时配置文件传入 URI，调用后删除该文件。恢复目标必须再次确认，允许覆盖的 `_DR_TEST` 测试库仍需由操作者确认没有有效业务数据。
+备份工具使用受限临时配置文件传入 URI，调用后删除该文件。本机验收的三个 RSA-3072+ 密钥对必须保存在 `mongo-local` 受限目录且互不相同；它们只证明流程，不代表生产职责已经分离。恢复目标必须再次确认，允许覆盖的 `_DR_TEST` 测试库仍需确认没有有效业务数据。
 
 真实协议客户端验收入口为 `Test-Gameplay.ps1`，覆盖 Router、登录、地图、房间重连、服务重启、数据库中断/恢复、保存失败退出和 20 并发流程；`Test-RealmTls.ps1` 验证 .NET 正确/错误 CA。详情见 `Book/服务器上线升级/014.1-真实游戏链路验收.md`。这些测试使用独立的 `ET_LOCAL_GAMEPLAY` 库，故障测试会停止本机测试副本集，不要与其他测试并行执行。网络分区、目标在线量和生产容量验收仍须补充。

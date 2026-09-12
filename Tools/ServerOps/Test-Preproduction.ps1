@@ -10,9 +10,23 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ConfirmRestoreDatabase,
 
-    [string]$BackupOutputDirectory = (Join-Path $PSScriptRoot "backups"),
+    [Parameter(Mandatory = $true)][string]$BackupOutputDirectory,
 
-    [string]$EvidenceOutputDirectory = (Join-Path $PSScriptRoot "acceptance-results"),
+    [Parameter(Mandatory = $true)][string]$EvidenceOutputDirectory,
+
+    [Parameter(Mandatory = $true)][string]$BackupSigningPrivateKeyFile,
+    [Parameter(Mandatory = $true)][string]$BackupSigningPublicKeyFile,
+    [Parameter(Mandatory = $true)][string]$BackupSigningKeyId,
+    [Parameter(Mandatory = $true)][string]$RestoreRequesterPrivateKeyFile,
+    [Parameter(Mandatory = $true)][string]$RestoreRequesterPublicKeyFile,
+    [Parameter(Mandatory = $true)][string]$RestoreRequesterKeyId,
+    [Parameter(Mandatory = $true)][string]$RestoreRequestedBy,
+    [Parameter(Mandatory = $true)][string]$RestoreApproverPrivateKeyFile,
+    [Parameter(Mandatory = $true)][string]$RestoreApproverPublicKeyFile,
+    [Parameter(Mandatory = $true)][string]$RestoreApproverKeyId,
+    [Parameter(Mandatory = $true)][string]$RestoreApprovedBy,
+
+    [Parameter(Mandatory = $true)][string]$RestoreOperationLedgerDirectory,
 
     [switch]$SkipPhase1Regression,
     [Parameter(Mandatory = $true)][switch]$SourceWritesStopped
@@ -79,15 +93,32 @@ finally {
 if ($LASTEXITCODE -ne 0) { throw "Source database consistency audit failed." }
 
 $backupRoot = [System.IO.Path]::GetFullPath($BackupOutputDirectory)
-$backupPath = & (Join-Path $PSScriptRoot "Backup-Mongo.ps1") -Database $Database -OutputDirectory $backupRoot
+$backupPath = & (Join-Path $PSScriptRoot "Backup-Mongo.ps1") -Database $Database -OutputDirectory $backupRoot `
+    -SigningPrivateKeyFile $BackupSigningPrivateKeyFile -SigningKeyId $BackupSigningKeyId
 if ($LASTEXITCODE -ne 0) { throw "MongoDB backup failed." }
 $backup = Get-Item -LiteralPath $backupPath
+
+$restoreOperationId='preproduction-restore-'+[guid]::NewGuid().ToString('N')
+$authorizationRoot=Join-Path ([IO.Path]::GetFullPath($EvidenceOutputDirectory)) 'restore-authorizations'
+$authorizationRaw=& (Join-Path $PSScriptRoot 'New-MongoRestoreAuthorization.ps1') -BackupPath $backup.FullName `
+    -BackupTrustedPublicKeyFile $BackupSigningPublicKeyFile -BackupExpectedSigningKeyId $BackupSigningKeyId `
+    -TargetDatabase $RestoreDatabase -ConfirmTargetDatabase $ConfirmRestoreDatabase -DropExisting `
+    -ConfirmRestoreMode "DROP $RestoreDatabase" -OperationId $restoreOperationId `
+    -RequestedBy $RestoreRequestedBy -ApprovedBy $RestoreApprovedBy `
+    -RequesterPrivateKeyFile $RestoreRequesterPrivateKeyFile -RequesterKeyId $RestoreRequesterKeyId `
+    -ApproverPrivateKeyFile $RestoreApproverPrivateKeyFile -ApproverKeyId $RestoreApproverKeyId `
+    -OutputDirectory $authorizationRoot
+$authorization=($authorizationRaw -join [Environment]::NewLine)|ConvertFrom-Json
 
 & (Join-Path $PSScriptRoot "Restore-Mongo.ps1") `
     -Database $RestoreDatabase `
     -BackupPath $backup.FullName `
     -ConfirmDatabaseName $ConfirmRestoreDatabase `
-    -DropExisting
+    -DropExisting -AuthorizationFile $authorization.AuthorizationFile -OperationId $restoreOperationId `
+    -BackupTrustedPublicKeyFile $BackupSigningPublicKeyFile -BackupExpectedSigningKeyId $BackupSigningKeyId `
+    -RequesterPublicKeyFile $RestoreRequesterPublicKeyFile -ExpectedRequesterKeyId $RestoreRequesterKeyId `
+    -ApproverPublicKeyFile $RestoreApproverPublicKeyFile -ExpectedApproverKeyId $RestoreApproverKeyId `
+    -OperationLedgerDirectory $RestoreOperationLedgerDirectory
 if ($LASTEXITCODE -ne 0) { throw "MongoDB isolated restore failed." }
 
 $env:ET_RESTORE_SOURCE_DATABASE = $Database
@@ -113,6 +144,9 @@ $evidence = [ordered]@{
     SourceDatabase = $Database
     RestoreDatabase = $RestoreDatabase
     BackupManifest = (Join-Path $backup.FullName "backup-manifest.json")
+    BackupManifestSha256 = (Get-FileHash -LiteralPath (Join-Path $backup.FullName "backup-manifest.json") -Algorithm SHA256).Hash.ToLowerInvariant()
+    RestoreOperationId = $restoreOperationId
+    RestoreAuthorization = $authorization.AuthorizationFile
     Phase1RegressionExecuted = (-not $SkipPhase1Regression)
     MongoCheck = ($mongoCheck | Select-Object -Last 1 | ConvertFrom-Json)
     RestoreCheck = ($restoreCheck | Select-Object -Last 1 | ConvertFrom-Json)

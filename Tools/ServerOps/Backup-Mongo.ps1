@@ -2,7 +2,12 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$Database,
 
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot "backups")
+    [Parameter(Mandatory = $true)][string]$OutputDirectory,
+
+    [Parameter(Mandatory = $true)][string]$SigningPrivateKeyFile,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9A-Za-z._-]{3,64}$')][string]$SigningKeyId
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +17,8 @@ if ([string]::IsNullOrWhiteSpace($mongoUri)) {
 }
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
+. "$PSScriptRoot/BackupRestore.Common.ps1"
+$resolvedOutput=Assert-BackupPathOutsideRepository $resolvedOutput 'OutputDirectory'
 [System.IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null
 $timestamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssfffffffZ")
 $backupPath = Join-Path $resolvedOutput "$Database-$timestamp"
@@ -22,11 +29,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "mongodump failed with exit code $LASTEXITCODE"
 }
 
-$manifest = @{
-    Database = $Database
-    CreatedAtUtc = [DateTime]::UtcNow.ToString("O")
-    Path = $backupPath
-}
-$manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backupPath "backup-manifest.json") -Encoding UTF8
+$backupId="$Database-$timestamp"
+& "$PSScriptRoot/New-SignedMongoBackupManifest.ps1" -BackupPath $backupPath -SourceDatabase $Database `
+    -BackupId $backupId -SigningPrivateKeyFile $SigningPrivateKeyFile -SigningKeyId $SigningKeyId|Out-Null
 Write-Host "MongoDB backup completed: $backupPath"
 Write-Output $backupPath

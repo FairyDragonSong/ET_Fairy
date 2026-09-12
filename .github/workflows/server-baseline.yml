@@ -99,3 +99,7 @@ jobs:
       - name: Verify signed emergency stop and graceful drain
         shell: pwsh
         run: ./Tools/ServerOps/Test-EmergencyStop.ps1
+
+      - name: Verify signed backup and restore authorization gates
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-BackupRestoreSecurity.ps1
