@@ -74,8 +74,22 @@ try{
     if(-not(Test-Path -LiteralPath $manifestPath -PathType Leaf)){$manifestPath=Join-Path $extract 'manifest.json'}
     if(-not(Test-Path -LiteralPath $manifestPath -PathType Leaf)){throw 'Release manifest is missing'}
     $manifest=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json -Depth 10
-    if($manifest.SchemaVersion -ne 1 -or $manifest.Product -ne 'ET.Server' -or $manifest.SourceCommit -notmatch '^[a-f0-9]{40}$'){
+    if($manifest.SchemaVersion -notin @(1,2) -or $manifest.Product -ne 'ET.Server' -or $manifest.SourceCommit -notmatch '^[a-f0-9]{40}$'){
         throw 'Release manifest identity is invalid'
+    }
+    $compatibility=$null
+    if($manifest.SchemaVersion -eq 2){
+        $compatibility=$manifest.Compatibility
+        if($null -eq $compatibility -or $compatibility.SchemaVersion -ne 1 -or
+            $compatibility.DatabaseMinimumReadable -lt 0 -or
+            $compatibility.DatabaseMinimumReadable -gt $compatibility.DatabaseTarget -or
+            $compatibility.DatabaseTarget -gt $compatibility.DatabaseMaximumReadable -or
+            $compatibility.ProtocolSha256 -notmatch '^[a-f0-9]{64}$' -or
+            $compatibility.RollingMode -notin @('protocol-identical-only','reviewed-backward-compatible') -or
+            ($compatibility.RollingMode -eq 'reviewed-backward-compatible' -and $compatibility.ReviewId -notmatch '^[0-9A-Za-z._-]{3,80}$') -or
+            ($compatibility.RollingMode -eq 'protocol-identical-only' -and $null -ne $compatibility.ReviewId)){
+            throw 'Release compatibility contract is invalid'
+        }
     }
     if($RequireCleanProvenance -and $manifest.WorktreeDirty){throw 'Dirty source provenance is not accepted'}
     if($signed){
@@ -155,6 +169,7 @@ try{
     }
     [ordered]@{Passed=$true;Archive=$archive.FullName;Sha256=$actual;Version=$manifest.Version;
         SourceCommit=$manifest.SourceCommit;WorktreeDirty=[bool]$manifest.WorktreeDirty;Files=$actualFiles.Count;
+        Platform=$manifest.Platform;Compatibility=$compatibility;
         Signed=$signed;SigningKeyId=$(if($signed){$attestation.SigningKeyId}else{$null});
         SbomPackages=$(if($hasSpdx){$sbomPackageCount}else{$null});
         RuntimeSmoke=$(if($RuntimeSmoke){$smokePassed}else{$null})}|ConvertTo-Json

@@ -418,6 +418,10 @@ internal static class Program
         string routerSystem = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Module/Router/RouterComponentSystem.cs");
         string webSocketService = Read(root, "Unity/Assets/Scripts/Core/Network/WService.cs");
         string urlAclScript = Read(root, "Tools/ServerOps/Set-ServerHttpUrlAcl.ps1");
+        string releaseBuilder = Read(root, "Tools/ServerOps/New-ServerRelease.ps1");
+        string compatibilityVerifier = Read(root, "Tools/ServerOps/Test-ServerReleaseCompatibility.ps1");
+        string rolloutPlan = Read(root, "Tools/ServerOps/New-ServerRolloutPlan.ps1");
+        string rolloutDecision = Read(root, "Tools/ServerOps/Get-ServerRolloutDecision.ps1");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -458,6 +462,10 @@ internal static class Program
                databaseResolver.Contains("cannot both be configured"), "MongoDB Secret file injection or ambiguity rejection removed");
         Assert(messageLogger.Contains("msg is ISensitiveMessage") && messageLogger.Contains("sensitive payload redacted"), "framework-level sensitive message redaction removed");
         Assert(migration.Contains("ux_account_login_name") && migration.Contains("ux_role_account_id"), "required unique indexes removed");
+        Assert(migration.Contains("public const int MinimumReadableVersion") &&
+               migration.Contains("public const int MaximumReadableVersion") && migration.Contains("public const int TargetVersion") &&
+               migration.Contains("version < MinimumReadableVersion || version > MaximumReadableVersion") &&
+               migration.Contains("version != TargetVersion"), "database release compatibility contract removed");
         Assert(shutdown.Contains("saver.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
         Assert(shutdown.Contains("const int batchSize = 16") && shutdown.Contains("await ETTaskHelper.WaitAll(tasks)")
             && shutdown.Contains("success &= saved") && shutdown.Contains("retry < 3"), "bounded shutdown drain or failure aggregation removed");
@@ -476,6 +484,19 @@ internal static class Program
         Assert(urlAclScript.Contains("ServiceIdentity") && urlAclScript.Contains("ConfirmUrl") &&
                urlAclScript.Contains("http://*:") && urlAclScript.Contains("http://+:") &&
                urlAclScript.Contains("WindowsBuiltInRole]::Administrator"), "exact URL ACL migration safeguards removed");
+        Assert(releaseBuilder.Contains("SchemaVersion=2") && releaseBuilder.Contains("DatabaseMinimumReadable") &&
+               releaseBuilder.Contains("ProtocolSha256") && releaseBuilder.Contains("reviewed-backward-compatible"),
+               "signed release compatibility manifest removed");
+        Assert(compatibilityVerifier.Contains("CurrentCanReadCandidate") && compatibilityVerifier.Contains("CandidateCanReadCurrent") &&
+               compatibilityVerifier.Contains("Candidate version must be newer") && compatibilityVerifier.Contains("protocol changed"),
+               "bidirectional release compatibility gate removed");
+        Assert(rolloutPlan.Contains("Requester and approver must be distinct") && rolloutPlan.Contains("AutomaticDecisionRequired") &&
+               rolloutPlan.Contains("RollbackOnJournalFailure") && rolloutPlan.Contains("Sign-Plan") &&
+               rolloutPlan.Contains("MonitoringPublicKeySha256") && rolloutPlan.Contains("Monitoring key must be separate"),
+               "dual approval or rollback rollout plan contract removed");
+        Assert(rolloutDecision.Contains("$decision='ROLLBACK'") && rolloutDecision.Contains("$decision='HOLD'") &&
+               rolloutDecision.Contains("$decision='PROMOTE'") && rolloutDecision.Contains("Monitoring observation signature is not trusted"),
+               "signed rollout health decision gate removed");
     }
 
     private static string FindRepositoryRoot()

@@ -5,6 +5,8 @@ param(
     [ValidatePattern('^[0-9A-Za-z._-]{3,64}$')][string]$SigningKeyId,
     [Parameter(Mandatory)][ValidatePattern('^[^:\r\n]{2,120}$')][string]$PackageSupplier,
     [Parameter(Mandatory)][uri]$SbomNamespaceBase,
+    [ValidateSet('protocol-identical-only','reviewed-backward-compatible')][string]$RollingCompatibility='protocol-identical-only',
+    [ValidatePattern('^[0-9A-Za-z._-]{3,80}$')][string]$CompatibilityReviewId,
     [switch]$AllowDirtyTestArtifact,
     [switch]$AllowUnsignedTestArtifact
 )
@@ -18,6 +20,12 @@ if($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-f0-9]{40}$'){throw 'Source com
 $dirty=@(& git -C $repositoryRoot status --porcelain).Count -ne 0
 if($dirty -and -not $AllowDirtyTestArtifact){throw 'Release creation requires a clean worktree'}
 if(-not $SbomNamespaceBase.IsAbsoluteUri -or $SbomNamespaceBase.Scheme -ne 'https'){throw 'SBOM namespace base must be an absolute HTTPS URI'}
+if($RollingCompatibility -eq 'reviewed-backward-compatible' -and [string]::IsNullOrWhiteSpace($CompatibilityReviewId)){
+    throw 'Reviewed rolling compatibility requires an explicit review id'
+}
+if($RollingCompatibility -eq 'protocol-identical-only' -and -not [string]::IsNullOrWhiteSpace($CompatibilityReviewId)){
+    throw 'CompatibilityReviewId is only valid for reviewed rolling compatibility'
+}
 $signed=-not [string]::IsNullOrWhiteSpace($SigningPrivateKeyFile)
 if($signed -ne (-not [string]::IsNullOrWhiteSpace($SigningKeyId))){throw 'Signing key file and key id must be provided together'}
 if(-not $signed -and -not $AllowUnsignedTestArtifact){throw 'Release creation requires an external signing key'}
@@ -35,6 +43,31 @@ if($signed){
     }
     finally{$rsaCheck.Dispose()}
 }
+
+$migrationSource=Get-Content -LiteralPath (Join-Path $repositoryRoot 'Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/DatabaseMigration.cs') -Raw
+function Read-MigrationConstant([string]$Name){
+    $match=[regex]::Match($migrationSource,"public\s+const\s+int\s+$Name\s*=\s*(?<value>[0-9]+)\s*;")
+    if(-not $match.Success){throw "Database migration compatibility constant is missing: $Name"}
+    return [int]$match.Groups['value'].Value
+}
+$databaseMinimum=Read-MigrationConstant 'MinimumReadableVersion'
+$databaseMaximum=Read-MigrationConstant 'MaximumReadableVersion'
+$databaseTarget=Read-MigrationConstant 'TargetVersion'
+if($databaseMinimum -gt $databaseTarget -or $databaseTarget -gt $databaseMaximum){throw 'Database compatibility range does not include its target'}
+$protocolHash=[Security.Cryptography.IncrementalHash]::CreateHash([Security.Cryptography.HashAlgorithmName]::SHA256)
+try{
+    $protoRoot=Join-Path $repositoryRoot 'Unity/Assets/Config/Proto'
+    $protoFiles=@(Get-ChildItem -LiteralPath $protoRoot -File -Filter '*.proto' -Recurse|Sort-Object FullName)
+    if($protoFiles.Count -eq 0){throw 'No protocol source files found'}
+    foreach($proto in $protoFiles){
+        $relative=$proto.FullName.Substring($protoRoot.Length+1).Replace('\','/')
+        $protocolHash.AppendData([Text.Encoding]::UTF8.GetBytes($relative))
+        $protocolHash.AppendData([byte[]]@(0))
+        $protocolHash.AppendData([IO.File]::ReadAllBytes($proto.FullName))
+    }
+    $protocolSha256=[Convert]::ToHexString($protocolHash.GetHashAndReset()).ToLowerInvariant()
+}
+finally{$protocolHash.Dispose()}
 
 $final=Join-Path $resolvedOutput $Version
 if(Test-Path -LiteralPath $final){throw 'Release version already exists; refusing to overwrite'}
@@ -87,9 +120,12 @@ try{
         [ordered]@{Path=$_.FullName.Substring($package.Length+1).Replace('\','/');Bytes=$_.Length;
             Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
     })
-    $manifest=[ordered]@{SchemaVersion=1;Product='ET.Server';Version=$Version;SourceCommit=$commit;
+    $compatibility=[ordered]@{SchemaVersion=1;DatabaseMinimumReadable=$databaseMinimum;
+        DatabaseMaximumReadable=$databaseMaximum;DatabaseTarget=$databaseTarget;ProtocolSha256=$protocolSha256;
+        RollingMode=$RollingCompatibility;ReviewId=$(if($CompatibilityReviewId){$CompatibilityReviewId}else{$null})}
+    $manifest=[ordered]@{SchemaVersion=2;Product='ET.Server';Version=$Version;SourceCommit=$commit;
         WorktreeDirty=$dirty;CreatedAtUtc=[DateTime]::UtcNow.ToString('O');Platform='windows-x64';SelfContained=$false;
-        RequiredRuntime='Microsoft.NETCore.App 8.0';StartWorkingDirectory='Bin';Files=$files}
+        RequiredRuntime='Microsoft.NETCore.App 8.0';StartWorkingDirectory='Bin';Compatibility=$compatibility;Files=$files}
     $utf8=[Text.UTF8Encoding]::new($false)
     $manifestPath=Join-Path $package '_manifest/et/release-manifest.json'
     New-Item -ItemType Directory -Path (Split-Path $manifestPath -Parent) -Force|Out-Null
@@ -121,7 +157,8 @@ try{
     Remove-Item -LiteralPath $package -Recurse -Force
     Move-Item -LiteralPath $staging -Destination $final
     [ordered]@{Passed=$true;Version=$Version;SourceCommit=$commit;WorktreeDirty=$dirty;Files=$files.Count;
-        Archive=(Join-Path $final $archiveName);Sha256=$archiveHash;Signed=$signed;SigningKeyId=$SigningKeyId}|ConvertTo-Json
+        Archive=(Join-Path $final $archiveName);Sha256=$archiveHash;Signed=$signed;SigningKeyId=$SigningKeyId;
+        Compatibility=$compatibility}|ConvertTo-Json -Depth 5
 }
 finally{
     if(Test-Path -LiteralPath $staging){Remove-Item -LiteralPath $staging -Recurse -Force}

@@ -7,7 +7,9 @@ namespace ET.Server
     [FriendOf(typeof(DBComponent))]
     public static class DatabaseMigration
     {
-        private const int CurrentVersion = 1;
+        public const int MinimumReadableVersion = 0;
+        public const int MaximumReadableVersion = 1;
+        public const int TargetVersion = 1;
         private const string MigrationCollection = "ET.Server.DatabaseSchema";
         private const string SchemaId = "server-schema";
 
@@ -17,9 +19,10 @@ namespace ET.Server
             IMongoCollection<BsonDocument> migrations = database.database.GetCollection<BsonDocument>(MigrationCollection);
             BsonDocument schema = await migrations.Find(Builders<BsonDocument>.Filter.Eq("_id", SchemaId)).FirstOrDefaultAsync();
             int version = schema?.GetValue("Version", 0).AsInt32 ?? 0;
-            if (version > CurrentVersion)
+            if (version < MinimumReadableVersion || version > MaximumReadableVersion)
             {
-                throw new InvalidOperationException($"database schema {version} is newer than server schema {CurrentVersion}");
+                throw new InvalidOperationException(
+                    $"database schema {version} is outside readable range {MinimumReadableVersion}-{MaximumReadableVersion}");
             }
 
             if (version < 1)
@@ -29,7 +32,13 @@ namespace ET.Server
                 version = 1;
             }
 
-            Log.Info($"database schema ready: database={database.database.DatabaseNamespace.DatabaseName}, version={version}");
+            if (version != TargetVersion)
+            {
+                throw new InvalidOperationException($"database migration target {TargetVersion} was not reached: {version}");
+            }
+
+            Log.Info($"database schema ready: database={database.database.DatabaseNamespace.DatabaseName}, version={version}, " +
+                     $"readable_min={MinimumReadableVersion}, readable_max={MaximumReadableVersion}");
         }
 
         private static async ETTask ApplyVersion1(DBComponent database)
