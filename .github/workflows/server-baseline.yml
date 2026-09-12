@@ -27,6 +27,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Restore pinned Unity Mathematics source without Unity Editor
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -48,7 +49,25 @@ jobs:
         run: |
           dotnet new globaljson --sdk-version 9.0.302 --roll-forward disable
           if ($LASTEXITCODE -ne 0) { throw 'SDK selection failed' }
-          dotnet restore DotNet/DotNet.sln
+          dotnet restore DotNet/DotNet.sln --locked-mode
           if ($LASTEXITCODE -ne 0) { throw 'Server restore failed' }
+      - name: Reject known NuGet vulnerabilities
+        run: ./Tools/ServerOps/Test-DependencyVulnerabilities.ps1
+      - name: Install pinned secret scanner and scan pushed commits
+        env:
+          GITLEAKS_SHA256: D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E
+        run: |
+          $version = '8.30.1'
+          $archive = Join-Path $env:RUNNER_TEMP 'gitleaks.zip'
+          Invoke-WebRequest "https://github.com/gitleaks/gitleaks/releases/download/v$version/gitleaks_${version}_windows_x64.zip" -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $env:GITLEAKS_SHA256) { throw 'Gitleaks checksum mismatch' }
+          $tool = Join-Path $env:RUNNER_TEMP 'gitleaks'
+          Expand-Archive $archive $tool
+          $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+          $range = '-1'
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') { $range = "$($event.pull_request.base.sha)..$env:GITHUB_SHA" }
+          elseif ($env:GITHUB_EVENT_NAME -eq 'push' -and $event.before -notmatch '^0+$') { $range = "$($event.before)..$env:GITHUB_SHA" }
+          & "$tool/gitleaks.exe" git . --no-banner --redact=100 --log-opts=$range
+          if ($LASTEXITCODE -ne 0) { throw 'Potential credential detected in changed commits' }
       - name: Build, regressions, health, shutdown and unsafe-config rejection
         run: ./Tools/ServerOps/Test-Phase1.ps1

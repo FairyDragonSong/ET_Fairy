@@ -14,20 +14,22 @@ namespace ET
         
         public static string ToJson(object obj)
         {
+            ArgumentNullException.ThrowIfNull(obj);
             if (obj is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
             }
-            return obj.ToJson(defaultSettings);
+            return obj.ToJson(obj.GetType(), defaultSettings);
         }
 
         public static string ToJson(object obj, JsonWriterSettings settings)
         {
+            ArgumentNullException.ThrowIfNull(obj);
             if (obj is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
             }
-            return obj.ToJson(settings);
+            return obj.ToJson(obj.GetType(), settings);
         }
 
         public static T FromJson<T>(string str)
@@ -49,15 +51,21 @@ namespace ET
 
         public static byte[] Serialize(object obj)
         {
+            ArgumentNullException.ThrowIfNull(obj);
             if (obj is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
             }
-            return obj.ToBson();
+            // Entity transfers are read back through the abstract Entity base type and therefore
+            // require the discriminator emitted by a polymorphic nominal type. Other values use
+            // their concrete serializer and never fall back to ObjectSerializer's broad policy.
+            Type nominalType = obj is Entity ? typeof (Entity) : obj.GetType();
+            return obj.ToBson(nominalType);
         }
 
         public static void Serialize(object message, MemoryStream stream)
         {
+            ArgumentNullException.ThrowIfNull(message);
             if (message is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
@@ -67,7 +75,7 @@ namespace ET
             
             BsonSerializationContext context = BsonSerializationContext.CreateRoot(bsonWriter);
             BsonSerializationArgs args = default;
-            args.NominalType = typeof (object);
+            args.NominalType = message.GetType();
             IBsonSerializer serializer = BsonSerializer.LookupSerializer(args.NominalType);
             serializer.Serialize(context, args, message);
         }

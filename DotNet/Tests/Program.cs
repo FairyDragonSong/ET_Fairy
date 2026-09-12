@@ -17,6 +17,7 @@ internal static class Program
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
         ("商业模式启动配置门禁", TestProductionStartupValidation),
         ("认证敏感消息统一标记", TestSensitiveMessages),
+        ("消息日志使用具体 BSON 类型", TestConcreteMessageLogging),
         ("登录与持久化安全架构回归", TestSourceGuards),
         ("管理签名与权限边界", TestAdminAuthorization),
         ("账号生命周期状态机", TestAccountStatePolicy),
@@ -73,6 +74,16 @@ internal static class Program
         Assert(!AccountInputValidator.TryNormalizeLoginName("player@example", out _), "invalid character accepted");
         Assert(AccountInputValidator.IsPasswordValid("12345678"), "valid password rejected");
         Assert(!AccountInputValidator.IsPasswordValid("1234567"), "short password accepted");
+    }
+
+    private static void TestConcreteMessageLogging()
+    {
+        G2C_LoginGate message = G2C_LoginGate.Create(false);
+        message.RpcId = 17;
+        string json = message.ToString();
+        Assert(json.Contains("17"), "concrete message BSON formatting lost fields");
+        byte[] bytes = message.ToBson();
+        Assert(bytes.Length > 5, "concrete entity BSON serialization failed");
     }
 
     private static void TestPasswordHashing()
