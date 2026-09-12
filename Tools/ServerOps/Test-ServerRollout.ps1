@@ -137,11 +137,39 @@ try{
     try{& "$PSScriptRoot/New-ServerRolloutPlan.ps1" @monitorReusePlan|Out-Null}catch{$rejected=$true}
     if(-not $rejected){throw 'Requester key was accepted as the monitoring identity'}
 
+    $deploymentRoot=Join-Path $fixture 'deployment'
+    $installParameters=@{ReleaseDirectory=$candidate;DeploymentRoot=$deploymentRoot;
+        TrustedPublicKeyFile=$keys['release-candidate'].Public;ExpectedSigningKeyId='release-candidate';
+        ExpectedPackageSupplier='ET Local Test';ExpectedSbomNamespaceBase='https://example.invalid/et-rollout';
+        ConfirmDeploymentRoot=[IO.Path]::GetFullPath($deploymentRoot)}
+    if($AllowDirtyTestArtifacts){$installParameters.AllowDirtyTestArtifact=$true}
+    $installedRaw=& "$PSScriptRoot/Install-ServerReleaseSlot.ps1" @installParameters
+    $installed=($installedRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    $slotParameters=@{SlotDirectory=$installed.SlotDirectory;TrustedPublicKeyFile=$keys['release-candidate'].Public;
+        ExpectedSigningKeyId='release-candidate';ExpectedPackageSupplier='ET Local Test';
+        ExpectedSbomNamespaceBase='https://example.invalid/et-rollout'}
+    if($AllowDirtyTestArtifacts){$slotParameters.AllowDirtyTestArtifact=$true}
+    $slotRaw=& "$PSScriptRoot/Test-InstalledServerSlot.ps1" @slotParameters
+    $slot=($slotRaw -join [Environment]::NewLine)|ConvertFrom-Json
+    if(-not $slot.Passed -or $slot.ArchiveSha256 -ne $compatibility.Candidate.ArchiveSha256){
+        throw 'Installed immutable slot did not match the candidate release'
+    }
+    $rejected=$false
+    try{& "$PSScriptRoot/Install-ServerReleaseSlot.ps1" @installParameters|Out-Null}catch{$rejected=$true}
+    if(-not $rejected){throw 'Existing immutable slot was overwritten'}
+    $hotfix=Join-Path $installed.SlotDirectory 'package/Bin/Hotfix.dll'
+    $stream=[IO.File]::Open($hotfix,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+    try{$stream.Position=0;$value=$stream.ReadByte();$stream.Position=0;$stream.WriteByte($value-bxor1)}finally{$stream.Dispose()}
+    $rejected=$false
+    try{& "$PSScriptRoot/Test-InstalledServerSlot.ps1" @slotParameters|Out-Null}catch{$rejected=$true}
+    if(-not $rejected){throw 'Tampered installed slot was accepted'}
+
     [ordered]@{Passed=$true;CurrentVersion=$currentVersion;CandidateVersion=$candidateVersion;
         ProtocolIdentical=[bool]$compatibility.Protocol.Identical;DatabaseRollbackSafe=[bool]$compatibility.RollbackSafe;
         DualApprovalVerified=$true;Decisions=@('PROMOTE:0','HOLD:2','ROLLBACK:3');
         TamperedPlanRejected=$true;ReversedVersionRejected=$true;CopiedApprovalKeyRejected=$true;
-        MonitoringKeyReuseRejected=$true}|ConvertTo-Json -Depth 5
+        MonitoringKeyReuseRejected=$true;ImmutableSlotVerified=$true;DuplicateSlotRejected=$true;
+        TamperedSlotRejected=$true}|ConvertTo-Json -Depth 5
 }
 finally{
     $tempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar

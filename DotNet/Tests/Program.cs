@@ -468,6 +468,8 @@ internal static class Program
         string appProgram = Read(root, "DotNet/App/Program.cs");
         string emergencyPolicy = Read(root, "DotNet/Core/EmergencyStopPolicy.cs");
         string emergencySigner = Read(root, "Tools/ServerOps/New-EmergencyStopCommand.ps1");
+        string slotInstaller = Read(root, "Tools/ServerOps/Install-ServerReleaseSlot.ps1");
+        string slotVerifier = Read(root, "Tools/ServerOps/Test-InstalledServerSlot.ps1");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -551,6 +553,12 @@ internal static class Program
         Assert(emergencySigner.Contains("ConfirmDeploymentId") && emergencySigner.Contains("refusing to overwrite") &&
                emergencySigner.Contains("PrivateKeyFile") && emergencySigner.Contains("RSASignaturePadding]::Pss"),
                "emergency stop command signing safeguards removed");
+        Assert(slotInstaller.Contains("ConfirmDeploymentRoot") && slotInstaller.Contains("Immutable release slot already exists") &&
+               slotInstaller.Contains("Release archive changed after verification") && slotInstaller.Contains("Test-InstalledServerSlot.ps1"),
+               "immutable signed release slot installation safeguards removed");
+        Assert(slotVerifier.Contains("Installed manifest differs from signed release") &&
+               slotVerifier.Contains("Installed server slot file integrity failed") && slotVerifier.Contains("Test-ServerRelease.ps1"),
+               "installed slot signature or per-file verification removed");
     }
 
     private static string FindRepositoryRoot()

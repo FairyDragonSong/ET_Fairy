@@ -58,6 +58,19 @@
 .\Test-EmergencyStop.ps1
 ```
 
+## 不可变服务器槽位
+
+使用受信发布公钥将已签名、干净来源的发布目录安装到仓库外 DeploymentRoot。解析后的根路径必须再次精确确认，已有槽位永不覆盖：
+
+```powershell
+.\Install-ServerReleaseSlot.ps1 -ReleaseDirectory '<签名发布目录>' `
+  -DeploymentRoot 'D:\ET-Deployment' -ConfirmDeploymentRoot 'D:\ET-Deployment' `
+  -TrustedPublicKeyFile '<受信发布公钥>' -ExpectedSigningKeyId '<Key ID>' `
+  -ExpectedPackageSupplier '<发行组织>' -ExpectedSbomNamespaceBase 'https://<受信命名空间>'
+```
+
+监督器或人工启动前必须调用 `Test-InstalledServerSlot.ps1`，不能只检查原 ZIP。槽位结构、逐文件验证、ACL 与回滚边界见 [020.11](../../Book/服务器上线升级/020.11-不可变签名发布槽位.md)。槽位测试已经包含在 `Test-ServerRollout.ps1` 中。
+
 ## 备份
 
 ```powershell
