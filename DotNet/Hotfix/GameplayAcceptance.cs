@@ -275,18 +275,69 @@ public sealed class GameplayAcceptance : IConsoleHandler
         string prefix=Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT");
         string password=Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD");
         List<Session> sessions=new();List<string> errors=new();List<ETTask> tasks=new();
-        long[] latency=new long[20];Stopwatch total=Stopwatch.StartNew();
+        int count=ReadLoadSetting("ET_GAMEPLAY_CLIENTS",20,1,3000);
+        int duration=ReadLoadSetting("ET_GAMEPLAY_DURATION",0,0,86400);
+        int batch=Math.Min(20,Options.Instance.LoginIpLimit);
+        Check(batch>0,"Login IP limit must be positive");
+        long[] latency=new long[count];Stopwatch total=Stopwatch.StartNew();
+        using Process process=Process.GetCurrentProcess();
+        TimeSpan cpuBefore=process.TotalProcessorTime;
+        long peakWorkingSet=0;
+        long requests=0;
+        long maxRpcMs=0;
+        long savesBefore=Metric("et_role_save_successes_total");
+        long failuresBefore=Metric("et_role_save_failures_total");
         try
         {
-            for(int i=0;i<20;i++)tasks.Add(Connect(i));
-            await ETTaskHelper.WaitAll(tasks);
+            for(int offset=0;offset<count;offset+=batch)
+            {
+                tasks.Clear();
+                for(int i=offset;i<Math.Min(offset+batch,count);i++)tasks.Add(Connect(i));
+                await ETTaskHelper.WaitAll(tasks);
+                Check(errors.Count==0,$"Concurrent clients failed: {string.Join(';',errors)}");
+                Console.WriteLine($"GAMEPLAY_PROGRESS connected={sessions.Count} target={count}");
+                if(sessions.Count<count)
+                {
+                    // Keep the production anti-abuse limit; a single loopback source must ramp slowly.
+                    for(int seconds=0;seconds<Options.Instance.LoginRateWindowSeconds+1;seconds+=5)
+                    {
+                        await Probe();
+                        Console.WriteLine($"GAMEPLAY_PROGRESS ramp_wait_seconds={seconds}");
+                        await parent.GetComponent<TimerComponent>().WaitAsync(5000);
+                    }
+                }
+            }
             Check(errors.Count==0,$"Concurrent clients failed: {string.Join(';',errors)}");
-            Check(sessions.Count==20,"Concurrent connection count mismatch");
-            foreach(Session session in sessions){Check(!session.IsDisposed,"Concurrent connection dropped");await Echo(session,701);}
+            Check(sessions.Count==count,"Concurrent connection count mismatch");
+            Stopwatch sustained=Stopwatch.StartNew();
+            do
+            {
+                await Probe();
+                process.Refresh();
+                peakWorkingSet=Math.Max(peakWorkingSet,process.WorkingSet64);
+                Console.WriteLine($"GAMEPLAY_PROGRESS online={sessions.Count} sustained_ms={sustained.ElapsedMilliseconds} rpc_count={requests} rpc_max_ms={maxRpcMs} working_set_bytes={process.WorkingSet64}");
+                if(sustained.Elapsed.TotalSeconds>=duration)break;
+                await parent.GetComponent<TimerComponent>().WaitAsync(5000);
+            }while(true);
             Array.Sort(latency);
-            Console.WriteLine($"GAMEPLAY_PASS concurrent-clients count=20 errors=0 flow_p95_ms={latency[18]} total_ms={total.ElapsedMilliseconds} working_set_bytes={Process.GetCurrentProcess().WorkingSet64}");
+            long saveFailures=Metric("et_role_save_failures_total")-failuresBefore;
+            Check(saveFailures==0,"Role saving failed during load test");
+            Console.WriteLine($"GAMEPLAY_PASS concurrent-clients count={count} errors=0 flow_p95_ms={latency[(int)Math.Ceiling(count*0.95)-1]} total_ms={total.ElapsedMilliseconds} sustained_ms={sustained.ElapsedMilliseconds} rpc_count={requests} rpc_max_ms={maxRpcMs} peak_sampled_working_set_bytes={peakWorkingSet} cpu_ms={(long)(process.TotalProcessorTime-cpuBefore).TotalMilliseconds} role_saves={Metric("et_role_save_successes_total")-savesBefore} role_save_failures={saveFailures}");
         }
         finally{foreach(Session session in sessions)session.Dispose();}
+
+        async ETTask Probe()
+        {
+            foreach(Session session in sessions)
+            {
+                Check(!session.IsDisposed,"Concurrent connection dropped");
+                Stopwatch request=Stopwatch.StartNew();
+                await Echo(session,701);
+                maxRpcMs=Math.Max(maxRpcMs,request.ElapsedMilliseconds);
+                ++requests;
+                if(requests%100==0)Console.WriteLine($"GAMEPLAY_PROGRESS rpc_count={requests} rpc_max_ms={maxRpcMs}");
+            }
+        }
 
         async ETTask Connect(int index)
         {
@@ -303,5 +354,14 @@ public sealed class GameplayAcceptance : IConsoleHandler
             }
             catch(Exception error){errors.Add(error.Message);}
         }
+    }
+
+    private static int ReadLoadSetting(string name,int fallback,int minimum,int maximum)
+    {
+        string value=Environment.GetEnvironmentVariable(name);
+        if(string.IsNullOrEmpty(value))return fallback;
+        if(!int.TryParse(value,out int parsed)||parsed<minimum||parsed>maximum)
+            throw new InvalidOperationException($"Invalid load setting: {name}");
+        return parsed;
     }
 }
