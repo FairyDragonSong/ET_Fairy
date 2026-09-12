@@ -113,6 +113,7 @@ namespace ET.Server
 
         private static void ApplyRoleSnapshot(Player player, RoleSnapshot role)
         {
+            player.MapEntered = false;
             player.RoleName = role.Name;
             player.LastMapName = role.MapName;
             player.PositionX = role.Position.x;

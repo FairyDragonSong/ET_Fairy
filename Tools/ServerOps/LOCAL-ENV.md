@@ -9,7 +9,7 @@
 - `tools`：Database Tools 100.18.0。
 - `downloads`、`packages.json`：官方安装包和固定 SHA-256。
 - `mongo-local`：三个节点的数据/日志、配置、随机凭据、内部 keyFile、私有 CA 和服务器证书。ACL 只允许当前用户与 SYSTEM。
-- 副本集 `et-local-rs`，只监听 `127.0.0.1:27101–27103`；成员地址为 `localhost`。
+- 副本集 `et-local-rs`，只监听 IPv4/IPv6 回环 `127.0.0.1`、`::1` 的 27101–27103 端口；成员地址为 `localhost`。
 - 源测试库 `ET_LOCAL_ACCEPTANCE`，恢复库 `ET_LOCAL_ACCEPTANCE_DR_TEST`。
 - 测试管理账号 `etlocal` 仅用于本机隔离环境，拥有测试所需管理权限；不是生产应用账号模板。
 
@@ -39,7 +39,7 @@ mongosh --nodb --file .\Tools\ServerOps\Connect-Mongo.js
 
 ## ET 连接及验收
 
-`Start-LocalRealmSmoke.ps1` 将本环境 CA 加入**当前 Windows 用户**的受信任根证书，使 ET 的 .NET 驱动可以严格验证 TLS。CA 私钥生成后不保存，证书指纹保存在 `mongo-local\ca-thumbprint.txt`，将来可按该指纹移除信任。
+`Start-LocalRealmSmoke.ps1` 使用 `ET_MONGO_CA_FILE` 指定本环境 CA，由 ET 的 .NET 驱动验证证书链、有效期、用途和主机名，不依赖 Windows 用户信任是否保留，也不新增全局信任。私有 CA 模式不查询吊销列表，生产证书吊销与轮换策略需另行配置。CA 私钥生成后不保存。
 
 ```powershell
 .\Tools\ServerOps\Test-Phase1.ps1
@@ -70,4 +70,4 @@ mongosh --nodb --quiet --file .\Tools\ServerOps\Connect-Mongo.js --file .\Tools\
 
 备份工具使用受限临时配置文件传入 URI，调用后删除该文件。恢复目标必须再次确认，允许覆盖的 `_DR_TEST` 测试库仍需由操作者确认没有有效业务数据。
 
-数据库脚本通过只代表数据库范围通过；真实游戏客户端登录/重连、网络分区、目标在线量和生产容量验收仍须补充。
+真实协议客户端验收入口为 `Test-Gameplay.ps1`，覆盖 Router、登录、地图、房间重连、服务重启、数据库中断/恢复、保存失败退出和 20 并发流程；`Test-RealmTls.ps1` 验证 .NET 正确/错误 CA。详情见 `Book/服务器上线升级/014.1-真实游戏链路验收.md`。这些测试使用独立的 `ET_LOCAL_GAMEPLAY` 库，故障测试会停止本机测试副本集，不要与其他测试并行执行。网络分区、目标在线量和生产容量验收仍须补充。

@@ -12,7 +12,36 @@ namespace ET.Server
 	    [EntitySystem]
 	    private static void Awake(this DBComponent self, string dbConnection, string dbName)
 		{
-			self.mongoClient = new MongoClient(dbConnection);
+			MongoClientSettings settings = MongoClientSettings.FromConnectionString(dbConnection);
+#if DOTNET
+            string caFile = System.Environment.GetEnvironmentVariable("ET_MONGO_CA_FILE");
+            if (!string.IsNullOrWhiteSpace(caFile))
+            {
+                if (!settings.UseTls) throw new System.InvalidOperationException("Custom MongoDB CA requires TLS");
+                using var caCertificate = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(
+                    System.IO.File.ReadAllText(caFile));
+                byte[] caBytes = caCertificate.RawData;
+                settings.SslSettings = new SslSettings
+                {
+                    ServerCertificateValidationCallback = (_, certificate, chain, errors) =>
+                    {
+                        if (certificate == null || (errors & System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch) != 0)
+                            return false;
+                        using var customChain = new System.Security.Cryptography.X509Certificates.X509Chain();
+                        using var rootCa = new System.Security.Cryptography.X509Certificates.X509Certificate2(caBytes);
+                        using var leaf = new System.Security.Cryptography.X509Certificates.X509Certificate2(certificate);
+                        customChain.ChainPolicy.TrustMode = System.Security.Cryptography.X509Certificates.X509ChainTrustMode.CustomRootTrust;
+                        customChain.ChainPolicy.CustomTrustStore.Add(rootCa);
+                        customChain.ChainPolicy.ApplicationPolicy.Add(new System.Security.Cryptography.Oid("1.3.6.1.5.5.7.3.1"));
+                        customChain.ChainPolicy.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck;
+                        if (chain != null)
+                            foreach (var element in chain.ChainElements) customChain.ChainPolicy.ExtraStore.Add(element.Certificate);
+                        return customChain.Build(leaf);
+                    }
+                };
+            }
+#endif
+			self.mongoClient = new MongoClient(settings);
 			self.database = self.mongoClient.GetDatabase(dbName);
 		}
 

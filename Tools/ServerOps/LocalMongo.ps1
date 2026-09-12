@@ -53,7 +53,8 @@ systemLog:
   path: '$yamlRoot/$port/mongod.log'
   logAppend: true
 net:
-  bindIp: 127.0.0.1
+  bindIp: '127.0.0.1,::1'
+  ipv6: true
   port: $port
   tls:
     mode: requireTLS

@@ -14,6 +14,8 @@
         public float PositionY { get; set; }
 
         public float PositionZ { get; set; }
+        // Connection lifecycle state, reset only after old Map state has been released.
+        public bool MapEntered { get; set; }
     }
 
     [ComponentOf(typeof(Player))]
