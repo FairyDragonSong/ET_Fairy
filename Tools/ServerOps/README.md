@@ -154,6 +154,12 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 .\Test-SecurityAssessmentGovernance.ps1
 ```
 
+`Get-GitHubProductionGovernanceEvidence.ps1` 使用只读 GitHub Token 验证分支 HEAD、严格保护规则和精确提交上的 `server-baseline` Check Run，并由独立观察身份签名一小时有效证据；Token 仅从环境变量读取。生产验证和当前远程边界见 [020.19](../../Book/服务器上线升级/020.19-托管CI与受保护分支证据门禁.md)，离线规则自检：
+
+```powershell
+.\Test-GitHubGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

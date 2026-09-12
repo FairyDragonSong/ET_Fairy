@@ -119,3 +119,7 @@ jobs:
       - name: Verify security assessment and risk closure governance
         shell: pwsh
         run: ./Tools/ServerOps/Test-SecurityAssessmentGovernance.ps1
+
+      - name: Verify hosted CI and protected branch governance
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-GitHubGovernance.ps1
