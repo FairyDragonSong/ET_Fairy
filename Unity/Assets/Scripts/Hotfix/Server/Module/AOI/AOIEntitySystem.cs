@@ -162,7 +162,12 @@ namespace ET.Server
                 leave.BeSeePlayers.Remove(self.Id);
             }
 
-            EventSystem.Instance.Publish(self.Scene(), new UnitLeaveSightRange { A = self, B = leave });
+            // Preserve AOI relationship cleanup, but do not send client notifications from a destroyed scene.
+            Scene scene = self.Scene();
+            if (!scene.IsDisposed)
+            {
+                EventSystem.Instance.Publish(scene, new UnitLeaveSightRange { A = self, B = leave });
+            }
         }
 
         /// <summary>

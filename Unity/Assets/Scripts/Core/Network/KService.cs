@@ -517,15 +517,20 @@ namespace ET
 
         public override void Update()
         {
+            if (this.IsDisposed()) return;
             uint timeNow = this.TimeNow;
 
             this.TimerOut(timeNow);
 
             this.CheckWaitAcceptChannel(timeNow);
+            if (this.IsDisposed()) return;
             
             this.Recv();
+            // Receive callbacks can synchronously dispose their owning NetComponent.
+            if (this.IsDisposed()) return;
 
             this.UpdateChannel(timeNow);
+            if (this.IsDisposed()) return;
             
             this.Transport.Update();
         }

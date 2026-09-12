@@ -30,6 +30,7 @@ $process=[Diagnostics.Process]::new();$process.StartInfo=$info
 $lines=[Collections.Generic.List[string]]::new()
 $selfRoleCreated=$false
 $processStarted=$false
+$shutdownObserved=$false;$shutdownExitCode=$null;$shutdownElapsedMs=$null
 try {
     if($SelfCredentials){
         $env:ET_SELF_TEST_USER='et_self_test_'+[Guid]::NewGuid().ToString('N')
@@ -79,10 +80,16 @@ try {
     $drain=$process.StandardOutput.ReadToEndAsync()
     if(-not $SaveFailure){$process.StandardInput.WriteLine('shutdown')}
     $expectedExit=if($SaveFailure){2}else{0}
-    if(-not $process.WaitForExit(25000) -or $process.ExitCode -ne $expectedExit){throw "Gameplay server did not return expected shutdown exit code $expectedExit"}
+    $shutdownWatch=[Diagnostics.Stopwatch]::StartNew()
+    $shutdownObserved=$process.WaitForExit(25000)
+    $shutdownElapsedMs=$shutdownWatch.ElapsedMilliseconds
+    if($shutdownObserved){$shutdownExitCode=$process.ExitCode}
+    if(-not $shutdownObserved){throw 'Gameplay server did not exit within the 25-second shutdown observation window'}
+    if($shutdownExitCode -ne $expectedExit){throw "Gameplay server exited with code $shutdownExitCode; expected $expectedExit"}
     if($SaveFailure){$lines.Add('GAMEPLAY_PASS storage-failure-shutdown-exit-2');Write-Host 'GAMEPLAY_PASS storage-failure-shutdown-exit-2'}
     $report=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Clients=$Clients;DurationSeconds=$DurationSeconds;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_PASS'});Samples=@($lines|Where-Object{$_ -match 'GAMEPLAY_PROGRESS'});ProductionCapacityVerified=$false}
     $report.CapacityProfile=[bool]$CapacityProfile
+    $report.ShutdownObserved=$shutdownObserved;$report.ShutdownExitCode=$shutdownExitCode;$report.ShutdownElapsedMs=$shutdownElapsedMs
     $report.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
     $report.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
     $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/$(if($SelfCredentials){'gameplay-self-credentials'}elseif($Credentials){'gameplay-credentials'}elseif($LeaseExpiry){'gameplay-lease-expiry'}elseif($Governance){'gameplay-governance'}elseif($Resume){'gameplay-restart'}elseif($SaveFailure){'gameplay-save-failure'}elseif($Outage){'gameplay-outage'}elseif($Baseline){'gameplay-baseline'}else{'gameplay'}).json"
@@ -90,6 +97,7 @@ try {
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
     $failure.CapacityProfile=[bool]$CapacityProfile
+    $failure.ShutdownObserved=$shutdownObserved;$failure.ShutdownExitCode=$shutdownExitCode;$failure.ShutdownElapsedMs=$shutdownElapsedMs
     $failure.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
     $failure.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
     $failure | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/gameplay-failed-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"

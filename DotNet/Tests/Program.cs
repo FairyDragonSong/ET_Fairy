@@ -26,6 +26,7 @@ internal static class Program
         ("处理耗时直方图边界与并发", TestHandlerLatency),
         ("Fiber 投递队列积压快照", TestMessageQueueSnapshot),
         ("协程锁等待计数与终态去重", TestCoroutineLockMetrics),
+        ("KService 更新期间销毁保护", TestKServiceDisposeDuringUpdate),
     ];
 
     private static int Main()
@@ -437,6 +438,32 @@ internal static class Program
             catch(ArgumentOutOfRangeException){rejected=true;}
             Assert(rejected,"Invalid latency sample accepted");
         }
+    }
+
+    private static void TestKServiceDisposeDuringUpdate()
+    {
+        var transport = new DisposalProbeTransport();
+        using var service = new KService(transport, NetworkProtocol.UDP, ServiceType.Outer);
+        service.Update();
+        Assert(transport.Updates == 1, "Live transport update skipped");
+        transport.OnAvailable = service.Dispose;
+        service.Update();
+        service.Update();
+        Assert(service.IsDisposed() && transport.Disposed && transport.Updates == 1,
+            "Disposed transport updated after receive-loop callback");
+    }
+
+    private sealed class DisposalProbeTransport : IKcpTransport
+    {
+        public Action OnAvailable;
+        public int Updates;
+        public bool Disposed;
+        public int Available() { OnAvailable?.Invoke(); return 0; }
+        public int Recv(byte[] buffer, ref System.Net.EndPoint endPoint) => throw new InvalidOperationException();
+        public void Send(byte[] bytes, int index, int length, System.Net.EndPoint endPoint, ChannelType channelType) => throw new InvalidOperationException();
+        public void Update() { Assert(!Disposed, "Disposed transport touched"); ++Updates; }
+        public void OnError(long id, int error) { }
+        public void Dispose() { Disposed = true; }
     }
 
     private static void TestCoroutineLockMetrics()
