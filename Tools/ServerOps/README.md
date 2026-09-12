@@ -182,6 +182,8 @@ Windows SCM 托管先用 `New-ServerSupervisorConfiguration.ps1` 生成签名生
 
 `monitoring/et-production-sli.rules.yml` 将 Realm、Gate 和地图传送的成功/服务故障计数标准化为固定 `stage`，提供内部 99.5% 工程基线的快速/慢速错误预算告警及地图传送卡死告警。`Test-ProductionSloRules.ps1` 使用固定版本 promtool 做语法和 firing/resolved 行为测试；处置步骤见 `Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md`。该基线不是对外 SLA，生产接收人和最终目标仍需签署。
 
+`New-ProductionAlertmanagerConfiguration.ps1` 在仓库外生成生产候选配置，critical/warning 必须使用不同 HTTPS URL Secret 文件和不同 Bearer Token 文件，避免敏感 webhook 出现在命令行；所有通知启用 `send_resolved`，未知级别默认升级到 critical。用 `Test-ProductionAlertmanagerGovernance.ps1` 执行 amtool schema 与路由验证。生成成功不代表外部值班人员已经收到告警。
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

@@ -142,3 +142,10 @@ jobs:
           ./Tools/ServerOps/Install-LocalPrometheus.ps1 -EnvironmentRoot $env:RUNNER_TEMP
           $promtool = Join-Path $env:RUNNER_TEMP 'prometheus-3.13.3/prometheus-3.13.3.windows-amd64/promtool.exe'
           ./Tools/ServerOps/Test-ProductionSloRules.ps1 -PromtoolPath $promtool
+
+      - name: Verify production Alertmanager routing governance
+        shell: pwsh
+        run: |
+          ./Tools/ServerOps/Install-LocalAlertmanager.ps1 -EnvironmentRoot $env:RUNNER_TEMP
+          $amtool = Join-Path $env:RUNNER_TEMP 'alertmanager-0.34.0/alertmanager-0.34.0.windows-amd64/amtool.exe'
+          ./Tools/ServerOps/Test-ProductionAlertmanagerGovernance.ps1 -AmtoolPath $amtool
