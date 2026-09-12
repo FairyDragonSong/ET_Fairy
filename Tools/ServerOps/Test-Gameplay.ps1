@@ -1,8 +1,9 @@
 param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
-    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs)
+    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs,[switch]$CrashJournal)
 $ErrorActionPreference='Stop'
 if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load parameters require -Baseline'}
 if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolated Baseline mode'}
+if($CrashJournal -and (-not $Baseline -or $Clients -gt 100 -or $DurationSeconds -lt 60)){throw 'Crash journal requires Baseline, at most 100 clients and at least 60 sustained seconds'}
 if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
 if($SaveFailure -or $LeaseExpiry){$Outage=$true}
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
@@ -33,6 +34,7 @@ $selfRoleCreated=$false
 $processStarted=$false
 $shutdownObserved=$false;$shutdownExitCode=$null;$shutdownElapsedMs=$null
 $journalVerification=$null
+$crashExitObserved=$false;$crashExit=$null
 try {
     if($SelfCredentials){
         $env:ET_SELF_TEST_USER='et_self_test_'+[Guid]::NewGuid().ToString('N')
@@ -76,10 +78,45 @@ try {
         }
         if($line -match 'GAMEPLAY_ROLE (\d+)'){$env:ET_GAMEPLAY_ROLEID=$Matches[1]}
         if($line -match 'GAMEPLAY_RESULT FAIL'){throw $line}
+        if($CrashJournal -and $line -match "GAMEPLAY_PROGRESS online=$Clients sustained_ms="){$passed=$true;break}
         if($SaveFailure -and $line -match 'GAMEPLAY_EXPECT_SAVE_FAILURE'){$passed=$true;break}
         if($line -match 'GAMEPLAY_RESULT PASS'){$passed=$true;break}
     }
     if(-not $passed){throw 'Gameplay acceptance did not complete'}
+    if($CrashJournal){
+        $previousCrashClients=$env:ET_GAMEPLAY_CLIENTS
+        try {
+            $env:ET_GAMEPLAY_CLIENTS=[string]$Clients
+            $beforeOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Snapshot-GameplayJournal.js"
+            if($LASTEXITCODE -ne 0){throw 'Pre-crash journal snapshot failed'}
+            $beforeCrash=($beforeOutput -join "`n")|ConvertFrom-Json
+            if(-not $beforeCrash.Passed -or $process.HasExited){throw 'Owned live server and complete admitted cohort required'}
+            $startedAt=$process.StartTime.ToUniversalTime().ToString('O')
+            $ownedPid=$process.Id
+            $crashWatch=[Diagnostics.Stopwatch]::StartNew()
+            # The handle comes from this invocation's Process.Start, never a PID read from a file.
+            $process.Kill($true)
+            if(-not $process.WaitForExit(10000)){throw 'Owned process exit not observed after intentional crash'}
+            $crashExitObserved=$true
+            $observedAt=[DateTime]::UtcNow.ToString('O')
+            $crashExit=$process.ExitCode
+            $crashElapsed=$crashWatch.ElapsedMilliseconds
+            $afterOutput=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Snapshot-GameplayJournal.js"
+            if($LASTEXITCODE -ne 0){throw 'Post-crash journal snapshot failed'}
+            $afterCrash=($afterOutput -join "`n")|ConvertFrom-Json
+            if(-not $afterCrash.Passed -or $beforeCrash.SnapshotSha256 -ne $afterCrash.SnapshotSha256){throw 'Crash did not preserve the expected unfinished journal cohort'}
+            $crashReport=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));
+                CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Test='owned-process-crash-journal';Clients=$Clients;
+                Cohort=$env:ET_GAMEPLAY_ACCOUNT;HostProcessId=$ownedPid;ProcessStartedAtUtc=$startedAt;ExitObservedAtUtc=$observedAt;
+                IntentionalCrash=$true;ExitObserved=$true;ExitCode=$crashExit;ExitElapsedMs=$crashElapsed;
+                Before=$beforeCrash;After=$afterCrash;RecoveryVerified=$false;ProductionCapacityVerified=$false}
+            $crashPath="$env:ET_LOCAL_MONGO_ROOT/evidence/journal-crash-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
+            $crashReport|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $crashPath
+            Write-Host "GAMEPLAY_PASS owned-process-crash-journal records=$Clients recovery_verified=false"
+            Write-Host "Evidence: $crashPath"
+        } finally {$env:ET_GAMEPLAY_CLIENTS=$previousCrashClients}
+        return
+    }
     $drain=$process.StandardOutput.ReadToEndAsync()
     if(-not $SaveFailure){$process.StandardInput.WriteLine('shutdown')}
     $expectedExit=if($SaveFailure){2}else{0}
@@ -115,6 +152,7 @@ try {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
     $failure.CapacityProfile=[bool]$CapacityProfile
     $failure.JournalVerification=$journalVerification
+    $failure.CrashJournal=[bool]$CrashJournal;$failure.CrashExitObserved=$crashExitObserved;$failure.CrashExitCode=$crashExit
     $failure.LogProfile=$info.Environment['ET_LOG_PROFILE'];$failure.HostProcessId=$(if($processStarted){$process.Id}else{$null})
     $failure.ShutdownObserved=$shutdownObserved;$failure.ShutdownExitCode=$shutdownExitCode;$failure.ShutdownElapsedMs=$shutdownElapsedMs
     $failure.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
