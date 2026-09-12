@@ -172,6 +172,12 @@ Windows SCM 托管先用 `New-ServerSupervisorConfiguration.ps1` 生成签名生
 .\Test-WindowsServiceHosting.ps1
 ```
 
+外部 Secret Manager/Agent 将受管文件写入 SecretRoot 后，用 `New-SecretLease.ps1` 生成最长 24 小时、绑定 DeploymentId 和逐文件哈希的 RSA-PSS 租约。生产监督器强制先运行 `Test-SecretLease.ps1`，ET 运行时每次读取受管文件也会复验；租约不加密内容，仍必须配合 ACL。完整轮换边界见 [020.22](../../Book/服务器上线升级/020.22-签名Secret租约与外部提供层.md)，离线自检：
+
+```powershell
+.\Test-SecretLeaseGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

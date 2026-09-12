@@ -131,3 +131,7 @@ jobs:
       - name: Verify Windows service hosting policy
         shell: pwsh
         run: ./Tools/ServerOps/Test-WindowsServiceHosting.ps1
+
+      - name: Verify signed Secret Manager lease governance
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-SecretLeaseGovernance.ps1

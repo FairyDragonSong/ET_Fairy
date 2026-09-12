@@ -23,6 +23,8 @@ public static class ProductionSecretPolicy
             return;
         }
 
+        SecretLeasePolicy.ValidateConfigured(true);
+
         bool metricsConfigured = HasValue("ET_METRICS_PORT") || HasValue("ET_METRICS_TOKEN_FILE") || HasValue("ET_METRICS_PREVIOUS_TOKEN_FILE");
         string[] adminVariables =
         [
@@ -191,6 +193,11 @@ public static class ProductionSecretPolicy
             {
                 throw new InvalidOperationException("Secret file permissions are too broad");
             }
+        }
+
+        if (requireManagedRoot)
+        {
+            SecretLeasePolicy.AssertFileAuthorized(fullPath);
         }
 
         using FileStream stream = new(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);

@@ -19,6 +19,7 @@ param(
     [string]$RuntimeRoot,
     [Parameter(Mandatory)][string]$ServerArguments,
     [string]$EmergencyStopFile,[string]$EmergencyStopTrustFile,
+    [string]$SecretLeaseFile,[string]$SecretLeaseSignatureFile,[string]$SecretLeaseTrustFile,[string]$SecretLeaseSigningKeyId,[string]$SecretLeaseReleaseSigningPublicKeyFile,
     [switch]$ExitAfterSuccessfulSwitch,[switch]$TestOnlySuppressCurrentShutdown,
     [switch]$AllowTestPlan,[switch]$AllowDirtyTestArtifact
 )
@@ -46,6 +47,14 @@ function Start-Slot([string]$SlotDirectory){
     $info.Environment['ET_LOG_PROFILE']='bounded'
     $info.Environment['ET_LOG_ROOT']=Join-Path (Join-Path $resolvedRuntimeRoot 'logs') $DeploymentId
     $info.Environment['ET_SECRET_ROOT']=$SecretRoot
+    if($SecretLeaseFile){
+        $info.Environment['ET_SECRET_LEASE_REQUIRED']='1'
+        $info.Environment['ET_SECRET_LEASE_FILE']=[IO.Path]::GetFullPath($SecretLeaseFile)
+        $info.Environment['ET_SECRET_LEASE_SIGNATURE_FILE']=[IO.Path]::GetFullPath($SecretLeaseSignatureFile)
+        $info.Environment['ET_SECRET_LEASE_TRUST_FILE']=[IO.Path]::GetFullPath($SecretLeaseTrustFile)
+        $info.Environment['ET_SECRET_LEASE_SIGNING_KEY_ID']=$SecretLeaseSigningKeyId
+        $info.Environment['ET_DEPLOYMENT_ID']=$DeploymentId
+    }
     if($EmergencyStopFile){
         $info.Environment['ET_EMERGENCY_STOP_FILE']=[IO.Path]::GetFullPath($EmergencyStopFile)
         $info.Environment['ET_EMERGENCY_STOP_TRUST_FILE']=[IO.Path]::GetFullPath($EmergencyStopTrustFile)
@@ -79,6 +88,12 @@ function Get-ProcessFailure([Diagnostics.Process]$Process){
 
 $stopValues=@([bool]$EmergencyStopFile,[bool]$EmergencyStopTrustFile)
 if($stopValues[0] -ne $stopValues[1]){throw 'Emergency stop file and trust file must be configured together'}
+$leaseValues=@([bool]$SecretLeaseFile,[bool]$SecretLeaseSignatureFile,[bool]$SecretLeaseTrustFile,-not[string]::IsNullOrWhiteSpace($SecretLeaseSigningKeyId),[bool]$SecretLeaseReleaseSigningPublicKeyFile)
+if(@($leaseValues|Select-Object -Unique).Count-ne1){throw 'Secret lease configuration must be complete'}
+if(-not$AllowTestPlan-and-not$leaseValues[0]){throw 'Production supervisor requires a signed Secret lease'}
+if($leaseValues[0]){& "$PSScriptRoot/Test-SecretLease.ps1" -LeaseFile $SecretLeaseFile -SignatureFile $SecretLeaseSignatureFile `
+    -TrustedPublicKeyFile $SecretLeaseTrustFile -ExpectedSigningKeyId $SecretLeaseSigningKeyId -ReleaseSigningPublicKeyFile $SecretLeaseReleaseSigningPublicKeyFile `
+    -ExpectedDeploymentId $DeploymentId -SecretRoot $SecretRoot|Out-Null}
 if($TestOnlySuppressCurrentShutdown -and -not $AllowTestPlan){throw 'Drain failure injection is only allowed with a test rollout plan'}
 $stateParameters=@{DeploymentRoot=$DeploymentRoot;ConfirmDeploymentRoot=$ConfirmDeploymentRoot;DeploymentId=$DeploymentId;
     SecretRoot=$SecretRoot;StatePrivateKeyFile=$StatePrivateKeyFile;StatePublicKeyFile=$StatePublicKeyFile;

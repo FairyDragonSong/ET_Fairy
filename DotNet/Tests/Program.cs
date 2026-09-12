@@ -20,6 +20,7 @@ internal static class Program
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
         ("商业模式启动配置门禁", TestProductionStartupValidation),
         ("生产 Secret 根目录与凭据门禁", TestProductionSecretPolicy),
+        ("签名 Secret 租约与文件完整性", TestSecretLeasePolicy),
         ("生产网络监听与入口暴露门禁", TestNetworkExposurePolicy),
         ("签名紧急停服与部署隔离", TestEmergencyStopPolicy),
         ("认证敏感消息统一标记", TestSensitiveMessages),
@@ -330,6 +331,81 @@ internal static class Program
         {
             foreach ((string name, string value) in previous) Environment.SetEnvironmentVariable(name, value);
             if (File.Exists(escape)) File.Delete(escape);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void TestSecretLeasePolicy()
+    {
+        string[] variables =
+        [
+            "ET_SECRET_ROOT", "ET_SECRET_LEASE_REQUIRED", "ET_SECRET_LEASE_FILE", "ET_SECRET_LEASE_SIGNATURE_FILE",
+            "ET_SECRET_LEASE_TRUST_FILE", "ET_SECRET_LEASE_SIGNING_KEY_ID", "ET_DEPLOYMENT_ID",
+        ];
+        Dictionary<string, string> previous = variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        string root = Path.Combine(Path.GetTempPath(), "et-secret-lease-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        string secret = Path.Combine(root, "mongo-uri");
+        string unlisted = Path.Combine(root, "unlisted-secret");
+        string leaseFile = Path.Combine(root, "lease.json");
+        string signatureFile = Path.Combine(root, "lease.sig");
+        string trustFile = Path.Combine(root, "lease-trust.pem");
+        using RSA signer = RSA.Create(3072);
+        try
+        {
+            foreach (string variable in variables) Environment.SetEnvironmentVariable(variable, null);
+            File.WriteAllText(secret, "mongodb://user:high-entropy-secret@db1,db2/?tls=true&replicaSet=rs0&retryWrites=true");
+            File.WriteAllText(unlisted, "must-not-be-readable-through-provider");
+            File.WriteAllText(trustFile, signer.ExportSubjectPublicKeyInfoPem());
+            Environment.SetEnvironmentVariable("ET_SECRET_ROOT", root);
+            Environment.SetEnvironmentVariable("ET_SECRET_LEASE_REQUIRED", "1");
+            Environment.SetEnvironmentVariable("ET_SECRET_LEASE_FILE", leaseFile);
+            Environment.SetEnvironmentVariable("ET_SECRET_LEASE_SIGNATURE_FILE", signatureFile);
+            Environment.SetEnvironmentVariable("ET_SECRET_LEASE_TRUST_FILE", trustFile);
+            Environment.SetEnvironmentVariable("ET_SECRET_LEASE_SIGNING_KEY_ID", "secret-agent-1");
+            Environment.SetEnvironmentVariable("ET_DEPLOYMENT_ID", "deployment-1");
+
+            void WriteLease(DateTimeOffset issued, DateTimeOffset expires)
+            {
+                byte[] secretBytes = File.ReadAllBytes(secret);
+                byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    SchemaVersion = 1, Product = "ET.Server", ArtifactType = "SecretLease", LeaseId = Guid.NewGuid().ToString("N"),
+                    DeploymentId = "deployment-1", Provider = "unit-test-agent", Generation = 1,
+                    IssuedAtUtc = issued.ToString("O"), ExpiresAtUtc = expires.ToString("O"), SigningKeyId = "secret-agent-1",
+                    SigningPublicKeySha256 = Convert.ToHexString(SHA256.HashData(signer.ExportSubjectPublicKeyInfo())).ToLowerInvariant(),
+                    Secrets = new[] { new { RelativePath = Path.GetRelativePath(root, secret), Size = secretBytes.LongLength, Sha256 = Convert.ToHexString(SHA256.HashData(secretBytes)).ToLowerInvariant() } },
+                });
+                File.WriteAllBytes(leaseFile, bytes);
+                File.WriteAllBytes(signatureFile, signer.SignData(bytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pss));
+            }
+
+            WriteLease(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
+            SecretLeasePolicy.ValidateConfigured(true);
+            SecretLeasePolicy.AssertFileAuthorized(secret);
+            AssertThrows(() => SecretLeasePolicy.AssertFileAuthorized(unlisted), "unlisted Secret was authorized by lease");
+            string original = File.ReadAllText(secret);
+            File.AppendAllText(secret, "tampered");
+            AssertThrows(() => SecretLeasePolicy.AssertFileAuthorized(secret), "changed Secret matched signed lease");
+            File.WriteAllText(secret, original);
+            File.WriteAllBytes(secret, new byte[1024 * 1024 + 1]);
+            WriteLease(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
+            AssertThrows(() => SecretLeasePolicy.ValidateConfigured(true), "oversized Secret was accepted");
+            File.WriteAllText(secret, original);
+            WriteLease(DateTimeOffset.UtcNow.AddHours(-2), DateTimeOffset.UtcNow.AddHours(-1));
+            AssertThrows(() => SecretLeasePolicy.ValidateConfigured(true), "expired Secret lease was accepted");
+            WriteLease(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(25));
+            AssertThrows(() => SecretLeasePolicy.ValidateConfigured(true), "overlong Secret lease was accepted");
+            WriteLease(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
+            Environment.SetEnvironmentVariable("ET_DEPLOYMENT_ID", "deployment-2");
+            AssertThrows(() => SecretLeasePolicy.ValidateConfigured(true), "cross-deployment Secret lease was accepted");
+            Environment.SetEnvironmentVariable("ET_DEPLOYMENT_ID", "deployment-1");
+            Environment.SetEnvironmentVariable("ET_SECRET_LEASE_SIGNATURE_FILE", null);
+            AssertThrows(() => SecretLeasePolicy.ValidateConfigured(true), "partial Secret lease configuration was accepted");
+        }
+        finally
+        {
+            foreach ((string name, string value) in previous) Environment.SetEnvironmentVariable(name, value);
             if (Directory.Exists(root)) Directory.Delete(root, true);
         }
     }
