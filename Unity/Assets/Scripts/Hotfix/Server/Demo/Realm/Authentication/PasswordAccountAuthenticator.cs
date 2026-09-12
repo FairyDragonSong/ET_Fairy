@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using MongoDB.Driver;
 
 namespace ET.Server
 {
     [EnableClass]
+    [FriendOf(typeof(DBComponent))]
     public sealed class PasswordAccountAuthenticator: IAccountAuthenticator
     {
         public async ETTask<AccountAuthenticationResult> Authenticate(Scene root, AccountAuthenticationRequest request)
@@ -65,8 +67,12 @@ namespace ET.Server
                         return InvalidCredentials();
                     }
 
-                    account.LastLoginTime = TimeInfo.Instance.ServerNow();
-                    await database.Save(accountLockKey, account);
+                    UpdateResult updated = await database.database.GetCollection<Account>(typeof(Account).FullName)
+                        .UpdateOneAsync(stored => stored.Id == account.Id && stored.Status == AccountStatus.Active &&
+                            stored.PasswordHash == account.PasswordHash && stored.PasswordSalt == account.PasswordSalt &&
+                            stored.PasswordIterations == account.PasswordIterations && stored.PasswordScheme == account.PasswordScheme,
+                            Builders<Account>.Update.Max(stored => stored.LastLoginTime, TimeInfo.Instance.ServerNow()));
+                    if (updated.MatchedCount != 1) return InvalidCredentials();
                     return AccountAuthenticationResult.Success(account.LoginName);
                 }
                 catch (Exception e)

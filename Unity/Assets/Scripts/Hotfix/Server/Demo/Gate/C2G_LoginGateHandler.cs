@@ -24,6 +24,23 @@ namespace ET.Server
                        CoroutineLockType.PlayerSession,
                        account.GetLongHashCode()))
             {
+                try
+                {
+                    DBComponent database = root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
+                    var accounts = await database.Query<Account>(account.GetLongHashCode(), stored => stored.LoginName == account);
+                    if (accounts.Count != 1 || accounts[0].Status != AccountStatus.Active)
+                    {
+                        response.Error = ErrorCore.ERR_InvalidAccountOrPassword;
+                        response.Message = "登录凭据已失效";
+                        return;
+                    }
+                }
+                catch (Exception)
+                {
+                    response.Error = ErrorCore.ERR_AccountStorageUnavailable;
+                    response.Message = "账号服务暂时不可用";
+                    return;
+                }
                 Player player = playerComponent.GetByAccount(account);
                 if (player == null)
                 {

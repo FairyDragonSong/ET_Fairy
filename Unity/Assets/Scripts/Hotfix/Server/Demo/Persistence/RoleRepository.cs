@@ -61,6 +61,7 @@ namespace ET.Server
                     }
 
                     Account account = accounts[0];
+                    if (account.Status != AccountStatus.Active) return RoleLoadResult.Failure("账号当前不可用");
                     if (account.DefaultRoleId == 0)
                     {
                         return await CreateDefaultRole(root, database, accountLockKey, account);
@@ -167,12 +168,11 @@ namespace ET.Server
                         role,
                         new ReplaceOptions { IsUpsert = true },
                         cancellationToken);
-                    account.DefaultRoleId = role.Id;
-                    ReplaceOneResult accountResult = await accounts.ReplaceOneAsync(
+                    UpdateResult accountResult = await accounts.UpdateOneAsync(
                         transactionSession,
-                        storedAccount => storedAccount.Id == account.Id,
-                        account,
-                        new ReplaceOptions { IsUpsert = false },
+                        storedAccount => storedAccount.Id == account.Id && storedAccount.Status == AccountStatus.Active && storedAccount.DefaultRoleId == 0,
+                        Builders<Account>.Update.Set(storedAccount => storedAccount.DefaultRoleId, role.Id),
+                        new UpdateOptions { IsUpsert = false },
                         cancellationToken);
                     if (accountResult.MatchedCount != 1)
                     {
@@ -194,8 +194,10 @@ namespace ET.Server
             {
                 await database.Save(accountLockKey, role);
                 roleSaved = true;
-                account.DefaultRoleId = role.Id;
-                await database.Save(accountLockKey, account);
+                UpdateResult linked = await database.database.GetCollection<Account>(typeof(Account).FullName).UpdateOneAsync(
+                    stored => stored.Id == account.Id && stored.Status == AccountStatus.Active && stored.DefaultRoleId == 0,
+                    Builders<Account>.Update.Set(stored => stored.DefaultRoleId, role.Id));
+                if (linked.MatchedCount != 1) throw new InvalidOperationException("Account changed during role creation");
             }
             catch
             {

@@ -5,11 +5,13 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using ET.Client;
+using MongoDB.Driver;
 
 namespace ET.Server;
 
 // Available only in the .NET host. No client protocol or production endpoint added.
 [ConsoleHandler("gameplay-check")]
+[FriendOf(typeof(DBComponent))]
 public sealed class GameplayAcceptance : IConsoleHandler
 {
     public async ETTask Run(Fiber fiber, ModeContex context, string content)
@@ -19,7 +21,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
             if (Options.Instance.Develop != 1 || Environment.GetEnvironmentVariable("ET_MONGO_DATABASE") != "ET_LOCAL_GAMEPLAY")
                 throw new InvalidOperationException("Requires development mode and isolated ET_LOCAL_GAMEPLAY database");
             bool saveFailure=content.EndsWith(" save-failure",StringComparison.Ordinal);
-            if(content.EndsWith(" baseline",StringComparison.Ordinal)) await Baseline(fiber.Root);
+            if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
+            else if(content.EndsWith(" baseline",StringComparison.Ordinal)) await Baseline(fiber.Root);
             else await Execute(fiber.Root, content.EndsWith(" resume",StringComparison.Ordinal), content.EndsWith(" outage",StringComparison.Ordinal) || saveFailure, saveFailure);
             Console.WriteLine("GAMEPLAY_RESULT PASS");
         }
@@ -363,5 +366,48 @@ public sealed class GameplayAcceptance : IConsoleHandler
         if(!int.TryParse(value,out int parsed)||parsed<minimum||parsed>maximum)
             throw new InvalidOperationException($"Invalid load setting: {name}");
         return parsed;
+    }
+
+    private static async ETTask Governance(Scene parent)
+    {
+        long id=IdGenerater.Instance.GenerateId();
+        using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"AccountGovernanceTest");
+        NetComponent net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
+        IPEndPoint realm=StartSceneConfigCategory.Instance.Realms[0].InnerIPPort;
+        Check(IPAddress.IsLoopback(realm.Address),"Only loopback endpoints allowed");
+        string name=Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT")+"gov";
+        string password=Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD");
+        DBComponent db=client.AddComponent<DBManagerComponent>().GetZoneDB(1);
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        using R2C_Login key=await RealmLogin(net,realm,name,password);
+        Check(key.Error==0,"Governance registration failed");
+        try
+        {
+            var disabled=await accounts.UpdateOneAsync(a=>a.LoginName==name,Builders<Account>.Update.Set(a=>a.Status,AccountStatus.Disabled));
+            Check(disabled.MatchedCount==1,"Test account missing");
+            using Session rejected=net.Create(NetworkHelper.ToIPEndPoint(key.Address));
+            using G2C_LoginGate gate=await GateLogin(rejected,key);
+            Check(gate.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Issued key bypassed disabled status");
+            using R2C_Login realmRejected=await RealmLogin(net,realm,name,password);
+            Check(realmRejected.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Disabled account authenticated");
+            Console.WriteLine("GAMEPLAY_PASS disabled-account-realm-and-issued-gate-key-rejected");
+        }
+        finally
+        {
+            await accounts.UpdateOneAsync(a=>a.LoginName==name,Builders<Account>.Update.Set(a=>a.Status,AccountStatus.Active));
+        }
+        using Session replay=net.Create(NetworkHelper.ToIPEndPoint(key.Address));
+        using G2C_LoginGate consumed=await GateLogin(replay,key);
+        Check(consumed.Error==ErrorCore.ERR_ConnectGateKeyError,"Rejected key became reusable after enable");
+        using R2C_Login fresh=await RealmLogin(net,realm,name,password);
+        Check(fresh.Error==0,"Re-enabled account failed");
+        using Session session=net.Create(NetworkHelper.ToIPEndPoint(fresh.Address));
+        using G2C_LoginGate login=await GateLogin(session,fresh);
+        Check(login.Error==0,"Role creation failed");
+        using R2C_Login again=await RealmLogin(net,realm,name,password);
+        Check(again.Error==0,"Subsequent authentication failed");
+        var stored=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        Check(stored.DefaultRoleId==login.PlayerId && stored.Status==AccountStatus.Active,"Authentication overwrote role association");
+        Console.WriteLine("GAMEPLAY_PASS reenabled-fresh-login-and-role-link-preserved");
     }
 }

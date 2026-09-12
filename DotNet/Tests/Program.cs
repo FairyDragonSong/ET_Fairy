@@ -216,6 +216,15 @@ internal static class Program
         Assert(keyHandler.Contains(".Issue(request.Account)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key reverted to non-cryptographic random");
         Assert(passwordAuthenticator.Contains("PasswordHasher.SimulateVerification(request.Credential)"), "unknown-account timing equalization removed");
         Assert(passwordAuthenticator.Contains("PasswordLoginEnabled != 1"), "password provider fail-closed gate removed");
+        Assert(passwordAuthenticator.Contains("stored.Status == AccountStatus.Active") &&
+               passwordAuthenticator.Contains("stored.PasswordHash == account.PasswordHash") &&
+               passwordAuthenticator.Contains("Builders<Account>.Update.Max") &&
+               !passwordAuthenticator.Contains("database.Save(accountLockKey, account)"), "login can overwrite concurrent account changes");
+        Assert(gateLogin.Contains("accounts[0].Status != AccountStatus.Active"), "Gate no longer rechecks account state");
+        Assert(roleRepository.Contains("storedAccount.DefaultRoleId == 0") &&
+               roleRepository.Contains("Builders<Account>.Update.Set") &&
+               !roleRepository.Contains("accounts.ReplaceOneAsync") &&
+               !roleRepository.Contains("database.Save(accountLockKey, account)"), "role creation can overwrite concurrent account changes");
         Assert(realmInit.IndexOf("ProductionStartupValidator.ValidateRealm", StringComparison.Ordinal) <
                realmInit.IndexOf("DatabaseMigration.Apply", StringComparison.Ordinal), "production validation no longer runs before database startup");
         Assert(serverStartup.Contains("StartupCoordinator.Instance.MarkFailed()"), "required Fiber startup failures no longer terminate the process");
