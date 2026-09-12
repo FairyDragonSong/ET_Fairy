@@ -392,7 +392,7 @@ internal static class Program
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+18,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+22,"Metric count changed unexpectedly");
         Assert(text.Contains("# TYPE et_gate_bound_sessions gauge\n")&&text.Contains("et_gate_bound_sessions 0\n")&&
             text.Contains("et_gate_session_bindings_total 1000\n")&&text.Contains("et_gate_session_unbindings_total 1000\n"),"Concurrent bound-session accounting incorrect");
         bool rejected=false;
@@ -404,6 +404,13 @@ internal static class Program
     private static void TestHandlerLatency()
     {
         var metrics=new OperationalMetrics();metrics.Awake();
+        Parallel.For(0,1000,_=> { metrics.StartMapMailbox(true); metrics.FinishMapMailbox(true, false); });
+        metrics.StartMapMailbox(false);
+        Assert(metrics.ExportPrometheus().Contains("et_map_unordered_mailbox_inflight 1\n"), "Unfinished mailbox invisible");
+        metrics.FinishMapMailbox(false, true);
+        string inflight = metrics.ExportPrometheus();
+        Assert(inflight.Contains("et_map_ordered_mailbox_inflight 0\n") && inflight.Contains("et_map_unordered_mailbox_inflight 0\n") &&
+            inflight.Contains("et_map_unordered_mailbox_exceptions_total 1\n") && inflight.Contains("et_map_ordered_mailbox_exceptions_total 0\n"), "Mailbox lifecycle accounting incorrect");
         foreach(double value in new[]{0.0,1,2,6000})metrics.RecordHandlerDuration(HandlerLatency.RealmLogin,value);
         Parallel.For(0,1000,_=>metrics.RecordHandlerDuration(HandlerLatency.GateLogin,5));
         metrics.RecordHandlerDuration(HandlerLatency.RoleSaveSuccess,10);

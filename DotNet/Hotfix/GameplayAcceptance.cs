@@ -404,6 +404,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
     private static async ETTask SelfCredentials(Scene parent)
     {
         await CoroutineLockLifecycle(parent);
+        await MapMailboxObservation(parent);
         long id=IdGenerater.Instance.GenerateId();
         using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"SelfCredentialTest");
         var net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
@@ -560,6 +561,47 @@ public sealed class GameplayAcceptance : IConsoleHandler
               after.Acquired - before.Acquired == 1 && after.Failed - before.Failed == 1,
               "Lifecycle counters leaked or counted late timeout twice");
         Console.WriteLine("GAMEPLAY_PASS coroutine-lock-destroy-timeout-replacement-and-component-disposal");
+    }
+
+    private static async ETTask MapMailboxObservation(Scene parent)
+    {
+        long id = IdGenerater.Instance.GenerateId();
+        using Scene scene = EntitySceneFactory.CreateScene(parent, id, id, SceneType.Map, "MailboxObservationTest");
+        var mailbox = scene.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.OrderedMessage);
+        var locks = parent.Fiber().Root.GetComponent<CoroutineLockComponent>();
+        var timer = parent.Fiber().Root.GetComponent<TimerComponent>();
+        long before = Metric("et_map_ordered_mailbox_seconds_count");
+        long gaugeBefore = Metric("et_map_ordered_mailbox_inflight");
+        long errorsBefore = Metric("et_map_ordered_mailbox_exceptions_total");
+        using var message = C2G_Ping.Create(); // No actor dispatcher handler: controlled dispatch failure, no network request.
+        var args = new MailBoxInvoker { MailBoxComponent = mailbox, MessageObject = message };
+        ETTask pending;
+        using (await locks.Wait(CoroutineLockType.Mailbox, scene.InstanceId))
+        {
+            pending = MailBoxType_OrderedMessageHandler.HandleInner(args);
+            await timer.WaitAsync(150);
+            Check(!pending.IsCompleted && Metric("et_map_ordered_mailbox_inflight") == gaugeBefore + 1 &&
+                  Metric("et_map_ordered_mailbox_seconds_count") == before, "Lock-blocked mailbox not observed as unfinished");
+        }
+        await timer.WaitAsync(50);
+        Check(pending.IsCompleted, "Released mailbox did not complete");
+        await ExpectMissingHandler(pending);
+        Check(Metric("et_map_ordered_mailbox_inflight") == gaugeBefore && Metric("et_map_ordered_mailbox_seconds_count") == before + 1 &&
+              Metric("et_map_ordered_mailbox_exceptions_total") == errorsBefore + 1, "Ordered failure lost observation or leaked gauge");
+        long unorderedBefore = Metric("et_map_unordered_mailbox_inflight");
+        long unorderedErrors = Metric("et_map_unordered_mailbox_exceptions_total");
+        await ExpectMissingHandler(MailBoxType_UnOrderedMessageHandler.HandleAsync(args));
+        Check(Metric("et_map_unordered_mailbox_inflight") == unorderedBefore &&
+              Metric("et_map_unordered_mailbox_exceptions_total") == unorderedErrors + 1, "Unordered failure leaked gauge");
+        Console.WriteLine("GAMEPLAY_PASS map-mailbox-lock-wait-inflight-and-dispatch-exception-cleanup");
+    }
+
+    private static async ETTask ExpectMissingHandler(ETTask task)
+    {
+        bool caught = false;
+        try { await task; }
+        catch (Exception e) when (e.Message.StartsWith("not found message handler:", StringComparison.Ordinal)) { caught = true; }
+        Check(caught, "Expected dispatcher failure did not propagate");
     }
 
     private static async ETTask ExpectDisposed(ETTask<CoroutineLock> task)

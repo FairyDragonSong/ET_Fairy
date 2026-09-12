@@ -24,6 +24,20 @@ namespace ET.Server
         private long loginFailures;
         private long roleSaveSuccesses;
         private long roleSaveFailures;
+        private readonly long[] mapMailboxInflight = new long[2];
+        private readonly long[] mapMailboxExceptions = new long[2];
+
+        public void StartMapMailbox(bool ordered)
+        {
+            Interlocked.Increment(ref this.mapMailboxInflight[ordered ? 0 : 1]);
+        }
+
+        public void FinishMapMailbox(bool ordered, bool exception)
+        {
+            int index = ordered ? 0 : 1;
+            Interlocked.Decrement(ref this.mapMailboxInflight[index]);
+            if (exception) Interlocked.Increment(ref this.mapMailboxExceptions[index]);
+        }
         [StaticField] private static readonly double[] latencyBoundsMs={1,5,10,25,50,100,250,500,1000,2500,5000};
         private readonly long[,] handlerLatencyBuckets=new long[(int)HandlerLatency.Count,12];
         private readonly long[] handlerLatencyMicroseconds=new long[(int)HandlerLatency.Count];
@@ -189,6 +203,14 @@ namespace ET.Server
             }
             Append(text, "et_shutdown_requested", ShutdownCoordinator.Instance.IsRequested ? 1 : 0);
             this.AppendHandlerLatency(text);
+            text.Append("# TYPE et_map_ordered_mailbox_inflight gauge\n");
+            Append(text, "et_map_ordered_mailbox_inflight", Interlocked.Read(ref this.mapMailboxInflight[0]));
+            text.Append("# TYPE et_map_unordered_mailbox_inflight gauge\n");
+            Append(text, "et_map_unordered_mailbox_inflight", Interlocked.Read(ref this.mapMailboxInflight[1]));
+            text.Append("# TYPE et_map_ordered_mailbox_exceptions_total counter\n");
+            Append(text, "et_map_ordered_mailbox_exceptions_total", Interlocked.Read(ref this.mapMailboxExceptions[0]));
+            text.Append("# TYPE et_map_unordered_mailbox_exceptions_total counter\n");
+            Append(text, "et_map_unordered_mailbox_exceptions_total", Interlocked.Read(ref this.mapMailboxExceptions[1]));
             Append(text, "et_startup_ready", StartupCoordinator.Instance.IsReady ? 1 : 0);
             return text.ToString();
         }

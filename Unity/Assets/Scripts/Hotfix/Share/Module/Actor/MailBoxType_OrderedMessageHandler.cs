@@ -16,7 +16,7 @@
             HandleInner(args).Coroutine();
         }
 
-        private static async ETTask HandleInner(MailBoxInvoker args)
+        internal static async ETTask HandleInner(MailBoxInvoker args)
         {
             MailBoxComponent mailBoxComponent = args.MailBoxComponent;
             
@@ -31,7 +31,10 @@
             long instanceId = mailBoxComponent.InstanceId;
 #if DOTNET
             bool observe = mailBoxComponent.IScene.SceneType == SceneType.Map;
+            var metrics = observe ? Server.OperationalMetrics.Instance : null;
+            bool failed = false;
             long started = observe ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            metrics?.StartMapMailbox(true);
             try
             {
 #endif
@@ -50,9 +53,15 @@
             }
 #if DOTNET
             }
+            catch
+            {
+                failed = true;
+                throw;
+            }
             finally
             {
-                if (observe) Server.OperationalMetrics.Instance?.RecordHandlerDuration(Server.HandlerLatency.MapOrderedMailbox,
+                metrics?.FinishMapMailbox(true, failed);
+                if (observe) metrics?.RecordHandlerDuration(Server.HandlerLatency.MapOrderedMailbox,
                     System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             }
 #endif

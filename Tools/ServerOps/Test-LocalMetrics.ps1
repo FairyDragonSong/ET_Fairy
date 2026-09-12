@@ -204,6 +204,10 @@ try {
         Wait-Prom 'et_coroutine_lock_waits_started_total{job="et-primary"} >= bool 0' '1'
         Wait-Prom 'et_map_ordered_mailbox_seconds_count{job="et-primary"}' '0'
         Wait-Prom 'et_map_unordered_mailbox_seconds_count{job="et-primary"}' '0'
+        Wait-Prom 'et_map_ordered_mailbox_inflight{job="et-primary"}' '0'
+        Wait-Prom 'et_map_unordered_mailbox_inflight{job="et-primary"}' '0'
+        Wait-Prom 'et_map_ordered_mailbox_exceptions_total{job="et-primary"}' '0'
+        Wait-Prom 'et_map_unordered_mailbox_exceptions_total{job="et-primary"}' '0'
         if(@(Get-NetTCPConnection -LocalPort 30909 -State Listen|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Collector is not loopback-only'}
         $checks.Add('prometheus-two-authenticated-targets-and-identities')
         if($Alertmanager){
