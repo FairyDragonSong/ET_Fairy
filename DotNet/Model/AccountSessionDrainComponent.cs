@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 
 namespace ET.Server;
@@ -12,6 +13,7 @@ public sealed class AccountSessionDrainComponent : Entity, IAwake
 [EnableClass]
 public sealed class AccountSessionDrainState
 {
+    public readonly string GateInstanceId = Guid.NewGuid().ToString("N");
     public readonly SemaphoreSlim Slots = new(16, 16);
     public int Pending;
     public int Admissions;

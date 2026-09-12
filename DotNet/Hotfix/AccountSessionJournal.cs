@@ -19,6 +19,9 @@ public static class AccountSessionJournal
         await db.database.GetCollection<BsonDocument>(Collection).Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("AccountId").Descending("OpenedAtUtc"),
                 new CreateIndexOptions {Name="ix_session_account_opened"}));
+        await db.database.GetCollection<BsonDocument>(Collection).Indexes.CreateOneAsync(
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("GateInstanceId").Ascending("State"),
+                new CreateIndexOptions {Name="ix_session_instance_state"}));
     }
 
     // Admission is not proof of a delivered login response or of current online status.
@@ -46,6 +49,7 @@ public static class AccountSessionJournal
             {
                 {"_id",recordId},{"AccountId",accountId},{"AccountStateVersion",version},
                 {"Process",Options.Instance.Process},{"GateId",root.Id},{"Zone",root.Zone()},
+                {"GateInstanceId",state.GateInstanceId},
                 {"OpenedAtUtc",DateTime.UtcNow},{"State","admitted"}
             },cancellationToken:timeout.Token);
             OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalAdmitted);

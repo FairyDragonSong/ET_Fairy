@@ -13,7 +13,7 @@ const accountRows = targetDb.getCollection('ET.Server.Account').aggregate([
 const accountsById = new Map(accountRows.map(row => [String(row._id), row]));
 const journalRows = targetDb.getCollection('ET.Server.AccountSessionJournal').aggregate([
     {$match:{AccountId:{$in:accountRows.map(row=>row._id)}}},
-    {$project:{AccountId:1,AccountStateVersion:1,State:1,OpenedAtUtc:1,EndedAtUtc:1,DisconnectError:1}}
+    {$project:{AccountId:1,AccountStateVersion:1,GateInstanceId:1,State:1,OpenedAtUtc:1,EndedAtUtc:1,DisconnectError:1}}
 ], {readConcern:{level:'majority'}}).toArray();
 const perAccount = new Map();
 let unfinished = 0, invalid = 0;
@@ -24,6 +24,7 @@ for (const row of journalRows) {
     if (row.State !== 'ended') unfinished++;
     if (!(row.OpenedAtUtc instanceof Date) || !(row.EndedAtUtc instanceof Date) ||
         row.EndedAtUtc < row.OpenedAtUtc || row.DisconnectError === undefined ||
+        !/^[a-f0-9]{32}$/.test(row.GateInstanceId || '') ||
         row.AccountStateVersion === undefined || !account || account.StateVersion === undefined ||
         String(row.AccountStateVersion) !== String(account.StateVersion)) invalid++;
 }
@@ -32,5 +33,6 @@ const duplicates = [...perAccount.values()].filter(count=>count!==1).length;
 const passed = accountRows.length===expected && new Set(accountRows.map(row=>row.LoginName)).size===expected &&
     journalRows.length===expected && missing===0 && duplicates===0 && unfinished===0 && invalid===0;
 print(JSON.stringify({Passed:passed,Expected:expected,Accounts:accountRows.length,Records:journalRows.length,
-    Missing:missing,Duplicates:duplicates,Unfinished:unfinished,Invalid:invalid,ReadOnly:true}));
+    Missing:missing,Duplicates:duplicates,Unfinished:unfinished,Invalid:invalid,
+    GateInstances:new Set(journalRows.map(row=>row.GateInstanceId)).size,ReadOnly:true}));
 if (!passed) quit(2);

@@ -500,8 +500,9 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(records.Count==2&&records.Count(r=>r["State"].AsString=="ended")==1,"Session admission/revocation journal incorrect");
             Check(records.Any(r=>r["AccountStateVersion"].AsInt64==before.StateVersion&&r["State"].AsString=="ended")&&
                 records.Any(r=>r["AccountStateVersion"].AsInt64==before.StateVersion+1&&r["State"].AsString=="admitted"),"Session credential version journal incorrect");
-            string[] safeFields={"_id","AccountId","AccountStateVersion","Process","GateId","Zone","OpenedAtUtc","State","EndedAtUtc","DisconnectError"};
+            string[] safeFields={"_id","AccountId","AccountStateVersion","Process","GateId","GateInstanceId","Zone","OpenedAtUtc","State","EndedAtUtc","DisconnectError"};
             Check(records.All(r=>r.Names.All(n=>safeFields.Contains(n))),"Session journal contains unexpected identity payload");
+            Check(records.All(r=>r.Contains("GateInstanceId")&&Guid.TryParseExact(r["GateInstanceId"].AsString,"N",out _)),"Gate startup instance missing");
             renewed.Dispose();
             for(int i=0;i<50;i++)
             {
@@ -511,7 +512,9 @@ public sealed class GameplayAcceptance : IConsoleHandler
             }
             Check(records.All(r=>r["State"].AsString=="ended"&&r.Contains("EndedAtUtc")),"Normal disconnect journal missing");
             using var indexes=await journal.Indexes.ListAsync();
-            Check((await indexes.ToListAsync()).Any(i=>i["name"].AsString=="ix_session_account_opened"),"Session journal query index missing");
+            var journalIndexes=await indexes.ToListAsync();
+            Check(journalIndexes.Any(i=>i["name"].AsString=="ix_session_account_opened")&&
+                journalIndexes.Any(i=>i["name"].AsString=="ix_session_instance_state"),"Session journal query index missing");
             Console.WriteLine("GAMEPLAY_PASS session-journal-admission-version-revocation-disconnect-index-minimal-fields");
             Check(Metric("et_password_change_accepted_total")==2&&Metric("et_password_change_unconfirmed_total")==4&&
                 Metric("et_password_change_rate_limited_total")==1,"Password outcome metrics do not match exercised requests");
@@ -671,9 +674,22 @@ public sealed class GameplayAcceptance : IConsoleHandler
             var records=database.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection);
             var saved=await records.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",id)).ToListAsync();
             Check(saved.Count==1&&saved[0]["State"]=="ended"&&saved[0].Contains("EndedAtUtc"),"Racing admission retained an open record");
+            Check(saved[0]["GateInstanceId"]==state.GateInstanceId,"Admission lost its startup instance");
             Check(await records.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",id+1))==0,
                 "Late admission wrote a journal row");
             Console.WriteLine("GAMEPLAY_PASS session-journal-inflight-admission-drain-and-late-rejection");
+            scope.RemoveComponent<AccountSessionDrainComponent>();
+            var replacement=scope.AddComponent<AccountSessionDrainComponent>().State;
+            Check(replacement.GateInstanceId!=state.GateInstanceId,"Reinitialized Gate reused startup identity");
+            async ETTask CloseReplacement() {replacement.Closing=1;await ETTask.CompletedTask;}
+            Check(!await AccountSessionJournal.BeginCore(late,scope,id+1,0,CloseReplacement),"Closing replacement unexpectedly bound session");
+            Check(await AccountSessionJournal.Drain(scope),"Replacement drain failed");
+            var replacementRow=await records.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",id+1)).SingleAsync();
+            Check(replacementRow["GateId"]==saved[0]["GateId"]&&replacementRow["GateInstanceId"]==replacement.GateInstanceId,
+                "Same Gate number did not retain distinct startup identities");
+            Check(saved[0].Equals(await records.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",saved[0]["_id"])).SingleAsync()),
+                "Replacement altered old startup evidence");
+            Console.WriteLine("GAMEPLAY_PASS session-journal-startup-instance-reinitialization-isolation");
         }
         finally {if(!released)release.SetResult();}
     }
