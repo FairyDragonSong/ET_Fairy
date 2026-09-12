@@ -1,5 +1,5 @@
 param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
-    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile)
+    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs)
 $ErrorActionPreference='Stop'
 if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load parameters require -Baseline'}
 if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolated Baseline mode'}
@@ -25,6 +25,7 @@ $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.Redir
 $info.Environment['ET_GAMEPLAY_CLIENTS']=[string]$Clients
 $info.Environment['ET_GAMEPLAY_DURATION']=[string]$DurationSeconds
 $info.Environment['ET_GAMEPLAY_CAPACITY_PROFILE']=$(if($CapacityProfile){'1'}else{'0'})
+if($BoundedLogs){$info.Environment['ET_LOG_PROFILE']='bounded'}
 foreach($name in @($info.Environment.Keys)){if($name -match '^ET_MONGO_(URI|DATABASE)_ZONE_'){$info.Environment.Remove($name)|Out-Null}}
 $process=[Diagnostics.Process]::new();$process.StartInfo=$info
 $lines=[Collections.Generic.List[string]]::new()
@@ -59,8 +60,9 @@ try {
         if($CapacityProfile -and ([DateTime]::UtcNow-$lastResourceCheck).TotalSeconds -ge 5){
             $lastResourceCheck=[DateTime]::UtcNow
             $process.Refresh()
-            if($process.WorkingSet64 -gt 8GB -or (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 2MB){
-                throw 'Local capacity resource guard reached (8 GiB process or less than 2 GiB free host RAM)'
+            if($process.WorkingSet64 -gt 8GB -or (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 2MB -or
+               ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($repo))).AvailableFreeSpace -lt 5GB){
+                throw 'Local capacity resource guard reached (8 GiB process, less than 2 GiB free RAM or 5 GiB free workspace disk)'
             }
         }
         if($Outage -and $line -match 'GAMEPLAY_OUTAGE_STOP'){
@@ -89,6 +91,7 @@ try {
     if($SaveFailure){$lines.Add('GAMEPLAY_PASS storage-failure-shutdown-exit-2');Write-Host 'GAMEPLAY_PASS storage-failure-shutdown-exit-2'}
     $report=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Clients=$Clients;DurationSeconds=$DurationSeconds;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_PASS'});Samples=@($lines|Where-Object{$_ -match 'GAMEPLAY_PROGRESS'});ProductionCapacityVerified=$false}
     $report.CapacityProfile=[bool]$CapacityProfile
+    $report.LogProfile=$info.Environment['ET_LOG_PROFILE'];$report.HostProcessId=$process.Id
     $report.ShutdownObserved=$shutdownObserved;$report.ShutdownExitCode=$shutdownExitCode;$report.ShutdownElapsedMs=$shutdownElapsedMs
     $report.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
     $report.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
@@ -97,6 +100,7 @@ try {
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
     $failure.CapacityProfile=[bool]$CapacityProfile
+    $failure.LogProfile=$info.Environment['ET_LOG_PROFILE'];$failure.HostProcessId=$(if($processStarted){$process.Id}else{$null})
     $failure.ShutdownObserved=$shutdownObserved;$failure.ShutdownExitCode=$shutdownExitCode;$failure.ShutdownElapsedMs=$shutdownElapsedMs
     $failure.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
     $failure.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
@@ -115,6 +119,6 @@ try {
     if($Outage){& "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot}
 }
 if(-not $Resume -and -not $Outage -and -not $Baseline -and -not $Governance -and -not $Credentials -and -not $SelfCredentials){
-    try { & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Resume; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Outage; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -SaveFailure; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Baseline }
+    try { & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Resume -BoundedLogs:$BoundedLogs; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Outage -BoundedLogs:$BoundedLogs; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -SaveFailure -BoundedLogs:$BoundedLogs; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Baseline -BoundedLogs:$BoundedLogs }
     finally { Remove-Item Env:ET_GAMEPLAY_PASSWORD,Env:ET_GAMEPLAY_ACCOUNT,Env:ET_GAMEPLAY_ROLEID -ErrorAction SilentlyContinue }
 }

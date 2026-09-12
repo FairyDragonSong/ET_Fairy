@@ -9,7 +9,14 @@ namespace ET
 
         static NLogger()
         {
-            LogManager.Configuration = new NLog.Config.XmlLoggingConfiguration("../Config/NLog/NLog.config");
+            string configFile = "../Config/NLog/NLog.config";
+#if DOTNET
+            string profile = Environment.GetEnvironmentVariable("ET_LOG_PROFILE");
+            if (profile == "bounded") configFile = "../Config/NLog/NLog.Bounded.config";
+            else if (!string.IsNullOrEmpty(profile) && profile != "legacy")
+                throw new InvalidOperationException("Unknown ET_LOG_PROFILE; use legacy or bounded");
+#endif
+            LogManager.Configuration = new NLog.Config.XmlLoggingConfiguration(configFile);
             LogManager.Configuration.Variables["currentDir"] = Environment.CurrentDirectory;
         }
 

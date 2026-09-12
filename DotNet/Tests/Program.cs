@@ -27,6 +27,7 @@ internal static class Program
         ("Fiber 投递队列积压快照", TestMessageQueueSnapshot),
         ("协程锁等待计数与终态去重", TestCoroutineLockMetrics),
         ("KService 更新期间销毁保护", TestKServiceDisposeDuringUpdate),
+        ("有界日志分级与真实轮转", TestBoundedLogging),
     ];
 
     private static int Main()
@@ -438,6 +439,45 @@ internal static class Program
             catch(ArgumentOutOfRangeException){rejected=true;}
             Assert(rejected,"Invalid latency sample accepted");
         }
+    }
+
+    private static void TestBoundedLogging()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "et-log-rotation-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var config = new NLog.Config.XmlLoggingConfiguration(Path.Combine(FindRepositoryRoot(), "Config/NLog/NLog.Bounded.config"));
+        config.Variables["logRoot"] = directory.Replace('\\', '/');
+        foreach (string name in new[] { "InfoFile", "WarnFile", "ErrorFile" })
+        {
+            var file = config.FindTargetByName<NLog.Targets.FileTarget>(name);
+            Assert(file.ArchiveAboveSize == 64L * 1024 * 1024 && file.MaxArchiveFiles == 4, "Production rotation limits changed");
+            file.ArchiveAboveSize = 1024; // Exercise the real target without generating hundreds of MiB.
+        }
+        using var factory = new NLog.LogFactory();
+        factory.Configuration = config;
+        var logger = factory.GetLogger("bounded-test");
+        logger.Debug("debug-must-not-be-written");
+        for (int i = 0; i < 100; ++i)
+        {
+            logger.Info("event-" + i.ToString("D4") + "-" + new string('x', 256));
+            factory.Flush(TimeSpan.FromSeconds(5));
+        }
+        logger.Info("latest-info-marker");
+        logger.Warn("warning-marker");
+        logger.Error("error-marker");
+        logger.Fatal("fatal-marker");
+        factory.Flush(TimeSpan.FromSeconds(5));
+        factory.Shutdown();
+        string info = File.ReadAllText(Path.Combine(directory, "info.log"));
+        string warn = File.ReadAllText(Path.Combine(directory, "warn.log"));
+        string error = File.ReadAllText(Path.Combine(directory, "error.log"));
+        Assert(info.Contains("latest-info-marker") && !info.Contains("warning-marker") && warn.Contains("warning-marker") &&
+            error.Contains("error-marker") && error.Contains("fatal-marker"), "Severity routing or flush failed");
+        string[] archives = Directory.GetFiles(Path.Combine(directory, "archive"), "info.*.log");
+        Assert(archives.Length > 1 && archives.Length <= 4, "Archive rotation/retention failed");
+        string retained = string.Join("", Directory.GetFiles(directory, "*.log", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert(!retained.Contains("debug-must-not-be-written") && !retained.Contains("event-0000-"), "Debug suppression or oldest archive eviction failed");
+        Console.WriteLine("LOG_ROTATION_EVIDENCE " + directory);
     }
 
     private static void TestKServiceDisposeDuringUpdate()

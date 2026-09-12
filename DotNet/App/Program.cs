@@ -7,6 +7,13 @@ namespace ET
     {
         public static void Main()
         {
+            string logProfile = Environment.GetEnvironmentVariable("ET_LOG_PROFILE");
+            if (!string.IsNullOrEmpty(logProfile) && logProfile != "legacy" && logProfile != "bounded")
+            {
+                Console.Error.WriteLine("Invalid ET_LOG_PROFILE: use legacy or bounded");
+                Environment.ExitCode = 3;
+                return;
+            }
             //这里大家看着可能比较困惑，为什么要绕一大圈呢，之前这里直接调用Model层，现在却要在CoderLoader中获取Model的程序集找到Entry入口再调用
             //原因是，之前DotNet.App直接依赖Model，但是在客户端，之前的Mono却不依赖Model。这导致前端跟后端程序集依赖不太一样
             //所以这次加了个Loader的程序集，客户端的Mono程序集也改成Loader，这样前后端Model都引用Loader，Loader通过反射去调用Model的Entry。
@@ -90,6 +97,7 @@ namespace ET
             metricsExporter?.Dispose();
             World.Instance.Dispose();
             sigtermRegistration?.Dispose();
+            NLog.LogManager.Shutdown();
         }
     }
 }
