@@ -5,6 +5,7 @@ if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load
 if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolated Baseline mode'}
 if($CrashJournal -and (-not $Baseline -or $Clients -gt 100 -or $DurationSeconds -lt 60)){throw 'Crash journal requires Baseline, at most 100 clients and at least 60 sustained seconds'}
 if($RecoverCrashJournal -and -not $CrashJournal){throw 'Recovery requires this invocation to own and crash its test server'}
+if($RecoverCrashJournal -and $Clients -lt 20){throw 'Recovery isolation requires at least 20 original clients for same-account relogin'}
 if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
 if($SaveFailure -or $LeaseExpiry){$Outage=$true}
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
@@ -115,7 +116,50 @@ try {
             $crashReport|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $crashPath
             if($RecoverCrashJournal){
                 $previousRecoveryContext=$env:ET_CRASH_RECOVERY_CONTEXT;$previousRecoveryFault=$env:ET_CRASH_RECOVERY_TEST_FAIL;$previousRecoveryCheck=$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK
+                $peer=$null;$peerStarted=$false
                 try {
+                    # Reuse the same process/config/ports with a fresh OS process and cohort.
+                    $peerInfo=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
+                    $peerInfo.WorkingDirectory=$info.WorkingDirectory;$peerInfo.Arguments=$info.Arguments
+                    $peerInfo.UseShellExecute=$false;$peerInfo.CreateNoWindow=$true
+                    $peerInfo.RedirectStandardInput=$true;$peerInfo.RedirectStandardOutput=$true;$peerInfo.RedirectStandardError=$true
+                    foreach($key in $info.Environment.Keys){$peerInfo.Environment[$key]=$info.Environment[$key]}
+                    $peerCohort=$env:ET_GAMEPLAY_ACCOUNT
+                    $peerInfo.Environment['ET_GAMEPLAY_ACCOUNT']=$peerCohort
+                    $peerInfo.Environment['ET_GAMEPLAY_CLIENTS']='20';$peerInfo.Environment['ET_GAMEPLAY_DURATION']='60';$peerInfo.Environment['ET_GAMEPLAY_CAPACITY_PROFILE']='0'
+                    $peer=[Diagnostics.Process]::new();$peer.StartInfo=$peerInfo
+                    if(-not $peer.Start()){throw 'Replacement process start failed'}
+                    $peerStarted=$true;$peerErrors=$peer.StandardError.ReadToEndAsync()
+                    Start-Sleep -Seconds 8
+                    if($peer.HasExited){throw 'Replacement process exited before test'}
+                    $peer.StandardInput.WriteLine('gameplay-check baseline')
+                    function Wait-RecoveryPeerMarker([string]$pattern){
+                        $peerDeadline=[DateTime]::UtcNow.AddSeconds(120)
+                        while([DateTime]::UtcNow -lt $peerDeadline){
+                            $read=$peer.StandardOutput.ReadLineAsync()
+                            if(-not $read.Wait(30000)){throw 'Replacement output timeout'}
+                            $peerLine=$read.Result
+                            if($null -eq $peerLine -or $peerLine -match 'GAMEPLAY_RESULT FAIL'){throw 'Replacement gameplay failed'}
+                            if($peerLine -match 'GAMEPLAY_'){Write-Host "RECOVERY_PEER $peerLine"}
+                            if($peerLine -match $pattern){return}
+                        }
+                        throw 'Replacement marker deadline exceeded'
+                    }
+                    function Read-RecoveryPeerJournal([string]$scriptName){
+                        $savedAccount=$env:ET_GAMEPLAY_ACCOUNT;$savedClients=$env:ET_GAMEPLAY_CLIENTS
+                        $savedExclude=$env:ET_RECOVERY_PEER_EXCLUDE;$savedPeerState=$env:ET_RECOVERY_PEER_STATE
+                        try {
+                            $env:ET_GAMEPLAY_ACCOUNT=$peerCohort;$env:ET_GAMEPLAY_CLIENTS='20'
+                            $env:ET_RECOVERY_PEER_EXCLUDE=ConvertTo-Json -InputObject @($beforeCrash.GateInstanceIds) -Compress
+                            $env:ET_RECOVERY_PEER_STATE=$(if($scriptName -eq 'Snapshot-GameplayJournal.js'){'admitted'}else{'ended'})
+                            $output=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Verify-RecoveryPeerJournal.js"
+                            if($LASTEXITCODE -ne 0){throw 'Replacement journal verification failed'}
+                            return (($output -join "`n")|ConvertFrom-Json)
+                        } finally {$env:ET_GAMEPLAY_ACCOUNT=$savedAccount;$env:ET_GAMEPLAY_CLIENTS=$savedClients;$env:ET_RECOVERY_PEER_EXCLUDE=$savedExclude;$env:ET_RECOVERY_PEER_STATE=$savedPeerState}
+                    }
+                    Wait-RecoveryPeerMarker 'GAMEPLAY_PROGRESS online=20 sustained_ms='
+                    $peerBefore=Read-RecoveryPeerJournal 'Snapshot-GameplayJournal.js'
+                    if(-not $peerBefore.Passed -or $peer.HasExited -or @($peerBefore.GateInstanceIds|Where-Object{$_ -in $beforeCrash.GateInstanceIds}).Count){throw 'Replacement live instance isolation not established'}
                     $env:ET_CRASH_RECOVERY_CONTEXT=([ordered]@{OperationId=[Guid]::NewGuid().ToString('N');HostProcessId=$ownedPid;
                         ExitObserved=$crashExitObserved;ProcessStartedAtUtc=$startedAt;ExitObservedAtUtc=$observedAt;
                         BeforeSha256=$beforeCrash.SnapshotSha256;GateInstanceIds=@($beforeCrash.GateInstanceIds)}|ConvertTo-Json -Compress)
@@ -142,13 +186,27 @@ try {
                     if($LASTEXITCODE -ne 0){throw 'Local crash recovery replay failed'}
                     $replay=($replayOutput -join "`n")|ConvertFrom-Json
                     if(-not $recovery.Passed -or $recovery.Replay -or -not $replay.Passed -or -not $replay.Replay){throw 'Recovery idempotency verification failed'}
+                    $peerAfter=Read-RecoveryPeerJournal 'Snapshot-GameplayJournal.js'
+                    if(-not $peerAfter.Passed -or $peer.HasExited -or $peerBefore.SnapshotSha256 -ne $peerAfter.SnapshotSha256){throw 'Recovery altered live replacement records'}
+                    Wait-RecoveryPeerMarker 'GAMEPLAY_RESULT PASS'
+                    $peerRemaining=$peer.StandardOutput.ReadToEndAsync()
+                    $peer.StandardInput.WriteLine('shutdown')
+                    if(-not $peer.WaitForExit(25000) -or $peer.ExitCode -ne 0){throw 'Replacement did not shut down normally'}
+                    $peerFinal=Read-RecoveryPeerJournal 'Verify-GameplayJournal.js'
+                    if(-not $peerFinal.Passed){throw 'Replacement final journal failed'}
+                    $crashReport.LiveReplacementIsolationVerified=$true
+                    $crashReport.Replacement=[ordered]@{HostProcessId=$peer.Id;Cohort=$peerCohort;SameAccounts=$true;Before=$peerBefore;After=$peerAfter;Final=$peerFinal;ExitCode=$peer.ExitCode}
                     $crashReport.RecoveryVerified=$true;$crashReport.Recovery=$recovery;$crashReport.Replay=$replay;$crashReport.Rollback=$rollback;$crashReport.CollisionRejected=$true
                     $crashReport.CompletedAtUtc=[DateTime]::UtcNow.ToString('O')
                     $recoveryPath="$env:ET_LOCAL_MONGO_ROOT/evidence/journal-recovery-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
                     $crashReport|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $recoveryPath
                     Write-Host "GAMEPLAY_PASS local-crash-recovery-interrupted-and-idempotent records=$Clients"
                     Write-Host "Recovery evidence: $recoveryPath"
-                } finally {$env:ET_CRASH_RECOVERY_CONTEXT=$previousRecoveryContext;$env:ET_CRASH_RECOVERY_TEST_FAIL=$previousRecoveryFault;$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK=$previousRecoveryCheck}
+                } finally {
+                    if($peerStarted -and -not $peer.HasExited){$peer.Kill($true);$peer.WaitForExit()}
+                    if($null -ne $peer){$peer.Dispose()}
+                    $env:ET_CRASH_RECOVERY_CONTEXT=$previousRecoveryContext;$env:ET_CRASH_RECOVERY_TEST_FAIL=$previousRecoveryFault;$env:ET_CRASH_RECOVERY_CHECK_ROLLBACK=$previousRecoveryCheck
+                }
             }
             Write-Host "GAMEPLAY_PASS owned-process-crash-journal records=$Clients recovery_verified=$($crashReport.RecoveryVerified.ToString().ToLowerInvariant())"
             Write-Host "Evidence: $crashPath"

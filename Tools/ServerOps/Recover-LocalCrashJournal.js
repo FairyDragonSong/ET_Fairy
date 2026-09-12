@@ -30,7 +30,7 @@ try {
         const names=Array.from({length:count},(_,i)=>prefix+'p'+i);
         const accounts=target.getCollection('ET.Server.Account').find({LoginName:{$in:names}},{_id:1}).toArray();
         if(accounts.length!==count)throw new Error('Recovery account cohort mismatch');
-        const filter={AccountId:{$in:accounts.map(a=>a._id)}};
+        const filter={AccountId:{$in:accounts.map(a=>a._id)},GateInstanceId:{$in:instances}};
         const rows=journal.find(filter).sort({_id:1}).toArray();
         if(rows.length!==count||new Set(rows.map(r=>String(r.AccountId))).size!==count||
            rows.some(r=>!instances.includes(r.GateInstanceId)))throw new Error('Recovery instance cohort mismatch');
