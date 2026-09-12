@@ -527,6 +527,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 "Handler latency samples do not include every success/rejection/early return");
             Console.WriteLine("GAMEPLAY_PASS handler-latency-samples-include-rejections-and-rate-limit");
             await SessionJournalBurst(parent, db);
+            await SessionJournalAdmissionDrain(parent);
         }
         finally
         {
@@ -591,6 +592,45 @@ public sealed class GameplayAcceptance : IConsoleHandler
         state.Pending=0;
         Check(!await AccountSessionJournal.Drain(scope),"Failed journal queue falsely passed drain");
         Console.WriteLine("GAMEPLAY_PASS session-journal-overflow-fails-drain");
+    }
+
+    private static async ETTask SessionJournalAdmissionDrain(Scene parent)
+    {
+        long id=IdGenerater.Instance.GenerateId();
+        using Scene scope=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"JournalAdmissionDrain");
+        var timer=scope.AddComponent<TimerComponent>();
+        var database=scope.AddComponent<DBManagerComponent>().GetZoneDB(scope.Zone());
+        var state=scope.AddComponent<AccountSessionDrainComponent>().State;
+        var net=scope.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
+        using Session first=net.Create(new IPEndPoint(IPAddress.Loopback,9));
+        using Session late=net.Create(new IPEndPoint(IPAddress.Loopback,9));
+        var entered=ETTask.Create();
+        var release=ETTask.Create();
+        bool released=false;
+        async ETTask HoldAfterInsert() {entered.SetResult();await release;}
+        var admission=AccountSessionJournal.BeginCore(first,scope,id,0,HoldAfterInsert);
+        try
+        {
+            await entered;
+            Check(state.Admissions==1,"Admission was not tracked before binding");
+            var draining=AccountSessionJournal.Drain(scope);
+            await timer.WaitAsync(50);
+            Check(!draining.IsCompleted && state.Closing==1,"Drain did not wait for in-flight admission");
+            Check(!await AccountSessionJournal.BeginCore(late,scope,id+1,0,null),"Closing Gate admitted a late session");
+            release.SetResult();released=true;
+            Check(!await admission,"Admission racing drain still bound a session");
+            Check(await draining,"Clean admission cancellation failed drain");
+            Check(state.Admissions==0&&state.Pending==0&&state.Failures==0,"Admission drain leaked work");
+            Check(first.GetComponent<AccountSessionRecordComponent>()==null&&late.GetComponent<AccountSessionRecordComponent>()==null,
+                "Closing admission attached a session journal component");
+            var records=database.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection);
+            var saved=await records.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",id)).ToListAsync();
+            Check(saved.Count==1&&saved[0]["State"]=="ended"&&saved[0].Contains("EndedAtUtc"),"Racing admission retained an open record");
+            Check(await records.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",id+1))==0,
+                "Late admission wrote a journal row");
+            Console.WriteLine("GAMEPLAY_PASS session-journal-inflight-admission-drain-and-late-rejection");
+        }
+        finally {if(!released)release.SetResult();}
     }
 
     private static async ETTask CoroutineLockLifecycle(Scene parent)

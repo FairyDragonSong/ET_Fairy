@@ -14,5 +14,7 @@ public sealed class AccountSessionDrainState
 {
     public readonly SemaphoreSlim Slots = new(16, 16);
     public int Pending;
+    public int Admissions;
+    public int Closing;
     public int Failures;
 }

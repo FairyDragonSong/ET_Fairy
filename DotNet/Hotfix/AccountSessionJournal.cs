@@ -24,12 +24,21 @@ public static class AccountSessionJournal
     // Admission is not proof of a delivered login response or of current online status.
     public static async ETTask<bool> Begin(Session session,long accountId,long version)
     {
+        if(session.IsDisposed)return false;
+        return await BeginCore(session,session.Root(),accountId,version,null);
+    }
+
+    // Internal deterministic barrier for acceptance tests; no network/configuration hook.
+    internal static async ETTask<bool> BeginCore(Session session,Scene root,long accountId,long version,Func<ETTask> afterInsert)
+    {
         if(session.IsDisposed||session.GetComponent<AccountSessionRecordComponent>()!=null)return false;
         long instance=session.InstanceId;
-        var root=session.Root();
+        var state=root.GetComponent<AccountSessionDrainComponent>().State;
+        if(Volatile.Read(ref state.Closing)!=0)return false;
         var db=root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
         var records=db.database.GetCollection<BsonDocument>(Collection).WithWriteConcern(WriteConcern.WMajority);
         string recordId=Guid.NewGuid().ToString("N");
+        Interlocked.Increment(ref state.Admissions);
         try
         {
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(3));
@@ -40,9 +49,10 @@ public static class AccountSessionJournal
                 {"OpenedAtUtc",DateTime.UtcNow},{"State","admitted"}
             },cancellationToken:timeout.Token);
             OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalAdmitted);
-            if(session.IsDisposed||session.InstanceId!=instance)
+            if(afterInsert!=null)await afterInsert();
+            if(session.IsDisposed||session.InstanceId!=instance||Volatile.Read(ref state.Closing)!=0)
             {
-                await EndTracked(root,records,recordId,ErrorCore.ERR_InvalidAccountOrPassword);
+                await EndQueued(state,records,recordId,ErrorCore.ERR_InvalidAccountOrPassword);
                 return false;
             }
             session.AddComponent<AccountSessionRecordComponent>().RecordId=recordId;
@@ -50,9 +60,15 @@ public static class AccountSessionJournal
         }
         catch(Exception)
         {
+            // A timed-out insert may have committed: do not certify a clean journal drain.
+            Interlocked.Increment(ref state.Failures);
             OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalAdmissionFailures);
             Log.Warning("event=account_session_journal_failed stage=admission");
             return false;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref state.Admissions);
         }
     }
 
@@ -97,7 +113,8 @@ public static class AccountSessionJournal
         var component=root.GetComponent<AccountSessionDrainComponent>();
         if(component==null)return true;
         var state=component.State;
-        while(Volatile.Read(ref state.Pending)>0)
+        Interlocked.Exchange(ref state.Closing,1);
+        while(Volatile.Read(ref state.Pending)>0||Volatile.Read(ref state.Admissions)>0)
             await root.GetComponent<TimerComponent>().WaitAsync(20);
         bool success=Volatile.Read(ref state.Failures)==0;
         Log.Info($"event=account_session_journal_drained success={success} failures={state.Failures}");
