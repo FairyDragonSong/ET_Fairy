@@ -528,6 +528,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Console.WriteLine("GAMEPLAY_PASS handler-latency-samples-include-rejections-and-rate-limit");
             await SessionJournalBurst(parent, db);
             await SessionJournalAdmissionDrain(parent);
+            await SessionJournalRetries(db);
         }
         finally
         {
@@ -592,6 +593,50 @@ public sealed class GameplayAcceptance : IConsoleHandler
         state.Pending=0;
         Check(!await AccountSessionJournal.Drain(scope),"Failed journal queue falsely passed drain");
         Console.WriteLine("GAMEPLAY_PASS session-journal-overflow-fails-drain");
+    }
+
+    private static async ETTask SessionJournalRetries(DBComponent db)
+    {
+        var records=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection).WithWriteConcern(WriteConcern.WMajority);
+        string recordId=Guid.NewGuid().ToString("N");
+        await records.InsertOneAsync(new MongoDB.Bson.BsonDocument {{"_id",recordId},{"State","admitted"},{"OpenedAtUtc",DateTime.UtcNow}});
+        int attempts=0;
+        long failures=Metric("et_session_journal_end_failures_total"),ends=Metric("et_session_journal_ended_total");
+        async ETTask TransientBeforeWrite(int attempt,bool before)
+        {
+            if(before){++attempts;if(attempt==0)throw new OperationCanceledException("Injected transient before write");}
+            await ETTask.CompletedTask;
+        }
+        Check(await AccountSessionJournal.EndWithRetry(records,recordId,7,TransientBeforeWrite)&&attempts==2,"Transient write did not recover in bounded retry");
+        Check(Metric("et_session_journal_end_failures_total")==failures&&Metric("et_session_journal_ended_total")==ends+1,"Recovered attempt counted as terminal failure");
+        string uncertainId=Guid.NewGuid().ToString("N");
+        await records.InsertOneAsync(new MongoDB.Bson.BsonDocument {{"_id",uncertainId},{"State","admitted"},{"OpenedAtUtc",DateTime.UtcNow}});
+        MongoDB.Bson.BsonDocument evidence=null;
+        var uncertainFilter=Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",uncertainId);
+        attempts=0;
+        async ETTask LostConfirmation(int attempt,bool before)
+        {
+            if(before)++attempts;
+            if(!before&&attempt==0)
+            {
+                evidence=await records.Find(uncertainFilter).SingleAsync();
+                throw new OperationCanceledException("Injected lost update confirmation");
+            }
+        }
+        Check(await AccountSessionJournal.EndWithRetry(records,uncertainId,8,LostConfirmation)&&attempts==2,"Uncertain committed write was not verified");
+        Check(evidence.Equals(await records.Find(uncertainFilter).SingleAsync()),"Retry overwrote committed evidence");
+        Check(Metric("et_session_journal_ended_total")==ends+1&&Metric("et_session_journal_end_failures_total")==failures,
+            "Uncertain retry fabricated a new mutation count or failure");
+        attempts=0;
+        async ETTask PersistentFailure(int attempt,bool before)
+        {
+            if(before){++attempts;throw new OperationCanceledException("Injected persistent transient");}
+            await ETTask.CompletedTask;
+        }
+        Check(!await AccountSessionJournal.EndWithRetry(records,Guid.NewGuid().ToString("N"),0,PersistentFailure)&&attempts==3,
+            "Persistent failure did not stop after three attempts");
+        Check(Metric("et_session_journal_end_failures_total")==failures+1,"Exhausted retries must count one final failure");
+        Console.WriteLine("GAMEPLAY_PASS session-journal-transient-recovery-lost-confirmation-and-retry-exhaustion");
     }
 
     private static async ETTask SessionJournalAdmissionDrain(Scene parent)

@@ -123,39 +123,59 @@ public static class AccountSessionJournal
 
     private static async ETTask<bool> EndCore(IMongoCollection<BsonDocument> records,string recordId,int error)
     {
-        try
+        return await EndWithRetry(records,recordId,error,null);
+    }
+
+    // Test-only callback: true before an attempt, false after its update. No external switch.
+    internal static async ETTask<bool> EndWithRetry(IMongoCollection<BsonDocument> records,string recordId,int error,Func<int,bool,ETTask> fault)
+    {
+        DateTime endedAt=DateTime.UtcNow;
+        for(int attempt=0;attempt<3;++attempt)
         {
-            using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            var result=await records.WithWriteConcern(WriteConcern.WMajority).UpdateOneAsync(
-                Builders<BsonDocument>.Filter.Eq("_id",recordId)&Builders<BsonDocument>.Filter.Eq("State","admitted"),
-                Builders<BsonDocument>.Update.Set("State","ended").Set("EndedAtUtc",DateTime.UtcNow).Set("DisconnectError",error),
-                cancellationToken:timeout.Token);
-            if(result.ModifiedCount==1)
+            try
             {
-                OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEnded);
-                return true;
+                using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                if(fault!=null)await fault(attempt,true);
+                var result=await records.WithWriteConcern(WriteConcern.WMajority).UpdateOneAsync(
+                    Builders<BsonDocument>.Filter.Eq("_id",recordId)&Builders<BsonDocument>.Filter.Eq("State","admitted"),
+                    Builders<BsonDocument>.Update.Set("State","ended").Set("EndedAtUtc",endedAt).Set("DisconnectError",error),
+                    cancellationToken:timeout.Token);
+                if(fault!=null)await fault(attempt,false);
+                if(result.ModifiedCount==1)
+                {
+                    OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEnded);
+                    return true;
+                }
+                // A successful command with no matching row is not proof of completion.
+                // Verify an idempotent retry against majority-visible terminal evidence.
+                var existing=await records.WithReadConcern(ReadConcern.Majority)
+                    .Find(Builders<BsonDocument>.Filter.Eq("_id",recordId))
+                    .Project(Builders<BsonDocument>.Projection.Include("State").Include("EndedAtUtc").Include("DisconnectError"))
+                    .FirstOrDefaultAsync(timeout.Token);
+                if(existing!=null && existing.TryGetValue("State",out var status) && status.IsString && status.AsString=="ended" &&
+                    existing.TryGetValue("EndedAtUtc",out var ended) && ended.IsBsonDateTime &&
+                    existing.TryGetValue("DisconnectError",out var disconnect) && disconnect.IsInt32)
+                    return true;
+                OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
+                Log.Warning($"event=account_session_journal_failed stage=disconnect reason={(existing==null?"missing_record":"invalid_terminal")}");
+                return false;
             }
-            // A successful command with no matching row is not proof of completion.
-            // Verify an idempotent retry against majority-visible terminal evidence.
-            var existing=await records.WithReadConcern(ReadConcern.Majority)
-                .Find(Builders<BsonDocument>.Filter.Eq("_id",recordId))
-                .Project(Builders<BsonDocument>.Projection.Include("State").Include("EndedAtUtc").Include("DisconnectError"))
-                .FirstOrDefaultAsync(timeout.Token);
-            if(existing!=null && existing.TryGetValue("State",out var status) && status.IsString && status.AsString=="ended" &&
-                existing.TryGetValue("EndedAtUtc",out var ended) && ended.IsBsonDateTime &&
-                existing.TryGetValue("DisconnectError",out var disconnect) && disconnect.IsInt32)
-                return true;
-            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
-            Log.Warning($"event=account_session_journal_failed stage=disconnect reason={(existing==null?"missing_record":"invalid_terminal")}");
-            return false;
+            catch(Exception exception)
+            {
+                bool transient=exception is OperationCanceledException || exception is MongoConnectionException || exception is MongoExecutionTimeoutException;
+                if(transient&&attempt<2)
+                {
+                    Log.Info($"event=account_session_journal_retry attempt={attempt+1}");
+                    await System.Threading.Tasks.Task.Delay(200);
+                    continue;
+                }
+                OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
+                string reason=exception is OperationCanceledException?"timeout":exception is MongoCommandException?"command":exception is MongoWriteException?"write":"other";
+                Log.Warning($"event=account_session_journal_failed stage=disconnect reason={reason}");
+                return false;
+            }
         }
-        catch(Exception exception)
-        {
-            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
-            string reason=exception is OperationCanceledException?"timeout":exception is MongoCommandException?"command":exception is MongoWriteException?"write":"other";
-            Log.Warning($"event=account_session_journal_failed stage=disconnect reason={reason}");
-            return false;
-        }
+        return false;
     }
 }
 
