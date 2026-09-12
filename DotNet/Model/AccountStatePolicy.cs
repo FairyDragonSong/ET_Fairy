@@ -18,6 +18,7 @@ public static class AccountStatePolicy
             "enable" when current==AccountStatus.Disabled => AccountStatus.Active,
             "disable" when current==AccountStatus.Active => AccountStatus.Disabled,
             "revoke" => current,
+            "reset-password" => current,
             "close" => AccountStatus.Closed,
             _ => throw new AccountStateConflictException()
         };

@@ -1,5 +1,6 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Lifecycle)
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Lifecycle,[switch]$PasswordReset)
 $ErrorActionPreference='Stop'
+if($Lifecycle -and $PasswordReset){throw 'Choose one administration test mode'}
 & "$PSScriptRoot/Test-Gameplay.ps1" -EnvironmentRoot $EnvironmentRoot -Baseline -Clients 1
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
 $fixture=Join-Path $env:ET_LOCAL_MONGO_ROOT ('admin-test-'+[Guid]::NewGuid().ToString('N'))
@@ -7,6 +8,8 @@ New-Item -ItemType Directory -Path $fixture | Out-Null
 $private=Join-Path $fixture 'operator-private.pem'
 $rsa=[Security.Cryptography.RSA]::Create(3072)
 $process=$null
+$passwordEncryption=$null
+$passwordPrivate=Join-Path $fixture 'password-private.pem'
 $roleCreated=$false
 $rootUri=$env:ET_MONGO_URI
 function Read-Target {
@@ -34,7 +37,13 @@ try {
     $trust=Join-Path $fixture 'trust.json'
     $deployment='local-admin-'+[Guid]::NewGuid().ToString('N')
     $env:ET_ADMIN_TEST_DEPLOYMENT=$deployment
-    ConvertTo-Json -InputObject @(@{Id='local-operator';PublicKeyPem=$rsa.ExportSubjectPublicKeyInfoPem();Database='ET_LOCAL_GAMEPLAY';DeploymentId=$deployment;Zone=1;Actions=$(if($Lifecycle){@('disable','enable','revoke','close')}else{@('disable','enable')});ExpiresAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+3600}) | Set-Content $trust
+    ConvertTo-Json -InputObject @(@{Id='local-operator';PublicKeyPem=$rsa.ExportSubjectPublicKeyInfoPem();Database='ET_LOCAL_GAMEPLAY';DeploymentId=$deployment;Zone=1;Actions=$(if($PasswordReset){@('disable','enable','reset-password')}elseif($Lifecycle){@('disable','enable','revoke','close')}else{@('disable','enable')});ExpiresAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+3600}) | Set-Content $trust
+    if($PasswordReset){
+        $passwordEncryption=[Security.Cryptography.RSA]::Create(4096)
+        [IO.File]::WriteAllText($passwordPrivate,$passwordEncryption.ExportPkcs8PrivateKeyPem())
+        $passwordPublic=Join-Path $fixture 'password-public.pem'
+        [IO.File]::WriteAllText($passwordPublic,$passwordEncryption.ExportSubjectPublicKeyInfoPem())
+    }
     $target=Read-Target
     $env:ET_ADMIN_TEST_USER='et_admin_test_'+[Guid]::NewGuid().ToString('N')
     $env:ET_ADMIN_TEST_PASSWORD=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
@@ -63,6 +72,7 @@ try {
     $info.Environment['ET_ACCOUNT_ADMIN_MONGO_URI']=$limitedUri
     $info.Environment['ET_ACCOUNT_ADMIN_DATABASE']='ET_LOCAL_GAMEPLAY'
     $info.Environment['ET_ACCOUNT_ADMIN_ZONE']='1'
+    if($PasswordReset){$info.Environment['ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE']=$passwordPrivate}
     foreach($name in @($info.Environment.Keys)){if($name -match '^ET_MONGO_(URI|DATABASE)_ZONE_'){$info.Environment.Remove($name)|Out-Null}}
     $process=[Diagnostics.Process]::new();$process.StartInfo=$info
     if(-not $process.Start()){throw 'Admin server start failed'}
@@ -85,7 +95,25 @@ try {
     Send-Command $enable 'APPLIED'
     $restored=Read-Target
     if($restored.Status -ne 0 -or [long]$restored.Version -ne ([long]$target.Version+2) -or $restored.AuditCount -ne 2){throw 'Enable audit failed'}
-    if($Lifecycle){
+    if($PasswordReset){
+        $reset=Join-Path $fixture 'reset.json'
+        $env:ET_ADMIN_TEST_NEW_PASSWORD=[Guid]::NewGuid().ToString('N')
+        $secure=ConvertTo-SecureString $env:ET_ADMIN_TEST_NEW_PASSWORD -AsPlainText -Force
+        try {
+            & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action reset-password -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $restored.Version -ReasonCode local-test -OutputFile $reset -NewPassword $secure -PasswordEncryptionPublicKeyFile $passwordPublic
+        } finally {$secure.Dispose()}
+        $resetEnvelope=Get-Content $reset -Raw|ConvertFrom-Json
+        $resetPayload=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($resetEnvelope.Payload))
+        if($resetPayload.Contains($env:ET_ADMIN_TEST_NEW_PASSWORD)){throw 'Plain password appeared in signed payload'}
+        Send-Command $reset 'APPLIED'
+        Send-Command $reset 'ALREADY_APPLIED'
+        $renewed=Join-Path $fixture 'reset-renewed.json'
+        & "$PSScriptRoot/Renew-AccountAdminCommand.ps1" -ExistingEnvelopeFile $reset -PrivateKeyFile $private -ConfirmAccountId $target.AccountId -OutputFile $renewed
+        Send-Command $renewed 'ALREADY_APPLIED'
+        $changed=Read-Target
+        if($changed.Status -ne 0 -or [long]$changed.Version -ne ([long]$target.Version+3) -or $changed.AuditCount -ne 3 -or -not $changed.NewPasswordMatches -or $changed.OldPasswordMatches){throw 'Encrypted password reset failed'}
+        Write-Host 'PASS encrypted signed reset, old password rejection and idempotency'
+    }elseif($Lifecycle){
         $revoke=Join-Path $fixture 'revoke.json'
         & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action revoke -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $restored.Version -ReasonCode local-test -OutputFile $revoke
         Send-Command $revoke 'APPLIED'
@@ -125,14 +153,16 @@ try {
     $stdout=$process.StandardOutput.ReadToEndAsync()
     if(-not $process.WaitForExit(25000) -or $process.ExitCode -ne 0){throw 'Admin server shutdown failed'}
     $checks=@('tampered-signature-no-write','signed-disable','idempotent-repeat','signed-enable','audit-mutation-denied','account-delete-denied','role-access-denied')
-    $checks += $(if($Lifecycle){@('signed-revoke','signed-close','close-idempotency','closed-cannot-enable')}else{@('two-audit-records','audit-unavailable-no-state-write','rate-limited','rejection-audits-persisted')})
+    $checks += $(if($PasswordReset){@('encrypted-signed-reset','reset-idempotency','renewed-reset-idempotency','new-password-matches','old-password-rejected')}elseif($Lifecycle){@('signed-revoke','signed-close','close-idempotency','closed-cannot-enable')}else{@('two-audit-records','audit-unavailable-no-state-write','rate-limited','rejection-audits-persisted')})
     @{Passed=$true;Lifecycle=[bool]$Lifecycle;Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Checks=$checks}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
-    Write-Host $(if($Lifecycle){'PASS lifecycle administration; isolated account retained as Closed'}else{'PASS signed administration end-to-end; isolated account restored'})
+    Write-Host $(if($PasswordReset){'PASS password administration; isolated account has a new test password'}elseif($Lifecycle){'PASS lifecycle administration; isolated account retained as Closed'}else{'PASS signed administration end-to-end; isolated account restored'})
 } catch {
     @{Passed=$false;Commit=(& git -C $repo rev-parse HEAD).Trim();CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Reason='See test console failure; no command or credential content retained'}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
     throw
 } finally {
     $rsa.Dispose()
+    if($passwordEncryption){$passwordEncryption.Dispose()}
+    if(Test-Path -LiteralPath $passwordPrivate){Remove-Item -LiteralPath $passwordPrivate}
     if($process){if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()};$process.Dispose()}
     $env:ET_MONGO_URI=$rootUri
     if($roleCreated){
@@ -140,7 +170,7 @@ try {
         & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/LocalAdminDatabaseRole.js"
         if($LASTEXITCODE -ne 0){Write-Warning 'Test administration identity cleanup failed; remove the per-test identity manually'}
     }
-    Remove-Item Env:ET_ADMIN_TEST_USER,Env:ET_ADMIN_TEST_PASSWORD,Env:ET_ADMIN_TEST_CLEANUP,Env:ET_ADMIN_TEST_DEPLOYMENT,Env:ET_ADMIN_TEST_AUDIT_POLICY -ErrorAction SilentlyContinue
+    Remove-Item Env:ET_ADMIN_TEST_USER,Env:ET_ADMIN_TEST_PASSWORD,Env:ET_ADMIN_TEST_CLEANUP,Env:ET_ADMIN_TEST_DEPLOYMENT,Env:ET_ADMIN_TEST_AUDIT_POLICY,Env:ET_ADMIN_TEST_NEW_PASSWORD -ErrorAction SilentlyContinue
     # Exact file created by this invocation inside the ACL-protected local fixture directory.
     if(Test-Path -LiteralPath $private){Remove-Item -LiteralPath $private}
     Remove-Item Env:ET_GAMEPLAY_PASSWORD,Env:ET_GAMEPLAY_ACCOUNT,Env:ET_GAMEPLAY_ROLEID -ErrorAction SilentlyContinue

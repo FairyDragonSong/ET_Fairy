@@ -32,7 +32,9 @@ public static class AccountAdminAuthorization
             command.AccountId<=0||command.ConfirmAccountId!=command.AccountId||command.ExpectedVersion<0||command.ExpectedVersion==long.MaxValue||
             command.IssuedAt<now-300||command.IssuedAt>now+30||command.ExpiresAt<=now||command.ExpiresAt>command.IssuedAt+300||
             !Guid.TryParseExact(command.OperationId,"N",out _)||string.IsNullOrEmpty(command.ReasonCode)||command.ReasonCode.Length>64||
-            (command.Action!="disable"&&command.Action!="enable"&&command.Action!="revoke"&&command.Action!="close")||identity.Actions==null||!identity.Actions.Contains(command.Action,StringComparer.Ordinal))
+            (command.Action!="disable"&&command.Action!="enable"&&command.Action!="revoke"&&command.Action!="close"&&command.Action!="reset-password")||
+            (command.Action=="reset-password" ? string.IsNullOrEmpty(command.EncryptedPassword) : command.EncryptedPassword!=null)||
+            identity.Actions==null||!identity.Actions.Contains(command.Action,StringComparer.Ordinal))
             throw new InvalidOperationException("Administration command not authorized");
         return command;
     }

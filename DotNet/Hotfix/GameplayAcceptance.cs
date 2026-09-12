@@ -22,7 +22,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 throw new InvalidOperationException("Requires development mode and isolated ET_LOCAL_GAMEPLAY database");
             bool saveFailure=content.EndsWith(" save-failure",StringComparison.Ordinal);
             bool leaseExpiry=content.EndsWith(" lease-expiry",StringComparison.Ordinal);
-            if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
+            if(content.EndsWith(" credentials",StringComparison.Ordinal)) await Credentials(fiber.Root);
+            else if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
             else if(content.EndsWith(" baseline",StringComparison.Ordinal)) await Baseline(fiber.Root);
             else await Execute(fiber.Root, content.EndsWith(" resume",StringComparison.Ordinal), content.EndsWith(" outage",StringComparison.Ordinal) || saveFailure || leaseExpiry, saveFailure, leaseExpiry);
             Console.WriteLine("GAMEPLAY_RESULT PASS");
@@ -384,6 +385,60 @@ public sealed class GameplayAcceptance : IConsoleHandler
         if(!int.TryParse(value,out int parsed)||parsed<minimum||parsed>maximum)
             throw new InvalidOperationException($"Invalid load setting: {name}");
         return parsed;
+    }
+
+    private static async ETTask Credentials(Scene parent)
+    {
+        long id=IdGenerater.Instance.GenerateId();
+        using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"CredentialTest");
+        var net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
+        var realm=StartSceneConfigCategory.Instance.Realms[0].InnerIPPort;
+        Check(IPAddress.IsLoopback(realm.Address),"Only loopback endpoints allowed");
+        string name=Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT")+"cred";
+        string oldPassword=Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD"),newPassword=oldPassword+"new";
+        var db=client.AddComponent<DBManagerComponent>().GetZoneDB(1);
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        using R2C_Login initial=await RealmLogin(net,realm,name,oldPassword);
+        Check(initial.Error==0,"Credential fixture registration failed");
+        using Session oldSession=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
+        using G2C_LoginGate oldGate=await GateLogin(oldSession,initial);
+        Check(oldGate.Error==0,"Credential fixture Gate failed");
+        using R2C_Login pending=await RealmLogin(net,realm,name,oldPassword);
+        Check(pending.Error==0,"Pending key failed");
+        var account=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        using var rsa=System.Security.Cryptography.RSA.Create(4096);
+        string encrypted=Convert.ToBase64String(rsa.Encrypt(System.Text.Encoding.UTF8.GetBytes(newPassword),System.Security.Cryptography.RSAEncryptionPadding.OaepSHA256));
+        var hash=AccountPasswordEnvelope.DecryptAndHash(encrypted,rsa.ExportPkcs8PrivateKeyPem());
+        string digest=AccountPasswordEnvelope.Digest(encrypted),operation=Guid.NewGuid().ToString("N");
+        bool injected=false;
+        try {await AccountStateStore.Execute(db,account.Id,account.StateVersion,"reset-password","local-test","test-reset",Guid.NewGuid().ToString("N"),
+            ()=>{injected=true;throw new InvalidOperationException("Injected credential rollback");},hash,digest);}
+        catch(InvalidOperationException){Check(injected,"Credential failure occurred before injection");}
+        Check(injected,"Credential fault injection missing");
+        using R2C_Login unchanged=await RealmLogin(net,realm,name,oldPassword);
+        Check(unchanged.Error==0,"Aborted reset changed password");
+        Check(await AccountStateStore.Execute(db,account.Id,account.StateVersion,"reset-password","local-test","test-reset",operation,passwordHash:hash,credentialDigest:digest),"Reset failed");
+        Check(!await AccountStateStore.Execute(db,account.Id,account.StateVersion,"reset-password","local-test","test-reset",operation,passwordHash:hash,credentialDigest:digest),"Reset replay repeated mutation");
+        bool conflict=false;
+        try {await AccountStateStore.Execute(db,account.Id,account.StateVersion,"reset-password","local-test","test-reset",operation,passwordHash:hash,credentialDigest:"different");}
+        catch(InvalidOperationException){conflict=true;}
+        Check(conflict,"Operation id accepted another credential envelope");
+        using Session stale=net.Create(NetworkHelper.ToIPEndPoint(pending.Address));
+        using G2C_LoginGate staleKey=await GateLogin(stale,pending);
+        Check(staleKey.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Pre-reset key remained valid");
+        for(int i=0;i<100 && !oldSession.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
+        Check(oldSession.IsDisposed,"Reset retained old session");
+        using R2C_Login oldRejected=await RealmLogin(net,realm,name,oldPassword);
+        using R2C_Login fresh=await RealmLogin(net,realm,name,newPassword);
+        Check(oldRejected.Error==ErrorCore.ERR_InvalidAccountOrPassword && fresh.Error==0,"Password replacement authentication failed");
+        using Session freshSession=net.Create(NetworkHelper.ToIPEndPoint(fresh.Address));
+        using G2C_LoginGate freshGate=await GateLogin(freshSession,fresh);
+        Check(freshGate.Error==0 && freshGate.PlayerId==oldGate.PlayerId,"Reset lost role identity");
+        var saved=await accounts.Find(a=>a.Id==account.Id).SingleAsync();
+        Check(saved.StateVersion==account.StateVersion+1 && saved.Status==AccountStatus.Active,"Reset state/version incorrect");
+        var audit=await db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountStateStore.AuditCollection).Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",operation)).SingleAsync();
+        Check(!audit.Contains("PasswordHash")&&!audit.Contains("PasswordSalt")&&!audit.Contains("EncryptedPassword")&&audit["CredentialDigest"].AsString==digest,"Credential audit contains sensitive payload");
+        Console.WriteLine("GAMEPLAY_PASS encrypted-password-reset-rollback-idempotency-old-credentials-revoked");
     }
 
     private static async ETTask Governance(Scene parent)

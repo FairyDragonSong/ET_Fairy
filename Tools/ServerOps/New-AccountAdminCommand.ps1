@@ -4,13 +4,15 @@ param(
     [Parameter(Mandatory)][string]$DeploymentId,
     [Parameter(Mandatory)][string]$Database,
     [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$Zone,
-    [Parameter(Mandatory)][ValidateSet('enable','disable','revoke','close')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('enable','disable','revoke','close','reset-password')][string]$Action,
     [Parameter(Mandatory)][long]$AccountId,
     [Parameter(Mandatory)][long]$ConfirmAccountId,
     [Parameter(Mandatory)][long]$ExpectedVersion,
     [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_.-]{1,64}$')][string]$ReasonCode,
     [Parameter(Mandatory)][string]$OutputFile,
-    [string]$OperationId=([Guid]::NewGuid().ToString('N'))
+    [string]$OperationId=([Guid]::NewGuid().ToString('N')),
+    [Security.SecureString]$NewPassword,
+    [string]$PasswordEncryptionPublicKeyFile
 )
 $ErrorActionPreference='Stop'
 if($AccountId -le 0 -or $ConfirmAccountId -ne $AccountId -or $ExpectedVersion -lt 0 -or $ExpectedVersion -eq [long]::MaxValue){throw 'Account confirmation or version invalid'}
@@ -22,6 +24,24 @@ try {
     if($rsa.KeySize -lt 3072){throw 'RSA key must be at least 3072 bits'}
     $issued=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $command=[ordered]@{OperationId=$OperationId;OperatorId=$OperatorId;Action=$Action;Database=$Database;DeploymentId=$DeploymentId;Zone=$Zone;AccountId=$AccountId;ConfirmAccountId=$ConfirmAccountId;ExpectedVersion=$ExpectedVersion;ReasonCode=$ReasonCode;IssuedAt=$issued;ExpiresAt=$issued+300}
+    if($Action -eq 'reset-password'){
+        if(-not $NewPassword -or -not $PasswordEncryptionPublicKeyFile){throw 'Reset requires SecureString password and server public encryption key'}
+        $encryption=[Security.Cryptography.RSA]::Create()
+        $pointer=[IntPtr]::Zero;$passwordBytes=$null
+        try {
+            $encryption.ImportFromPem([IO.File]::ReadAllText((Resolve-Path -LiteralPath $PasswordEncryptionPublicKeyFile)))
+            if($encryption.KeySize -lt 4096){throw 'Password encryption requires RSA 4096 or stronger'}
+            $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($NewPassword)
+            $plain=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+            if($plain.Length -lt 8 -or $plain.Length -gt 128){throw 'Password must contain 8 to 128 characters'}
+            $passwordBytes=[Text.Encoding]::UTF8.GetBytes($plain)
+            $command.EncryptedPassword=[Convert]::ToBase64String($encryption.Encrypt($passwordBytes,[Security.Cryptography.RSAEncryptionPadding]::OaepSHA256))
+        } finally {
+            if($passwordBytes){[Security.Cryptography.CryptographicOperations]::ZeroMemory($passwordBytes)}
+            if($pointer -ne [IntPtr]::Zero){[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)}
+            $plain=$null;$encryption.Dispose()
+        }
+    }elseif($NewPassword -or $PasswordEncryptionPublicKeyFile){throw 'Password parameters require reset-password'}
     $payload=[Text.Encoding]::UTF8.GetBytes(($command|ConvertTo-Json -Compress))
     $signature=$rsa.SignData($payload,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pss)
     $envelope=[ordered]@{OperatorId=$OperatorId;Payload=[Convert]::ToBase64String($payload);Signature=[Convert]::ToBase64String($signature)}

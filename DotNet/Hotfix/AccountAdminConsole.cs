@@ -40,11 +40,20 @@ public sealed class AccountAdminConsole : IConsoleHandler
             if(command.DeploymentId!=Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_DEPLOYMENT_ID"))
                 throw new InvalidOperationException("Wrong deployment");
             if(command.Zone!=zone||command.Database!=database)throw new InvalidOperationException("Wrong administration scope");
+            PasswordHashData? passwordHash=null;
+            string credentialDigest=null;
+            if(command.Action=="reset-password")
+            {
+                stage="credential_envelope";
+                string keyPath=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
+                passwordHash=AccountPasswordEnvelope.DecryptAndHash(command.EncryptedPassword,ReadBounded(keyPath,16384));
+                credentialDigest=AccountPasswordEnvelope.Digest(command.EncryptedPassword);
+            }
             stage="execution";
             await AccountAdminAttemptStore.Append(db,requestId,"authorized",stage,command);
             executionStarted=true;
             bool applied=await AccountStateStore.Execute(db,command.AccountId,command.ExpectedVersion,
-                command.Action,command.OperatorId,command.ReasonCode,command.OperationId);
+                command.Action,command.OperatorId,command.ReasonCode,command.OperationId,passwordHash:passwordHash,credentialDigest:credentialDigest);
             await AccountAdminAttemptStore.Append(db,requestId,applied?"applied":"already_applied",stage,command);
             Console.WriteLine($"ACCOUNT_ADMIN_RESULT {(applied?"APPLIED":"ALREADY_APPLIED")} operation_id={command.OperationId}");
         }

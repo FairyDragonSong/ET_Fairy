@@ -19,10 +19,12 @@ internal static class AccountStateStore
     }
 
     internal static async ETTask<bool> Execute(DBComponent database,long accountId,long expectedVersion,
-        string action,string operatorId,string reasonCode,string operationId,Action beforeAudit=null)
+        string action,string operatorId,string reasonCode,string operationId,Action beforeAudit=null,
+        PasswordHashData? passwordHash=null,string credentialDigest=null)
     {
         if (accountId <= 0 || expectedVersion < 0 || expectedVersion == long.MaxValue ||
-            (action!="enable" && action!="disable" && action!="revoke" && action!="close") ||
+            (action!="enable" && action!="disable" && action!="revoke" && action!="close" && action!="reset-password") ||
+            (action=="reset-password" ? !passwordHash.HasValue || string.IsNullOrEmpty(credentialDigest) : passwordHash.HasValue || credentialDigest!=null) ||
             !ValidLabel(operatorId) || !ValidLabel(reasonCode) ||
             !Guid.TryParseExact(operationId, "N", out _))
             throw new InvalidOperationException("Invalid account state command");
@@ -39,7 +41,7 @@ internal static class AccountStateStore
                 string priorAction=prior.GetValue("Action",prior["Target"].AsInt32==0?"enable":"disable").AsString;
                 if (prior["AccountId"].AsInt64 != accountId || prior["ExpectedVersion"].AsInt64 != expectedVersion ||
                     priorAction != action || prior["OperatorId"].AsString != operatorId ||
-                    prior["ReasonCode"].AsString != reasonCode)
+                    prior["ReasonCode"].AsString != reasonCode || prior.GetValue("CredentialDigest", "").AsString != (credentialDigest??""))
                     throw new InvalidOperationException("Operation id belongs to another command");
                 return false;
             }
@@ -50,6 +52,12 @@ internal static class AccountStateStore
             AccountStatus target=AccountStatePolicy.Target(account.Status,action);
             var update=Builders<Account>.Update.Set(a=>a.Status,target).Set(a=>a.StateVersion,expectedVersion+1);
             if(action=="close")update=update.Set(a=>a.ClosedAt,DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            if(passwordHash.HasValue)
+            {
+                var hash=passwordHash.Value;
+                update=update.Set(a=>a.PasswordHash,hash.Hash).Set(a=>a.PasswordSalt,hash.Salt)
+                    .Set(a=>a.PasswordScheme,hash.Scheme).Set(a=>a.PasswordIterations,hash.Iterations);
+            }
             var changed = await accounts.UpdateOneAsync(transaction,
                 a => a.Id == accountId && a.Status == account.Status,
                 update,
@@ -61,7 +69,7 @@ internal static class AccountStateStore
                 { "_id", operationId }, { "AccountId", accountId }, { "ExpectedVersion", expectedVersion },
                 { "Version", expectedVersion + 1 }, { "Previous", (int)account.Status }, { "Target", (int)target },
                 { "OperatorId", operatorId }, { "ReasonCode", reasonCode }, { "CreatedAtUtc", DateTime.UtcNow },
-                { "Action", action }
+                { "Action", action }, { "CredentialDigest", credentialDigest??"" }
             }, cancellationToken: cancellation);
             return true;
         }, new TransactionOptions(ReadConcern.Snapshot, ReadPreference.Primary, WriteConcern.WMajority));

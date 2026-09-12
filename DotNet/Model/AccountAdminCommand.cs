@@ -15,6 +15,7 @@ public sealed class AccountAdminCommand
     public string ReasonCode { get; set; }
     public long IssuedAt { get; set; }
     public long ExpiresAt { get; set; }
+    public string EncryptedPassword { get; set; }
 }
 
 [EnableClass]

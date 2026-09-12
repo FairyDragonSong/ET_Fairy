@@ -20,6 +20,7 @@ internal static class Program
         ("登录与持久化安全架构回归", TestSourceGuards),
         ("管理签名与权限边界", TestAdminAuthorization),
         ("账号生命周期状态机", TestAccountStatePolicy),
+        ("密码加密信封", TestPasswordEnvelope),
     ];
 
     private static int Main()
@@ -325,6 +326,25 @@ internal static class Program
         foreach(string action in new[]{"enable","disable","revoke","close"})
             AssertThrows(()=>AccountStatePolicy.Target(AccountStatus.Closed,action),"closed account changed state");
         AssertThrows(()=>AccountStatePolicy.Target(AccountStatus.Active,"enable"),"no-op enable accepted");
+        Assert(AccountStatePolicy.Target(AccountStatus.Disabled,"reset-password")==AccountStatus.Disabled,"reset enabled disabled account");
+        AssertThrows(()=>AccountStatePolicy.Target(AccountStatus.Closed,"reset-password"),"reset reopened closed account");
+    }
+
+    private static void TestPasswordEnvelope()
+    {
+        using var rsa=System.Security.Cryptography.RSA.Create(4096);
+        const string password="test-password-envelope";
+        string Encrypt()=>Convert.ToBase64String(rsa.Encrypt(System.Text.Encoding.UTF8.GetBytes(password),System.Security.Cryptography.RSAEncryptionPadding.OaepSHA256));
+        string first=Encrypt(),second=Encrypt();
+        Assert(first!=second,"password encryption is not randomized");
+        var hash=AccountPasswordEnvelope.DecryptAndHash(first,rsa.ExportPkcs8PrivateKeyPem());
+        Assert(PasswordHasher.Verify(password,hash.Scheme,hash.Salt,hash.Hash,hash.Iterations),"encrypted password cannot authenticate");
+        Assert(!PasswordHasher.Verify("wrong-password",hash.Scheme,hash.Salt,hash.Hash,hash.Iterations),"wrong encrypted password accepted");
+        byte[] tampered=Convert.FromBase64String(first);tampered[0]^=1;
+        bool rejected=false;
+        try {AccountPasswordEnvelope.DecryptAndHash(Convert.ToBase64String(tampered),rsa.ExportPkcs8PrivateKeyPem());}
+        catch(System.Security.Cryptography.CryptographicException){rejected=true;}
+        Assert(rejected,"tampered ciphertext decrypted");
     }
 
     private static string Read(string root, string relativePath) =>
