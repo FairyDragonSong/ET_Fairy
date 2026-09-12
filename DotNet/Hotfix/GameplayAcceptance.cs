@@ -468,6 +468,13 @@ public sealed class GameplayAcceptance : IConsoleHandler
             using var indexes=await journal.Indexes.ListAsync();
             Check((await indexes.ToListAsync()).Any(i=>i["name"].AsString=="ix_session_account_opened"),"Session journal query index missing");
             Console.WriteLine("GAMEPLAY_PASS session-journal-admission-version-revocation-disconnect-index-minimal-fields");
+            Check(Metric("et_password_change_accepted_total")==2&&Metric("et_password_change_unconfirmed_total")==4&&
+                Metric("et_password_change_rate_limited_total")==1,"Password outcome metrics do not match exercised requests");
+            Check(Metric("et_session_journal_admitted_total")==2&&Metric("et_session_journal_ended_total")==2&&
+                Metric("et_session_state_revoked_total")==1,"Session lifecycle metrics do not match persisted records");
+            Check(Metric("et_session_journal_admission_failures_total")==0&&Metric("et_session_journal_end_failures_total")==1,
+                "Unexpected session journal failures");
+            Console.WriteLine("GAMEPLAY_PASS security-metrics-match-password-and-session-events");
         }
         finally
         {
@@ -510,6 +517,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
             catch(MongoCommandException exception) when(exception.Code==13){denied=true;}
             catch(MongoWriteException exception) when(exception.WriteError?.Code==13){denied=true;}
             Check(updated&&denied,"Audit insert must fail with code 13 after account update");
+            long journalFailures=Metric("et_session_journal_end_failures_total");
+            await AccountSessionJournal.End(restricted.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection),Guid.NewGuid().ToString("N"),0);
+            Check(Metric("et_session_journal_end_failures_total")==journalFailures+1,"Denied journal update did not increment failure counter");
+            Console.WriteLine("GAMEPLAY_PASS denied-session-journal-update-counted");
         }
         var afterDenied=await accounts.Find(a=>a.LoginName==name).SingleAsync();
         Check(afterDenied.StateVersion==version&&afterDenied.PasswordHash==unchanged.PasswordHash&&afterDenied.PasswordSalt==unchanged.PasswordSalt,"Denied audit left changed credentials");

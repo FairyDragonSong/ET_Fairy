@@ -42,6 +42,10 @@ try {
     if ($ready.StatusCode -ne 200 -or -not $metrics.Content.Contains("et_shutdown_requested")) {
         throw "readiness or metrics smoke test failed"
     }
+    if(-not $metrics.Content.Contains("# TYPE et_session_journal_end_failures_total counter") -or
+       -not $metrics.Content.Contains("et_password_change_accepted_total 0")){
+        throw 'Security counters missing from metrics HTTP response'
+    }
 
     $process.StandardInput.WriteLine("shutdown")
     if (-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0) {

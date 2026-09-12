@@ -5,6 +5,13 @@ using System.Threading;
 
 namespace ET.Server
 {
+    public enum SecurityMetric
+    {
+        PasswordChangeAccepted, PasswordChangeUnconfirmed, PasswordChangeRateLimited,
+        JournalAdmitted, JournalAdmissionFailures, JournalEnded, JournalEndFailures, JournalEndSkipped,
+        SessionStateRevoked, SessionLeaseExpired, SessionCheckFailures, Count
+    }
+
     [Code]
     public sealed class OperationalMetrics: Singleton<OperationalMetrics>, ISingletonAwake
     {
@@ -16,6 +23,29 @@ namespace ET.Server
         private long loginFailures;
         private long roleSaveSuccesses;
         private long roleSaveFailures;
+        private readonly long[] securityCounters = new long[(int)SecurityMetric.Count];
+
+        public void RecordSecurity(SecurityMetric metric)
+        {
+            if ((uint)metric >= (uint)SecurityMetric.Count) throw new ArgumentOutOfRangeException(nameof(metric));
+            Interlocked.Increment(ref this.securityCounters[(int)metric]);
+        }
+
+        private static string SecurityName(SecurityMetric metric) => metric switch
+        {
+            SecurityMetric.PasswordChangeAccepted => "et_password_change_accepted_total",
+            SecurityMetric.PasswordChangeUnconfirmed => "et_password_change_unconfirmed_total",
+            SecurityMetric.PasswordChangeRateLimited => "et_password_change_rate_limited_total",
+            SecurityMetric.JournalAdmitted => "et_session_journal_admitted_total",
+            SecurityMetric.JournalAdmissionFailures => "et_session_journal_admission_failures_total",
+            SecurityMetric.JournalEnded => "et_session_journal_ended_total",
+            SecurityMetric.JournalEndFailures => "et_session_journal_end_failures_total",
+            SecurityMetric.JournalEndSkipped => "et_session_journal_end_skipped_total",
+            SecurityMetric.SessionStateRevoked => "et_session_state_revoked_total",
+            SecurityMetric.SessionLeaseExpired => "et_session_lease_expired_total",
+            SecurityMetric.SessionCheckFailures => "et_session_check_failures_total",
+            _ => throw new ArgumentOutOfRangeException(nameof(metric))
+        };
 
         public void Awake()
         {
@@ -63,6 +93,12 @@ namespace ET.Server
             Append(text, "et_login_failures_total", Interlocked.Read(ref this.loginFailures));
             Append(text, "et_role_save_successes_total", Interlocked.Read(ref this.roleSaveSuccesses));
             Append(text, "et_role_save_failures_total", Interlocked.Read(ref this.roleSaveFailures));
+            for (int i = 0; i < this.securityCounters.Length; i++)
+            {
+                string name = SecurityName((SecurityMetric)i);
+                text.Append("# TYPE ").Append(name).Append(" counter\n");
+                Append(text, name, Interlocked.Read(ref this.securityCounters[i]));
+            }
             Append(text, "et_shutdown_requested", ShutdownCoordinator.Instance.IsRequested ? 1 : 0);
             Append(text, "et_startup_ready", StartupCoordinator.Instance.IsReady ? 1 : 0);
             return text.ToString();

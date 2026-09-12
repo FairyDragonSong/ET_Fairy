@@ -37,6 +37,7 @@ public static class AccountSessionJournal
                 {"Process",Options.Instance.Process},{"GateId",root.Id},{"Zone",root.Zone()},
                 {"OpenedAtUtc",DateTime.UtcNow},{"State","admitted"}
             },cancellationToken:timeout.Token);
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalAdmitted);
             if(session.IsDisposed||session.InstanceId!=instance)
             {
                 await End(records,recordId,ErrorCore.ERR_InvalidAccountOrPassword);
@@ -47,6 +48,7 @@ public static class AccountSessionJournal
         }
         catch(Exception)
         {
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalAdmissionFailures);
             Log.Warning("event=account_session_journal_failed stage=admission");
             return false;
         }
@@ -57,12 +59,17 @@ public static class AccountSessionJournal
         try
         {
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await records.WithWriteConcern(WriteConcern.WMajority).UpdateOneAsync(
+            var result=await records.WithWriteConcern(WriteConcern.WMajority).UpdateOneAsync(
                 Builders<BsonDocument>.Filter.Eq("_id",recordId)&Builders<BsonDocument>.Filter.Eq("State","admitted"),
                 Builders<BsonDocument>.Update.Set("State","ended").Set("EndedAtUtc",DateTime.UtcNow).Set("DisconnectError",error),
                 cancellationToken:timeout.Token);
+            if(result.ModifiedCount==1)OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEnded);
         }
-        catch(Exception){Log.Warning("event=account_session_journal_failed stage=disconnect");}
+        catch(Exception)
+        {
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
+            Log.Warning("event=account_session_journal_failed stage=disconnect");
+        }
     }
 }
 
@@ -79,9 +86,9 @@ public static partial class AccountSessionRecordComponentSystem
     {
         if(string.IsNullOrEmpty(self.RecordId))return;
         var root=self.Root();
-        if(root.IsDisposed)return;
+        if(root.IsDisposed){OperationalMetrics.Instance?.RecordSecurity(SecurityMetric.JournalEndSkipped);return;}
         var db=root.GetComponent<DBManagerComponent>()?.GetZoneDB(root.Zone());
-        if(db==null||db.IsDisposed)return;
+        if(db==null||db.IsDisposed){OperationalMetrics.Instance?.RecordSecurity(SecurityMetric.JournalEndSkipped);return;}
         var records=db.database.GetCollection<BsonDocument>(AccountSessionJournal.Collection);
         AccountSessionJournal.End(records,self.RecordId,self.GetParent<Session>().Error).Coroutine();
     }

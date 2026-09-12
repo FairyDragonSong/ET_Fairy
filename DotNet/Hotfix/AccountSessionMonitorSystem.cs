@@ -42,6 +42,7 @@ public static partial class AccountSessionMonitorSystem
             if(now-player.AccountVerifiedAt>120000)
             {
                 session.Dispose();
+                OperationalMetrics.Instance.RecordSecurity(SecurityMetric.SessionLeaseExpired);
                 Log.Warning("event=account_session_revoked reason=verification_expired");
                 continue;
             }
@@ -77,6 +78,7 @@ public static partial class AccountSessionMonitorSystem
                     if(matches.Length!=1 || matches[0].Status!=AccountStatus.Active || matches[0].StateVersion!=player.AccountStateVersion)
                     {
                         session.Dispose();
+                        OperationalMetrics.Instance.RecordSecurity(SecurityMetric.SessionStateRevoked);
                         Log.Warning("event=account_session_revoked reason=state_changed");
                     }
                     else player.AccountVerifiedAt=TimeInfo.Instance.ServerNow();
@@ -85,6 +87,7 @@ public static partial class AccountSessionMonitorSystem
         }
         catch(Exception)
         {
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.SessionCheckFailures);
             // No credentials or account data in operational logs. The lease still expires.
             Log.Warning("event=account_session_check_failed");
         }

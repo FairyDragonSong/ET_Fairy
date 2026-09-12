@@ -16,6 +16,7 @@ public sealed class C2G_ChangePasswordHandler : MessageSessionHandler<C2G_Change
             if(player==null||player.GetComponent<PlayerSessionComponent>()?.Session!=session)throw new AccountStateConflictException();
             if(!SelfPasswordChangeLimits.TryAcquire(player.Account,Environment.TickCount64))
             {
+                OperationalMetrics.Instance.RecordSecurity(SecurityMetric.PasswordChangeRateLimited);
                 response.Error=ErrorCore.ERR_LoginRateLimited;response.Message="操作过于频繁";return;
             }
             string keyPath=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
@@ -31,9 +32,11 @@ public sealed class C2G_ChangePasswordHandler : MessageSessionHandler<C2G_Change
                 await UserPasswordStore.Change(db,change,player.AccountStateVersion,digest);
             }
             response.Message="密码已更新，请重新登录";
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.PasswordChangeAccepted);
         }
         catch(Exception)
         {
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.PasswordChangeUnconfirmed);
             response.Error=ErrorCore.ERR_InvalidAccountOrPassword;
             response.Message="密码修改未确认成功，请核对凭据后重试";
             Log.Warning("event=user_password_change_rejected");

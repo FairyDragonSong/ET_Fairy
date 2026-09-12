@@ -22,6 +22,7 @@ internal static class Program
         ("账号生命周期状态机", TestAccountStatePolicy),
         ("密码加密信封", TestPasswordEnvelope),
         ("自助改密混合加密与有效期", TestSelfPasswordCipher),
+        ("安全指标固定基数与并发计数", TestSecurityMetrics),
     ];
 
     private static int Main()
@@ -36,6 +37,8 @@ internal static class Program
         });
         World.Instance.AddSingleton<TimeInfo>();
         World.Instance.AddSingleton<ObjectPool>();
+        World.Instance.AddSingleton<StartupCoordinator>();
+        World.Instance.AddSingleton<ShutdownCoordinator>();
 
         int failures = 0;
         foreach ((string name, Action run) in Tests)
@@ -373,6 +376,22 @@ internal static class Program
         Assert(message is ISessionRequest && new G2C_ChangePassword() is ISessionResponse,"Change password must route to Gate session handler");
         var decoded=MemoryPack.MemoryPackSerializer.Deserialize<C2G_ChangePassword>(MemoryPack.MemoryPackSerializer.Serialize(message));
         Assert(decoded.Envelope==envelope&&decoded.RpcId==42,"Protocol roundtrip failed");
+    }
+
+    private static void TestSecurityMetrics()
+    {
+        var metrics=new OperationalMetrics();metrics.Awake();
+        Parallel.For(0,1000,_=>metrics.RecordSecurity(SecurityMetric.PasswordChangeAccepted));
+        foreach(var metric in Enum.GetValues<SecurityMetric>().Where(v=>v!=SecurityMetric.Count))metrics.RecordSecurity(metric);
+        string text=metrics.ExportPrometheus();
+        Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
+        Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
+        Assert(!text.Contains('{')&&!text.Contains('}'),"Unexpected dynamic metric labels");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count,"Security metric count changed unexpectedly");
+        bool rejected=false;
+        try {metrics.RecordSecurity((SecurityMetric)999);}
+        catch(ArgumentOutOfRangeException){rejected=true;}
+        Assert(rejected,"Unknown metric accepted");
     }
 
     private static string Read(string root, string relativePath) =>
