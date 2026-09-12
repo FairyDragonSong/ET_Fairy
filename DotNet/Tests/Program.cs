@@ -21,6 +21,7 @@ internal static class Program
         ("管理签名与权限边界", TestAdminAuthorization),
         ("账号生命周期状态机", TestAccountStatePolicy),
         ("密码加密信封", TestPasswordEnvelope),
+        ("自助改密混合加密与有效期", TestSelfPasswordCipher),
     ];
 
     private static int Main()
@@ -204,6 +205,8 @@ internal static class Program
             new C2G_LoginGate(),
             new R2G_GetLoginKey(),
             new G2R_GetLoginKey(),
+            new C2G_ChangePassword(),
+            new G2C_ChangePassword(),
         ];
         Assert(messages.All(message => message is ISensitiveMessage), "an authentication message is not marked sensitive");
     }
@@ -345,6 +348,31 @@ internal static class Program
         try {AccountPasswordEnvelope.DecryptAndHash(Convert.ToBase64String(tampered),rsa.ExportPkcs8PrivateKeyPem());}
         catch(System.Security.Cryptography.CryptographicException){rejected=true;}
         Assert(rejected,"tampered ciphertext decrypted");
+    }
+
+    private static void TestSelfPasswordCipher()
+    {
+        using var rsa=System.Security.Cryptography.RSA.Create(4096);
+        string privateKey=rsa.ExportPkcs8PrivateKeyPem(),publicKey=rsa.ExportSubjectPublicKeyInfoPem();
+        var request=new SelfPasswordChange {LoginName="test_user",OperationId=Guid.NewGuid().ToString("N"),OldPassword=new string('旧',128),NewPassword=new string('新',128),ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240};
+        string envelope=SelfPasswordCipher.Encrypt(request,publicKey);
+        var copy=SelfPasswordCipher.Decrypt(envelope,privateKey);
+        Assert(copy.OldPassword==request.OldPassword&&copy.NewPassword==request.NewPassword&&copy.LoginName==request.LoginName,"Unicode boundary roundtrip failed");
+        Assert(envelope!=SelfPasswordCipher.Encrypt(request,publicKey),"Encryption reused randomness");
+        var data=System.Text.Json.JsonSerializer.Deserialize<PasswordChangeCipher>(envelope)!;
+        byte[] tag=Convert.FromBase64String(data.Tag);tag[0]^=1;data.Tag=Convert.ToBase64String(tag);
+        bool rejected=false;
+        try {SelfPasswordCipher.Decrypt(System.Text.Json.JsonSerializer.Serialize(data),privateKey);}
+        catch(System.Security.Cryptography.CryptographicException){rejected=true;}
+        Assert(rejected,"Modified GCM tag accepted");
+        request.ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()-1;
+        AssertThrows(()=>SelfPasswordCipher.Decrypt(SelfPasswordCipher.Encrypt(request,publicKey),privateKey),"Expired request accepted");
+        request.ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+600;
+        AssertThrows(()=>SelfPasswordCipher.Decrypt(SelfPasswordCipher.Encrypt(request,publicKey),privateKey),"Excessive lifetime accepted");
+        using var message=new C2G_ChangePassword {Envelope=envelope,RpcId=42};
+        Assert(message is ISessionRequest && new G2C_ChangePassword() is ISessionResponse,"Change password must route to Gate session handler");
+        var decoded=MemoryPack.MemoryPackSerializer.Deserialize<C2G_ChangePassword>(MemoryPack.MemoryPackSerializer.Serialize(message));
+        Assert(decoded.Envelope==envelope&&decoded.RpcId==42,"Protocol roundtrip failed");
     }
 
     private static string Read(string root, string relativePath) =>

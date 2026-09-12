@@ -22,7 +22,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 throw new InvalidOperationException("Requires development mode and isolated ET_LOCAL_GAMEPLAY database");
             bool saveFailure=content.EndsWith(" save-failure",StringComparison.Ordinal);
             bool leaseExpiry=content.EndsWith(" lease-expiry",StringComparison.Ordinal);
-            if(content.EndsWith(" credentials",StringComparison.Ordinal)) await Credentials(fiber.Root);
+            if(content.EndsWith(" self-credentials",StringComparison.Ordinal)) await SelfCredentials(fiber.Root);
+            else if(content.EndsWith(" credentials",StringComparison.Ordinal)) await Credentials(fiber.Root);
             else if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
             else if(content.EndsWith(" baseline",StringComparison.Ordinal)) await Baseline(fiber.Root);
             else await Execute(fiber.Root, content.EndsWith(" resume",StringComparison.Ordinal), content.EndsWith(" outage",StringComparison.Ordinal) || saveFailure || leaseExpiry, saveFailure, leaseExpiry);
@@ -385,6 +386,80 @@ public sealed class GameplayAcceptance : IConsoleHandler
         if(!int.TryParse(value,out int parsed)||parsed<minimum||parsed>maximum)
             throw new InvalidOperationException($"Invalid load setting: {name}");
         return parsed;
+    }
+
+    private static async ETTask SelfCredentials(Scene parent)
+    {
+        long id=IdGenerater.Instance.GenerateId();
+        using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"SelfCredentialTest");
+        var net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
+        var realm=StartSceneConfigCategory.Instance.Realms[0].InnerIPPort;
+        Check(IPAddress.IsLoopback(realm.Address),"Only loopback endpoints allowed");
+        string name=Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT")+"self";
+        string oldPassword=Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD"),newPassword=oldPassword+"new";
+        var db=client.AddComponent<DBManagerComponent>().GetZoneDB(1);
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        using var rsa=System.Security.Cryptography.RSA.Create(4096);
+        string keyPath=Path.Combine(Environment.GetEnvironmentVariable("ET_LOCAL_MONGO_ROOT"),"self-password-test-"+Guid.NewGuid().ToString("N")+".pem");
+        string previous=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
+        try
+        {
+            File.WriteAllText(keyPath,rsa.ExportPkcs8PrivateKeyPem());
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",keyPath);
+            using R2C_Login initial=await RealmLogin(net,realm,name,oldPassword);
+            Check(initial.Error==0,"Self credential registration failed");
+            using Session current=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
+            using G2C_LoginGate login=await GateLogin(current,initial);
+            Check(login.Error==0,"Self credential Gate failed");
+            using R2C_Login pending=await RealmLogin(net,realm,name,oldPassword);
+            var before=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+            string operation=Guid.NewGuid().ToString("N");
+            string Envelope(string account,string old)=>SelfPasswordCipher.Encrypt(new SelfPasswordChange
+            {LoginName=account,OldPassword=old,NewPassword=newPassword,OperationId=operation,ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240},rsa.ExportSubjectPublicKeyInfoPem());
+            string valid=Envelope(name,oldPassword);
+            using Session anonymous=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
+            Check(await ChangePassword(anonymous,valid)!=0,"Anonymous change accepted");
+            Check(await ChangePassword(current,Envelope(name,oldPassword+"wrong"))!=0,"Wrong old password accepted");
+            Check(await ChangePassword(current,Envelope(name+"other",oldPassword))!=0,"Cross-account change accepted");
+            var corrupted=System.Text.Json.JsonSerializer.Deserialize<PasswordChangeCipher>(valid);
+            byte[] tag=Convert.FromBase64String(corrupted.Tag);tag[0]^=1;corrupted.Tag=Convert.ToBase64String(tag);
+            Check(await ChangePassword(current,System.Text.Json.JsonSerializer.Serialize(corrupted))!=0,"Tampered change accepted");
+            var unchanged=await accounts.Find(a=>a.Id==before.Id).SingleAsync();
+            Check(unchanged.StateVersion==before.StateVersion && unchanged.PasswordHash==before.PasswordHash,"Rejected change mutated account");
+            Check(await ChangePassword(current,valid)==0,"Valid self change failed");
+            // Reauthenticate before retry: revocation may race the first success response.
+            for(int i=0;i<100&&!current.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
+            Check(current.IsDisposed,"Self change retained old session");
+            using Session stale=net.Create(NetworkHelper.ToIPEndPoint(pending.Address));
+            using G2C_LoginGate staleResult=await GateLogin(stale,pending);
+            Check(staleResult.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Old Gate ticket accepted");
+            using R2C_Login rejected=await RealmLogin(net,realm,name,oldPassword);
+            using R2C_Login fresh=await RealmLogin(net,realm,name,newPassword);
+            Check(rejected.Error==ErrorCore.ERR_InvalidAccountOrPassword&&fresh.Error==0,"Password replacement failed");
+            using Session renewed=net.Create(NetworkHelper.ToIPEndPoint(fresh.Address));
+            using G2C_LoginGate renewedLogin=await GateLogin(renewed,fresh);
+            Check(renewedLogin.Error==0&&renewedLogin.PlayerId==login.PlayerId,"Role identity changed");
+            Check(await ChangePassword(renewed,valid)==0,"Idempotent retry failed");
+            Check(await ChangePassword(renewed,valid)==ErrorCore.ERR_LoginRateLimited,"Account rate limit missing");
+            var saved=await accounts.Find(a=>a.Id==before.Id).SingleAsync();
+            Check(saved.StateVersion==before.StateVersion+1,"Retry repeated change");
+            var audit=await db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountStateStore.AuditCollection).Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",operation)).SingleAsync();
+            Check(audit["Action"].AsString=="user-change-password"&&!audit.Contains("PasswordHash")&&!audit.Contains("OldPassword")&&!audit.Contains("NewPassword")&&!audit.Contains("Envelope"),"Unsafe self change audit");
+            Console.WriteLine("GAMEPLAY_PASS self-password-anonymous-wrong-old-cross-account-tamper-rejected");
+            Console.WriteLine("GAMEPLAY_PASS self-password-change-idempotency-limit-role-preserved-old-session-ticket-revoked");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",previous);
+            if(File.Exists(keyPath))File.Delete(keyPath);
+        }
+    }
+
+    private static async ETTask<int> ChangePassword(Session session,string envelope)
+    {
+        var request=C2G_ChangePassword.Create();request.Envelope=envelope;
+        using var response=(G2C_ChangePassword)await session.Call(request,10000);
+        return response.Error;
     }
 
     private static async ETTask Credentials(Scene parent)

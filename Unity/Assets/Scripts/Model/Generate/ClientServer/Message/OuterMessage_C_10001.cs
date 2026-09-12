@@ -1082,6 +1082,69 @@ namespace ET
         }
     }
 
+    [MemoryPackable]
+    [Message(OuterMessage.C2G_ChangePassword)]
+    [ResponseType(nameof(G2C_ChangePassword))]
+    public partial class C2G_ChangePassword : MessageObject, ISessionRequest
+    {
+        public static C2G_ChangePassword Create(bool isFromPool = false)
+        {
+            return ObjectPool.Instance.Fetch(typeof(C2G_ChangePassword), isFromPool) as C2G_ChangePassword;
+        }
+
+        [MemoryPackOrder(0)]
+        public int RpcId { get; set; }
+
+        [MemoryPackOrder(1)]
+        public string Envelope { get; set; }
+
+        public override void Dispose()
+        {
+            if (!this.IsFromPool)
+            {
+                return;
+            }
+
+            this.RpcId = default;
+            this.Envelope = default;
+
+            ObjectPool.Instance.Recycle(this);
+        }
+    }
+
+    [MemoryPackable]
+    [Message(OuterMessage.G2C_ChangePassword)]
+    public partial class G2C_ChangePassword : MessageObject, ISessionResponse
+    {
+        public static G2C_ChangePassword Create(bool isFromPool = false)
+        {
+            return ObjectPool.Instance.Fetch(typeof(G2C_ChangePassword), isFromPool) as G2C_ChangePassword;
+        }
+
+        [MemoryPackOrder(0)]
+        public int RpcId { get; set; }
+
+        [MemoryPackOrder(1)]
+        public int Error { get; set; }
+
+        [MemoryPackOrder(2)]
+        public string Message { get; set; }
+
+        public override void Dispose()
+        {
+            if (!this.IsFromPool)
+            {
+                return;
+            }
+
+            this.RpcId = default;
+            this.Error = default;
+            this.Message = default;
+
+            ObjectPool.Instance.Recycle(this);
+        }
+    }
+
     public static class OuterMessage
     {
         public const ushort HttpGetRouterResponse = 10002;
@@ -1118,5 +1181,7 @@ namespace ET
         public const ushort M2C_TransferMap = 10033;
         public const ushort C2G_Benchmark = 10034;
         public const ushort G2C_Benchmark = 10035;
+        public const ushort C2G_ChangePassword = 10036;
+        public const ushort G2C_ChangePassword = 10037;
     }
 }

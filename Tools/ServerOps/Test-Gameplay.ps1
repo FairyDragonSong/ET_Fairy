@@ -1,8 +1,8 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
     [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0)
 $ErrorActionPreference='Stop'
 if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load parameters require -Baseline'}
-if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
+if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
 if($SaveFailure -or $LeaseExpiry){$Outage=$true}
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
@@ -30,7 +30,7 @@ try {
     $errors=$process.StandardError.ReadToEndAsync()
     Start-Sleep -Seconds 8
     if($process.HasExited){throw "Server exited before test: $($process.ExitCode)"}
-    $process.StandardInput.WriteLine($(if($Credentials){'gameplay-check credentials'}elseif($LeaseExpiry){'gameplay-check lease-expiry'}elseif($Governance){'gameplay-check governance'}elseif($Resume){'gameplay-check resume'}elseif($SaveFailure){'gameplay-check save-failure'}elseif($Outage){'gameplay-check outage'}elseif($Baseline){'gameplay-check baseline'}else{'gameplay-check'}))
+    $process.StandardInput.WriteLine($(if($SelfCredentials){'gameplay-check self-credentials'}elseif($Credentials){'gameplay-check credentials'}elseif($LeaseExpiry){'gameplay-check lease-expiry'}elseif($Governance){'gameplay-check governance'}elseif($Resume){'gameplay-check resume'}elseif($SaveFailure){'gameplay-check save-failure'}elseif($Outage){'gameplay-check outage'}elseif($Baseline){'gameplay-check baseline'}else{'gameplay-check'}))
     $deadline=[DateTime]::UtcNow.AddSeconds($(if($Baseline){240+$DurationSeconds+[Math]::Ceiling($Clients/20.0)*90}else{240}))
     $passed=$false
     while([DateTime]::UtcNow -lt $deadline){
@@ -59,7 +59,7 @@ try {
     if(-not $process.WaitForExit(25000) -or $process.ExitCode -ne $expectedExit){throw "Gameplay server did not return expected shutdown exit code $expectedExit"}
     if($SaveFailure){$lines.Add('GAMEPLAY_PASS storage-failure-shutdown-exit-2');Write-Host 'GAMEPLAY_PASS storage-failure-shutdown-exit-2'}
     $report=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Clients=$Clients;DurationSeconds=$DurationSeconds;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_PASS'});Samples=@($lines|Where-Object{$_ -match 'GAMEPLAY_PROGRESS'});ProductionCapacityVerified=$false}
-    $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/$(if($Credentials){'gameplay-credentials'}elseif($LeaseExpiry){'gameplay-lease-expiry'}elseif($Governance){'gameplay-governance'}elseif($Resume){'gameplay-restart'}elseif($SaveFailure){'gameplay-save-failure'}elseif($Outage){'gameplay-outage'}elseif($Baseline){'gameplay-baseline'}else{'gameplay'}).json"
+    $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/$(if($SelfCredentials){'gameplay-self-credentials'}elseif($Credentials){'gameplay-credentials'}elseif($LeaseExpiry){'gameplay-lease-expiry'}elseif($Governance){'gameplay-governance'}elseif($Resume){'gameplay-restart'}elseif($SaveFailure){'gameplay-save-failure'}elseif($Outage){'gameplay-outage'}elseif($Baseline){'gameplay-baseline'}else{'gameplay'}).json"
     $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/gameplay-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
@@ -70,7 +70,7 @@ try {
     $process.Dispose()
     if($Outage){& "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot}
 }
-if(-not $Resume -and -not $Outage -and -not $Baseline -and -not $Governance -and -not $Credentials){
+if(-not $Resume -and -not $Outage -and -not $Baseline -and -not $Governance -and -not $Credentials -and -not $SelfCredentials){
     try { & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Resume; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Outage; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -SaveFailure; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Baseline }
     finally { Remove-Item Env:ET_GAMEPLAY_PASSWORD,Env:ET_GAMEPLAY_ACCOUNT,Env:ET_GAMEPLAY_ROLEID -ErrorAction SilentlyContinue }
 }
