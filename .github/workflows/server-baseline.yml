@@ -127,3 +127,7 @@ jobs:
       - name: Verify production filesystem ACL governance
         shell: pwsh
         run: ./Tools/ServerOps/Test-FilesystemAclGovernance.ps1
+
+      - name: Verify Windows service hosting policy
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-WindowsServiceHosting.ps1

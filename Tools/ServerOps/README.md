@@ -166,6 +166,12 @@ Windows 生产主机用 `Test-ServerFilesystemAcl.ps1` 检查不可变发布槽�
 .\Test-FilesystemAclGovernance.ps1
 ```
 
+Windows SCM 托管先用 `New-ServerSupervisorConfiguration.ps1` 生成签名生产参数，再由 `New-WindowsServiceHostManifest.ps1` 生成 WinSW XML 和签名组件清单；启动入口 `Start-ServerSupervisorFromConfiguration.ps1` 会拒绝未签名配置和所有测试开关。服务策略与本机 WinSW 供应链边界见 [020.21](../../Book/服务器上线升级/020.21-Windows服务托管与失败恢复.md)，离线验证：
+
+```powershell
+.\Test-WindowsServiceHosting.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：
