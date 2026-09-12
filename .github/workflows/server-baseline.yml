@@ -123,3 +123,7 @@ jobs:
       - name: Verify hosted CI and protected branch governance
         shell: pwsh
         run: ./Tools/ServerOps/Test-GitHubGovernance.ps1
+
+      - name: Verify production filesystem ACL governance
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-FilesystemAclGovernance.ps1

@@ -160,6 +160,12 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 .\Test-GitHubGovernance.ps1
 ```
 
+Windows 生产主机用 `Test-ServerFilesystemAcl.ps1` 检查不可变发布槽位、可写运行/状态目录、只读 Secret/私钥、宽泛主体和重解析点。它只读取 ACL，不会自动放宽或重写权限。规则、生产账号边界和本机现状见 [020.20](../../Book/服务器上线升级/020.20-Windows生产目录ACL门禁.md)，真实临时 DACL 自检：
+
+```powershell
+.\Test-FilesystemAclGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：
