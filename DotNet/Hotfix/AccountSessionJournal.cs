@@ -7,12 +7,14 @@ namespace ET.Server;
 
 [FriendOf(typeof(DBComponent))]
 [FriendOf(typeof(AccountSessionRecordComponent))]
+[FriendOf(typeof(AccountSessionDrainComponent))]
 public static class AccountSessionJournal
 {
     public const string Collection="ET.Server.AccountSessionJournal";
 
     public static async ETTask Initialize(Scene root)
     {
+        root.AddComponent<AccountSessionDrainComponent>();
         var db=root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
         await db.database.GetCollection<BsonDocument>(Collection).Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("AccountId").Descending("OpenedAtUtc"),
@@ -40,7 +42,7 @@ public static class AccountSessionJournal
             OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalAdmitted);
             if(session.IsDisposed||session.InstanceId!=instance)
             {
-                await End(records,recordId,ErrorCore.ERR_InvalidAccountOrPassword);
+                await EndTracked(root,records,recordId,ErrorCore.ERR_InvalidAccountOrPassword);
                 return false;
             }
             session.AddComponent<AccountSessionRecordComponent>().RecordId=recordId;
@@ -56,6 +58,54 @@ public static class AccountSessionJournal
 
     internal static async ETTask End(IMongoCollection<BsonDocument> records,string recordId,int error)
     {
+        await EndCore(records,recordId,error);
+    }
+
+    internal static async ETTask EndTracked(Scene root,IMongoCollection<BsonDocument> records,string recordId,int error)
+    {
+        var state=root.GetComponent<AccountSessionDrainComponent>().State;
+        await EndQueued(state,records,recordId,error);
+    }
+
+    internal static async ETTask EndQueued(AccountSessionDrainState state,IMongoCollection<BsonDocument> records,string recordId,int error)
+    {
+        // Cap retained work as well as active writes. Overflow is observable and fails drain.
+        if(Interlocked.Increment(ref state.Pending)>4096)
+        {
+            Interlocked.Decrement(ref state.Pending);
+            Interlocked.Increment(ref state.Failures);
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
+            Log.Warning("event=account_session_journal_failed stage=disconnect reason=queue_full");
+            return;
+        }
+        bool acquired=false;
+        try
+        {
+            await state.Slots.WaitAsync();
+            acquired=true;
+            if(!await EndCore(records,recordId,error))Interlocked.Increment(ref state.Failures);
+        }
+        finally
+        {
+            if(acquired)state.Slots.Release();
+            Interlocked.Decrement(ref state.Pending);
+        }
+    }
+
+    public static async ETTask<bool> Drain(Scene root)
+    {
+        var component=root.GetComponent<AccountSessionDrainComponent>();
+        if(component==null)return true;
+        var state=component.State;
+        while(Volatile.Read(ref state.Pending)>0)
+            await root.GetComponent<TimerComponent>().WaitAsync(20);
+        bool success=Volatile.Read(ref state.Failures)==0;
+        Log.Info($"event=account_session_journal_drained success={success} failures={state.Failures}");
+        return success;
+    }
+
+    private static async ETTask<bool> EndCore(IMongoCollection<BsonDocument> records,string recordId,int error)
+    {
         try
         {
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(3));
@@ -64,11 +114,14 @@ public static class AccountSessionJournal
                 Builders<BsonDocument>.Update.Set("State","ended").Set("EndedAtUtc",DateTime.UtcNow).Set("DisconnectError",error),
                 cancellationToken:timeout.Token);
             if(result.ModifiedCount==1)OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEnded);
+            return true;
         }
-        catch(Exception)
+        catch(Exception exception)
         {
             OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
-            Log.Warning("event=account_session_journal_failed stage=disconnect");
+            string reason=exception is OperationCanceledException?"timeout":exception is MongoCommandException?"command":exception is MongoWriteException?"write":"other";
+            Log.Warning($"event=account_session_journal_failed stage=disconnect reason={reason}");
+            return false;
         }
     }
 }
@@ -90,6 +143,17 @@ public static partial class AccountSessionRecordComponentSystem
         var db=root.GetComponent<DBManagerComponent>()?.GetZoneDB(root.Zone());
         if(db==null||db.IsDisposed){OperationalMetrics.Instance?.RecordSecurity(SecurityMetric.JournalEndSkipped);return;}
         var records=db.database.GetCollection<BsonDocument>(AccountSessionJournal.Collection);
-        AccountSessionJournal.End(records,self.RecordId,self.GetParent<Session>().Error).Coroutine();
+        AccountSessionJournal.EndTracked(root,records,self.RecordId,self.GetParent<Session>().Error).Coroutine();
+    }
+}
+
+[EntitySystemOf(typeof(AccountSessionDrainComponent))]
+[FriendOf(typeof(AccountSessionDrainComponent))]
+public static partial class AccountSessionDrainComponentSystem
+{
+    [EntitySystem]
+    private static void Awake(this AccountSessionDrainComponent self)
+    {
+        self.State=new AccountSessionDrainState();
     }
 }

@@ -13,6 +13,7 @@ namespace ET.Server;
 // Available only in the .NET host. No client protocol or production endpoint added.
 [ConsoleHandler("gameplay-check")]
 [FriendOf(typeof(DBComponent))]
+[FriendOf(typeof(AccountSessionDrainComponent))]
 public sealed class GameplayAcceptance : IConsoleHandler
 {
     public async ETTask Run(Fiber fiber, ModeContex context, string content)
@@ -525,12 +526,49 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 Metric("et_gate_login_handler_seconds_count")==3&&Metric("et_password_change_handler_seconds_count")==7,
                 "Handler latency samples do not include every success/rejection/early return");
             Console.WriteLine("GAMEPLAY_PASS handler-latency-samples-include-rejections-and-rate-limit");
+            await SessionJournalBurst(parent, db);
         }
         finally
         {
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",previous);
             if(File.Exists(keyPath))File.Delete(keyPath);
         }
+    }
+
+    private static async ETTask SessionJournalBurst(Scene parent, DBComponent db)
+    {
+        long id=IdGenerater.Instance.GenerateId();
+        using Scene scope=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"JournalBurst");
+        scope.AddComponent<TimerComponent>();
+        var state=scope.AddComponent<AccountSessionDrainComponent>().State;
+        var records=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection).WithWriteConcern(WriteConcern.WMajority);
+        var documents=new List<MongoDB.Bson.BsonDocument>();
+        for(int i=0;i<3000;i++)documents.Add(new MongoDB.Bson.BsonDocument
+        {
+            {"_id",Guid.NewGuid().ToString("N")},{"AccountId",id},{"State","admitted"},{"OpenedAtUtc",DateTime.UtcNow}
+        });
+        await records.InsertManyAsync(documents);
+        long failures=Metric("et_session_journal_end_failures_total");
+        var tasks=new List<ETTask>();
+        Stopwatch elapsed=Stopwatch.StartNew();
+        foreach(var document in documents)
+            tasks.Add(AccountSessionJournal.EndTracked(scope,records,document["_id"].AsString,0));
+        Check(state.Pending>0,"Burst did not exercise pending drain work");
+        Check(await AccountSessionJournal.Drain(scope),"Journal drain reported failure");
+        await ETTaskHelper.WaitAll(tasks);
+        var filter=Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",id);
+        var saved=await records.Find(filter).ToListAsync();
+        Check(saved.Count==3000&&saved.All(r=>r["State"]=="ended"&&r.Contains("EndedAtUtc")),"Burst retained unfinished journal records");
+        Check(state.Pending==0&&state.Failures==0&&Metric("et_session_journal_end_failures_total")==failures,"Burst failed writes or leaked pending work");
+        Check(elapsed.ElapsedMilliseconds<20000,"Journal burst exceeded original drain budget");
+        Console.WriteLine($"GAMEPLAY_PASS session-journal-3000-burst-persisted-and-drained elapsed_ms={elapsed.ElapsedMilliseconds}");
+        // Deterministic saturation, with no fabricated success or database write on overflow.
+        state.Pending=4096;
+        await AccountSessionJournal.EndQueued(state,records,Guid.NewGuid().ToString("N"),0);
+        Check(state.Pending==4096&&state.Failures==1,"Journal queue overflow was not bounded and failed");
+        state.Pending=0;
+        Check(!await AccountSessionJournal.Drain(scope),"Failed journal queue falsely passed drain");
+        Console.WriteLine("GAMEPLAY_PASS session-journal-overflow-fails-drain");
     }
 
     private static async ETTask CoroutineLockLifecycle(Scene parent)

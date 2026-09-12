@@ -42,6 +42,9 @@ namespace ET.Server
             try
             {
                 root.RemoveComponent<NetComponent>();
+#if DOTNET
+                success &= await AccountSessionJournal.Drain(root);
+#endif
                 UnitComponent unitComponent = root.GetComponent<UnitComponent>();
                 if (unitComponent != null)
                 {
