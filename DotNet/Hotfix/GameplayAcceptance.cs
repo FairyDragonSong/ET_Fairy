@@ -442,12 +442,20 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var db=client.AddComponent<DBManagerComponent>().GetZoneDB(1);
         var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
         using var rsa=System.Security.Cryptography.RSA.Create(4096);
-        string keyPath=Path.Combine(Environment.GetEnvironmentVariable("ET_LOCAL_MONGO_ROOT"),"self-password-test-"+Guid.NewGuid().ToString("N")+".pem");
+        using var legacyRsa=System.Security.Cryptography.RSA.Create(4096);
+        string keyPath=Path.Combine(Environment.GetEnvironmentVariable("ET_LOCAL_MONGO_ROOT"),"self-password-test-"+Guid.NewGuid().ToString("N")+".json");
         string previous=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
+        string previousRing=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE");
         try
         {
-            File.WriteAllText(keyPath,rsa.ExportPkcs8PrivateKeyPem());
-            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",keyPath);
+            long keyNow=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            File.WriteAllText(keyPath,System.Text.Json.JsonSerializer.Serialize(new {SchemaVersion=1,ActiveKeyId="self-current",LegacyKeyId="self-legacy",Keys=new[]
+            {
+                new {KeyId="self-legacy",PrivateKeyPem=legacyRsa.ExportPkcs8PrivateKeyPem(),NotBefore=keyNow-3600,NotAfter=keyNow+7200},
+                new {KeyId="self-current",PrivateKeyPem=rsa.ExportPkcs8PrivateKeyPem(),NotBefore=keyNow-60,NotAfter=keyNow+86400}
+            }}));
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",null);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE",keyPath);
             using R2C_Login initial=await RealmLogin(net,realm,name,oldPassword);
             Check(initial.Error==0,"Self credential registration failed");
             Check(Metric("et_gate_bound_sessions")==0,"Realm authentication counted as Gate online session");
@@ -460,7 +468,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             await SelfPasswordTransactions(db,name,oldPassword,before.StateVersion);
             string operation=Guid.NewGuid().ToString("N");
             string Envelope(string account,string old)=>SelfPasswordCipher.Encrypt(new SelfPasswordChange
-            {LoginName=account,OldPassword=old,NewPassword=newPassword,OperationId=operation,ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240},rsa.ExportSubjectPublicKeyInfoPem());
+            {LoginName=account,OldPassword=old,NewPassword=newPassword,OperationId=operation,ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240},"self-current",rsa.ExportSubjectPublicKeyInfoPem());
             string valid=Envelope(name,oldPassword);
             using Session anonymous=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
             Check(await ChangePassword(anonymous,valid)!=0,"Anonymous change accepted");
@@ -494,6 +502,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(audit["Action"].AsString=="user-change-password"&&!audit.Contains("PasswordHash")&&!audit.Contains("OldPassword")&&!audit.Contains("NewPassword")&&!audit.Contains("Envelope"),"Unsafe self change audit");
             Console.WriteLine("GAMEPLAY_PASS self-password-anonymous-wrong-old-cross-account-tamper-rejected");
             Console.WriteLine("GAMEPLAY_PASS self-password-change-idempotency-limit-role-preserved-old-session-ticket-revoked");
+            Console.WriteLine("GAMEPLAY_PASS self-password-keyring-active-keyid-selected");
             var journal=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection);
             var journalFilter=Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",before.Id);
             var records=await journal.Find(journalFilter).ToListAsync();
@@ -536,6 +545,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         finally
         {
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE",previous);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE",previousRing);
             if(File.Exists(keyPath))File.Delete(keyPath);
         }
     }

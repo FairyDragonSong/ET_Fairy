@@ -23,7 +23,7 @@ public static class ProductionSecretPolicy
             return;
         }
 
-        bool metricsConfigured = HasValue("ET_METRICS_PORT") || HasValue("ET_METRICS_TOKEN_FILE");
+        bool metricsConfigured = HasValue("ET_METRICS_PORT") || HasValue("ET_METRICS_TOKEN_FILE") || HasValue("ET_METRICS_PREVIOUS_TOKEN_FILE");
         string[] adminVariables =
         [
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
@@ -31,10 +31,9 @@ public static class ProductionSecretPolicy
         ];
         bool administrationConfigured = adminVariables.Any(HasValue);
 
-        if (HasValue("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE"))
+        if (HasValue("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE") || HasValue("ET_ACCOUNT_PASSWORD_KEYRING_FILE"))
         {
-            string privateKey = ReadManagedEnvironmentFile("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", 16384, true);
-            ValidatePasswordPrivateKey(privateKey);
+            ValidatePasswordSources(true);
         }
 
         if (metricsConfigured)
@@ -44,10 +43,14 @@ public static class ProductionSecretPolicy
                 throw new InvalidOperationException("Production metrics configuration is incomplete");
             }
 
-            string token = ReadManagedEnvironmentFile("ET_METRICS_TOKEN_FILE", 128, true).Trim();
-            if (token.Length != 64 || token.Any(character => !Uri.IsHexDigit(character)))
+            string token = ReadMetricsToken("ET_METRICS_TOKEN_FILE", true);
+            if (HasValue("ET_METRICS_PREVIOUS_TOKEN_FILE"))
             {
-                throw new InvalidOperationException("Production metrics credential is invalid");
+                string previousToken = ReadMetricsToken("ET_METRICS_PREVIOUS_TOKEN_FILE", true);
+                if (CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(token), System.Text.Encoding.ASCII.GetBytes(previousToken)))
+                {
+                    throw new InvalidOperationException("Production metrics rotation credentials must be distinct");
+                }
             }
         }
 
@@ -92,9 +95,42 @@ public static class ProductionSecretPolicy
             return;
         }
 
-        string privateKey = ReadManagedEnvironmentFile("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", 16384, true);
-        ValidatePasswordPrivateKey(privateKey);
+        ValidatePasswordSources(true);
     }
+
+    public static string ReadPasswordPrivateKey(string keyId, bool requireManagedRoot)
+    {
+        bool legacy = HasValue("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
+        bool ring = HasValue("ET_ACCOUNT_PASSWORD_KEYRING_FILE");
+        if (legacy == ring)
+        {
+            throw new InvalidOperationException("Exactly one password decryption key source is required");
+        }
+
+        if (legacy)
+        {
+            if (!string.IsNullOrEmpty(keyId)) throw new InvalidOperationException("Password encryption key id is unsupported by the configured legacy key");
+            string privateKey = ReadManagedEnvironmentFile("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", 16384, requireManagedRoot);
+            ValidatePasswordPrivateKey(privateKey);
+            return privateKey;
+        }
+
+        string json = ReadManagedEnvironmentFile("ET_ACCOUNT_PASSWORD_KEYRING_FILE", 65536, requireManagedRoot);
+        return ReadPasswordKeyRing(json, keyId, true);
+    }
+
+    public static string ReadMetricsToken(string variable, bool requireManagedRoot)
+    {
+        string token = ReadManagedEnvironmentFile(variable, 128, requireManagedRoot).Trim();
+        if (token.Length != 64 || token.Any(character => !Uri.IsHexDigit(character)))
+        {
+            throw new InvalidOperationException("Production metrics credential is invalid");
+        }
+        return token;
+    }
+
+    public static bool IsSafeKeyId(string keyId) => !string.IsNullOrWhiteSpace(keyId) && keyId.Length is >= 3 and <= 64 &&
+        keyId.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
 
     public static string ReadManagedEnvironmentFile(string variable, int maximumBytes, bool requireManagedRoot)
     {
@@ -179,6 +215,54 @@ public static class ProductionSecretPolicy
         {
             throw new InvalidOperationException("Password encryption private key must be RSA-4096 or stronger");
         }
+    }
+
+    private static void ValidatePasswordSources(bool requireManagedRoot)
+    {
+        bool legacy = HasValue("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
+        bool ring = HasValue("ET_ACCOUNT_PASSWORD_KEYRING_FILE");
+        if (legacy == ring) throw new InvalidOperationException("Exactly one password decryption key source is required");
+        if (legacy)
+        {
+            ValidatePasswordPrivateKey(ReadManagedEnvironmentFile("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", 16384, requireManagedRoot));
+            return;
+        }
+        string json = ReadManagedEnvironmentFile("ET_ACCOUNT_PASSWORD_KEYRING_FILE", 65536, requireManagedRoot);
+        _ = ReadPasswordKeyRing(json, null, false);
+    }
+
+    private static string ReadPasswordKeyRing(string json, string requestedKeyId, bool select)
+    {
+        using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 6 });
+        JsonElement root = document.RootElement;
+        if (root.GetProperty("SchemaVersion").GetInt32() != 1) throw new InvalidOperationException("Password key ring schema is unsupported");
+        string activeKeyId = root.GetProperty("ActiveKeyId").GetString();
+        string legacyKeyId = root.TryGetProperty("LegacyKeyId", out JsonElement legacyElement) && legacyElement.ValueKind != JsonValueKind.Null
+            ? legacyElement.GetString() : null;
+        JsonElement keys = root.GetProperty("Keys");
+        if (!IsSafeKeyId(activeKeyId) || (legacyKeyId != null && !IsSafeKeyId(legacyKeyId)) ||
+            keys.ValueKind != JsonValueKind.Array || keys.GetArrayLength() is < 1 or > 4)
+            throw new InvalidOperationException("Password key ring metadata is invalid");
+
+        Dictionary<string, string> privateKeys = new(StringComparer.Ordinal);
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        foreach (JsonElement item in keys.EnumerateArray())
+        {
+            string id = item.GetProperty("KeyId").GetString();
+            string pem = item.GetProperty("PrivateKeyPem").GetString();
+            long notBefore = item.GetProperty("NotBefore").GetInt64();
+            long notAfter = item.GetProperty("NotAfter").GetInt64();
+            if (!IsSafeKeyId(id) || !privateKeys.TryAdd(id, pem) || notBefore > now + 300 || notAfter <= now || notAfter <= notBefore)
+                throw new InvalidOperationException("Password key ring entry is invalid");
+            ValidatePasswordPrivateKey(pem);
+        }
+        if (!privateKeys.ContainsKey(activeKeyId) || (legacyKeyId != null && !privateKeys.ContainsKey(legacyKeyId)))
+            throw new InvalidOperationException("Password key ring selection is invalid");
+        if (!select) return string.Empty;
+        string selected = string.IsNullOrEmpty(requestedKeyId) ? legacyKeyId : requestedKeyId;
+        if (selected == null || !privateKeys.TryGetValue(selected, out string privateKey))
+            throw new InvalidOperationException("Password encryption key id is unknown");
+        return privateKey;
     }
 
     private static void ValidateAdministrationTrust(string json, string expectedDatabase, string expectedDeployment, int expectedZone)

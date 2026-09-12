@@ -33,7 +33,9 @@ public static class AccountAdminAuthorization
             command.IssuedAt<now-300||command.IssuedAt>now+30||command.ExpiresAt<=now||command.ExpiresAt>command.IssuedAt+300||
             !Guid.TryParseExact(command.OperationId,"N",out _)||string.IsNullOrEmpty(command.ReasonCode)||command.ReasonCode.Length>64||
             (command.Action!="disable"&&command.Action!="enable"&&command.Action!="revoke"&&command.Action!="close"&&command.Action!="reset-password")||
-            (command.Action=="reset-password" ? string.IsNullOrEmpty(command.EncryptedPassword) : command.EncryptedPassword!=null)||
+            (command.Action=="reset-password" ? string.IsNullOrEmpty(command.EncryptedPassword) ||
+                (command.PasswordKeyId!=null&&!ProductionSecretPolicy.IsSafeKeyId(command.PasswordKeyId)) :
+                command.EncryptedPassword!=null||command.PasswordKeyId!=null)||
             identity.Actions==null||!identity.Actions.Contains(command.Action,StringComparer.Ordinal))
             throw new InvalidOperationException("Administration command not authorized");
         return command;

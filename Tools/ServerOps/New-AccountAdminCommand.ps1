@@ -12,7 +12,8 @@ param(
     [Parameter(Mandatory)][string]$OutputFile,
     [string]$OperationId=([Guid]::NewGuid().ToString('N')),
     [Security.SecureString]$NewPassword,
-    [string]$PasswordEncryptionPublicKeyFile
+    [string]$PasswordEncryptionPublicKeyFile,
+    [ValidatePattern('^[A-Za-z0-9._-]{3,64}$')][string]$PasswordEncryptionKeyId
 )
 $ErrorActionPreference='Stop'
 if($AccountId -le 0 -or $ConfirmAccountId -ne $AccountId -or $ExpectedVersion -lt 0 -or $ExpectedVersion -eq [long]::MaxValue){throw 'Account confirmation or version invalid'}
@@ -26,6 +27,7 @@ try {
     $command=[ordered]@{OperationId=$OperationId;OperatorId=$OperatorId;Action=$Action;Database=$Database;DeploymentId=$DeploymentId;Zone=$Zone;AccountId=$AccountId;ConfirmAccountId=$ConfirmAccountId;ExpectedVersion=$ExpectedVersion;ReasonCode=$ReasonCode;IssuedAt=$issued;ExpiresAt=$issued+300}
     if($Action -eq 'reset-password'){
         if(-not $NewPassword -or -not $PasswordEncryptionPublicKeyFile){throw 'Reset requires SecureString password and server public encryption key'}
+        if($PasswordEncryptionKeyId){$command.PasswordKeyId=$PasswordEncryptionKeyId}
         $encryption=[Security.Cryptography.RSA]::Create()
         $pointer=[IntPtr]::Zero;$passwordBytes=$null
         try {
@@ -41,7 +43,7 @@ try {
             if($pointer -ne [IntPtr]::Zero){[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)}
             $plain=$null;$encryption.Dispose()
         }
-    }elseif($NewPassword -or $PasswordEncryptionPublicKeyFile){throw 'Password parameters require reset-password'}
+    }elseif($NewPassword -or $PasswordEncryptionPublicKeyFile -or $PasswordEncryptionKeyId){throw 'Password parameters require reset-password'}
     $payload=[Text.Encoding]::UTF8.GetBytes(($command|ConvertTo-Json -Compress))
     $signature=$rsa.SignData($payload,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pss)
     $envelope=[ordered]@{OperatorId=$OperatorId;Payload=[Convert]::ToBase64String($payload);Signature=[Convert]::ToBase64String($signature)}

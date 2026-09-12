@@ -220,7 +220,8 @@ internal static class Program
     {
         string[] variables =
         [
-            "ET_SECRET_ROOT", "ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", "ET_METRICS_PORT", "ET_METRICS_TOKEN_FILE",
+            "ET_SECRET_ROOT", "ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", "ET_ACCOUNT_PASSWORD_KEYRING_FILE",
+            "ET_METRICS_PORT", "ET_METRICS_TOKEN_FILE", "ET_METRICS_PREVIOUS_TOKEN_FILE",
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
             "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
         ];
@@ -229,10 +230,13 @@ internal static class Program
         string escape = Path.Combine(Path.GetTempPath(), "et-secret-escape-" + Guid.NewGuid().ToString("N") + ".pem");
         Directory.CreateDirectory(root);
         string passwordKey = Path.Combine(root, "password-private.pem");
+        string passwordKeyRing = Path.Combine(root, "password-keyring.json");
         string metricsToken = Path.Combine(root, "metrics-token");
+        string previousMetricsToken = Path.Combine(root, "metrics-token-previous");
         string adminTrust = Path.Combine(root, "admin-trust.json");
         string adminUri = Path.Combine(root, "admin-mongo-uri");
         using RSA passwordRsa = RSA.Create(4096);
+        using RSA rotationRsa = RSA.Create(4096);
         using RSA operatorRsa = RSA.Create(3072);
         string privatePem = passwordRsa.ExportPkcs8PrivateKeyPem();
         try
@@ -240,6 +244,7 @@ internal static class Program
             foreach (string variable in variables) Environment.SetEnvironmentVariable(variable, null);
             File.WriteAllText(passwordKey, privatePem);
             File.WriteAllText(metricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+            File.WriteAllText(previousMetricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
             File.WriteAllText(adminUri, "mongodb://admin:secret@db1,db2/?tls=true&replicaSet=rs0");
             File.WriteAllText(adminTrust, JsonSerializer.Serialize(new[]
             {
@@ -263,10 +268,33 @@ internal static class Program
             Options production = new() { Develop = 0, PasswordLoginEnabled = 1, PasswordLoginTransportSecure = 1 };
             ProductionSecretPolicy.Validate(production);
             ProductionSecretPolicy.ValidatePasswordLogin(production);
+            Environment.SetEnvironmentVariable("ET_METRICS_PREVIOUS_TOKEN_FILE", previousMetricsToken);
+            ProductionSecretPolicy.Validate(production);
 
             File.WriteAllText(passwordKey, passwordRsa.ExportSubjectPublicKeyInfoPem());
             AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "public key was accepted as the password decryption key");
             File.WriteAllText(passwordKey, privatePem);
+
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            string rotatedPem = rotationRsa.ExportPkcs8PrivateKeyPem();
+            File.WriteAllText(passwordKeyRing, JsonSerializer.Serialize(new
+            {
+                SchemaVersion = 1, ActiveKeyId = "password-2026-10", LegacyKeyId = "password-2026-09",
+                Keys = new[]
+                {
+                    new { KeyId = "password-2026-09", PrivateKeyPem = privatePem, NotBefore = now - 3600, NotAfter = now + 7200 },
+                    new { KeyId = "password-2026-10", PrivateKeyPem = rotatedPem, NotBefore = now - 60, NotAfter = now + 86400 },
+                },
+            }));
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", null);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE", passwordKeyRing);
+            ProductionSecretPolicy.ValidatePasswordLogin(production);
+            Assert(ProductionSecretPolicy.ReadPasswordPrivateKey(null, true) == privatePem, "legacy password envelope did not select overlap key");
+            Assert(ProductionSecretPolicy.ReadPasswordPrivateKey("password-2026-10", true) == rotatedPem, "new password key id did not select active key");
+            AssertThrows(() => ProductionSecretPolicy.ReadPasswordPrivateKey("unknown-key", true), "unknown password key id was accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", passwordKey);
+            AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "conflicting password key sources were accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE", null);
 
             File.WriteAllText(escape, privatePem);
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE", escape);
@@ -284,6 +312,10 @@ internal static class Program
             File.WriteAllText(metricsToken, "not-a-random-token");
             AssertThrows(() => ProductionSecretPolicy.Validate(production), "invalid metrics credential was accepted");
             File.WriteAllText(metricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+
+            File.Copy(metricsToken, previousMetricsToken, true);
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "duplicate metrics rotation credentials were accepted");
+            File.WriteAllText(previousMetricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
 
             Environment.SetEnvironmentVariable("ET_SECRET_ROOT", null);
             AssertThrows(() => ProductionSecretPolicy.ValidatePasswordLogin(production), "production Secret files without a managed root were accepted");
@@ -472,6 +504,15 @@ internal static class Program
         var copy=SelfPasswordCipher.Decrypt(envelope,privateKey);
         Assert(copy.OldPassword==request.OldPassword&&copy.NewPassword==request.NewPassword&&copy.LoginName==request.LoginName,"Unicode boundary roundtrip failed");
         Assert(envelope!=SelfPasswordCipher.Encrypt(request,publicKey),"Encryption reused randomness");
+        string keyedEnvelope=SelfPasswordCipher.Encrypt(request,"password-2026-10",publicKey);
+        Assert(SelfPasswordCipher.GetKeyId(keyedEnvelope)=="password-2026-10","Password key id was not authenticated with the envelope selection");
+        var changedKeyId=JsonSerializer.Deserialize<PasswordChangeCipher>(keyedEnvelope)!;
+        changedKeyId.KeyId="password-2026-11";
+        bool keyIdTamperRejected=false;
+        try {SelfPasswordCipher.Decrypt(JsonSerializer.Serialize(changedKeyId),privateKey);}
+        catch(CryptographicException){keyIdTamperRejected=true;}
+        Assert(keyIdTamperRejected,"Modified password key id was not authenticated by AES-GCM");
+        AssertThrows(()=>SelfPasswordCipher.Encrypt(request,"bad key id",publicKey),"Invalid password key id accepted");
         var data=System.Text.Json.JsonSerializer.Deserialize<PasswordChangeCipher>(envelope)!;
         byte[] tag=Convert.FromBase64String(data.Tag);tag[0]^=1;data.Tag=Convert.ToBase64String(tag);
         bool rejected=false;

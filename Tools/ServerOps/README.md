@@ -14,6 +14,8 @@
 
 只有完整客户端链路已经通过 WSS/TLS 等方式加密时，才可同时设置 `--PasswordLoginEnabled=1 --PasswordLoginTransportSecure=1`。该参数是部署方安全确认，不会自动给 UDP/KCP 增加加密；原生 UDP 登录不得把它设置为 1。生产密码登录还必须设置应用目录外的 `ET_SECRET_ROOT`，并通过 `ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE` 挂载 RSA-4096 私钥。完整约束见 [020.6](../../Book/服务器上线升级/020.6-生产Secret部署契约与启动门禁.md)。
 
+轮换时可用 `ET_ACCOUNT_PASSWORD_KEYRING_FILE` 替代单私钥文件，并用 `ET_METRICS_PREVIOUS_TOKEN_FILE` 提供指标 Token 重叠窗口；具体 JSON、部署顺序和回滚要求见 [020.7](../../Book/服务器上线升级/020.7-Secret旧新凭据重叠轮换.md)。禁止同时设置密码单私钥与 Key Ring。
+
 ## 备份
 
 ```powershell

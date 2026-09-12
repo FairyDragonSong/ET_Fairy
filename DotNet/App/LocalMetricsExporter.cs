@@ -11,7 +11,8 @@ namespace ET;
 internal sealed class LocalMetricsExporter : IDisposable
 {
     private readonly HttpListener listener=new();
-    private readonly byte[] tokenDigest;
+    private readonly bool requireManagedRoot;
+    private readonly bool acceptPreviousToken;
     private readonly Task worker;
 
     internal static LocalMetricsExporter FromEnvironment()
@@ -21,15 +22,18 @@ internal sealed class LocalMetricsExporter : IDisposable
         if(string.IsNullOrEmpty(portText)&&string.IsNullOrEmpty(file))return null;
         if(!int.TryParse(portText,out int port)||port<1024||port>65535||string.IsNullOrEmpty(file)||!Path.IsPathFullyQualified(file))
             throw new InvalidOperationException("Invalid local metrics configuration");
-        string token=ProductionSecretPolicy.ReadManagedFile(file,128,Options.Instance?.Develop==0).Trim();
-        if(token.Length!=64)throw new InvalidOperationException("Metrics token must be 32 random bytes encoded as hex");
-        foreach(char c in token)if(!Uri.IsHexDigit(c))throw new InvalidOperationException("Invalid metrics token encoding");
-        return new LocalMetricsExporter(port,token);
+        bool production=Options.Instance?.Develop==0;
+        string token=ProductionSecretPolicy.ReadMetricsToken("ET_METRICS_TOKEN_FILE",production);
+        string previousFile=Environment.GetEnvironmentVariable("ET_METRICS_PREVIOUS_TOKEN_FILE");
+        string previous=string.IsNullOrWhiteSpace(previousFile)?null:ProductionSecretPolicy.ReadMetricsToken("ET_METRICS_PREVIOUS_TOKEN_FILE",production);
+        if(previous==token)throw new InvalidOperationException("Metrics rotation credentials must be distinct");
+        return new LocalMetricsExporter(port,production,previous!=null);
     }
 
-    private LocalMetricsExporter(int port,string token)
+    private LocalMetricsExporter(int port,bool requireManagedRoot,bool acceptPreviousToken)
     {
-        this.tokenDigest=SHA256.HashData(Encoding.ASCII.GetBytes("Bearer "+token));
+        this.requireManagedRoot=requireManagedRoot;
+        this.acceptPreviousToken=acceptPreviousToken;
         this.listener.Prefixes.Add($"http://127.0.0.1:{port}/");
         try {this.listener.Start();}
         catch {this.listener.Close();throw;}
@@ -50,7 +54,7 @@ internal sealed class LocalMetricsExporter : IDisposable
                 string authorization=context.Request.Headers["Authorization"];
                 if(context.Request.RemoteEndPoint==null||!IPAddress.IsLoopback(context.Request.RemoteEndPoint.Address)||
                     authorization==null||authorization.Length!=71||
-                    !CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.ASCII.GetBytes(authorization)),this.tokenDigest))
+                    !this.IsAuthorized(authorization))
                 {
                     context.Response.StatusCode=401;
                     continue;
@@ -82,6 +86,26 @@ internal sealed class LocalMetricsExporter : IDisposable
                 try {context.Response.StatusCode=503;}catch(Exception) { }
             }
             finally {try {context.Response.Close();}catch(Exception) { }}
+        }
+    }
+
+    private bool IsAuthorized(string authorization)
+    {
+        try
+        {
+            byte[] presented=SHA256.HashData(Encoding.ASCII.GetBytes(authorization));
+            string current=ProductionSecretPolicy.ReadMetricsToken("ET_METRICS_TOKEN_FILE",this.requireManagedRoot);
+            bool accepted=CryptographicOperations.FixedTimeEquals(presented,SHA256.HashData(Encoding.ASCII.GetBytes("Bearer "+current)));
+            if(this.acceptPreviousToken)
+            {
+                string previous=ProductionSecretPolicy.ReadMetricsToken("ET_METRICS_PREVIOUS_TOKEN_FILE",this.requireManagedRoot);
+                accepted|=CryptographicOperations.FixedTimeEquals(presented,SHA256.HashData(Encoding.ASCII.GetBytes("Bearer "+previous)));
+            }
+            return accepted;
+        }
+        catch(Exception)
+        {
+            return false;
         }
     }
 

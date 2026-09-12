@@ -17,6 +17,7 @@ public sealed class SelfPasswordChange
 [EnableClass]
 public sealed class PasswordChangeCipher
 {
+    public string KeyId { get; set; }
     public string Key { get; set; }
     public string Nonce { get; set; }
     public string Ciphertext { get; set; }

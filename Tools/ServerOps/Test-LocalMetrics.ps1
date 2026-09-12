@@ -28,6 +28,9 @@ if($LASTEXITCODE -ne 0){throw 'Cannot protect metrics test credentials'}
 $tokenFile=Join-Path $fixture 'token.txt'
 $token=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 [IO.File]::WriteAllText($tokenFile,$token)
+$previousTokenFile=Join-Path $fixture 'token-previous.txt'
+$previousToken=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+[IO.File]::WriteAllText($previousTokenFile,$previousToken)
 $process=$null
 $peer=$null
 $collector=$null
@@ -42,7 +45,7 @@ $client=[Net.Http.HttpClient]::new($handler)
 $client.Timeout=[TimeSpan]::FromSeconds(3)
 $checks=[Collections.Generic.List[string]]::new()
 $queryEvidence=[Collections.Generic.List[object]]::new()
-function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]$ProcessNumber=8){
+function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]$ProcessNumber=8,[string]$PreviousCredentialFile=''){
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
     $info.WorkingDirectory="$repo/Bin"
     $info.Arguments="--Process=$ProcessNumber --StartConfig=StartConfig/Release --Console=1 --ShutdownTimeoutSeconds=5"
@@ -50,8 +53,11 @@ function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]
     $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
     $info.Environment.Remove('ET_METRICS_PORT')|Out-Null
     $info.Environment.Remove('ET_METRICS_TOKEN_FILE')|Out-Null
+    $info.Environment.Remove('ET_METRICS_PREVIOUS_TOKEN_FILE')|Out-Null
+    $info.Environment['ET_SECRET_ROOT']=$fixture
     if($ConfiguredPort){$info.Environment['ET_METRICS_PORT']=$ConfiguredPort}
     if($CredentialFile){$info.Environment['ET_METRICS_TOKEN_FILE']=$CredentialFile}
+    if($PreviousCredentialFile){$info.Environment['ET_METRICS_PREVIOUS_TOKEN_FILE']=$PreviousCredentialFile}
     $child=[Diagnostics.Process]::new();$child.StartInfo=$info
     if(-not $child.Start()){throw 'Metrics test process did not start'}
     $script:stdout=$child.StandardOutput.ReadToEndAsync()
@@ -100,7 +106,7 @@ function Wait-Notification([string]$Status){
     throw 'Expected webhook notification did not arrive'
 }
 try {
-    $process=Start-TestProcess ([string]$Port) $tokenFile
+    $process=Start-TestProcess ([string]$Port) $tokenFile 8 $previousTokenFile
     $deadline=[DateTime]::UtcNow.AddSeconds(20)
     do {
         if($process.HasExited){throw 'Metrics process exited before readiness'}
@@ -115,6 +121,18 @@ try {
         if(-not $body.Contains('et_password_change_accepted_total') -or $body.Contains($token)){throw 'Metrics response missing counters or exposes credential'}
     } finally {$response.Dispose()}
     $checks.Add('authorized-scrape-and-no-secret')
+    $response=Request '/metrics' "Bearer $previousToken"
+    try {if([int]$response.StatusCode -ne 200){throw 'Previous metrics rotation credential was rejected'}}finally{$response.Dispose()}
+    $checks.Add('current-and-previous-rotation-credentials-accepted')
+    $rotatedToken=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    [IO.File]::WriteAllText($previousTokenFile,$token)
+    [IO.File]::WriteAllText($tokenFile,$rotatedToken)
+    foreach($rotationCase in @(@($rotatedToken,200),@($token,200),@($previousToken,401))){
+        $response=Request '/metrics' "Bearer $($rotationCase[0])"
+        try {if([int]$response.StatusCode -ne $rotationCase[1]){throw 'Live metrics credential rotation result was incorrect'}}finally{$response.Dispose()}
+    }
+    $token=$rotatedToken
+    $checks.Add('atomic-file-rotation-reloaded-without-process-restart')
     foreach($case in @(@('/metrics','',401,'GET'),@('/metrics','Bearer invalid',401,'GET'),@('/shutdown',"Bearer $token",404,'GET'),@('/metrics?token=x',"Bearer $token",404,'GET'),@('/metrics',"Bearer $token",405,'POST'))){
         $response=Request $case[0] $case[1] $case[3]
         try {if([int]$response.StatusCode -ne $case[2]){throw 'Unexpected metrics access-control response'}}finally{$response.Dispose()}
@@ -300,6 +318,7 @@ try {
     foreach($aux in @($manager,$receiver)){if($aux){if(-not $aux.HasExited){$aux.Kill($true);$aux.WaitForExit()};$aux.Dispose()}}
     $client.Dispose()
     if(Test-Path -LiteralPath $tokenFile){Remove-Item -LiteralPath $tokenFile -ErrorAction Stop}
+    if(Test-Path -LiteralPath $previousTokenFile){Remove-Item -LiteralPath $previousTokenFile -ErrorAction Stop}
     if(Test-Path -LiteralPath $peerTokenFile){Remove-Item -LiteralPath $peerTokenFile -ErrorAction Stop}
     if(Test-Path -LiteralPath $alertTokenFile){Remove-Item -LiteralPath $alertTokenFile -ErrorAction Stop}
 }

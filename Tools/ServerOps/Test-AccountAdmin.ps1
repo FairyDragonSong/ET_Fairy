@@ -10,6 +10,7 @@ $rsa=[Security.Cryptography.RSA]::Create(3072)
 $process=$null
 $passwordEncryption=$null
 $passwordPrivate=Join-Path $fixture 'password-private.pem'
+$passwordKeyRing=Join-Path $fixture 'password-keyring.json'
 $roleCreated=$false
 $rootUri=$env:ET_MONGO_URI
 function Read-Target {
@@ -40,7 +41,8 @@ try {
     ConvertTo-Json -InputObject @(@{Id='local-operator';PublicKeyPem=$rsa.ExportSubjectPublicKeyInfoPem();Database='ET_LOCAL_GAMEPLAY';DeploymentId=$deployment;Zone=1;Actions=$(if($PasswordReset){@('disable','enable','reset-password')}elseif($Lifecycle){@('disable','enable','revoke','close')}else{@('disable','enable')});ExpiresAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+3600}) | Set-Content $trust
     if($PasswordReset){
         $passwordEncryption=[Security.Cryptography.RSA]::Create(4096)
-        [IO.File]::WriteAllText($passwordPrivate,$passwordEncryption.ExportPkcs8PrivateKeyPem())
+        $keyNow=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        @{SchemaVersion=1;ActiveKeyId='admin-current';LegacyKeyId=$null;Keys=@(@{KeyId='admin-current';PrivateKeyPem=$passwordEncryption.ExportPkcs8PrivateKeyPem();NotBefore=$keyNow-60;NotAfter=$keyNow+3600})}|ConvertTo-Json -Depth 5|Set-Content $passwordKeyRing
         $passwordPublic=Join-Path $fixture 'password-public.pem'
         [IO.File]::WriteAllText($passwordPublic,$passwordEncryption.ExportSubjectPublicKeyInfoPem())
     }
@@ -72,7 +74,7 @@ try {
     $info.Environment['ET_ACCOUNT_ADMIN_MONGO_URI']=$limitedUri
     $info.Environment['ET_ACCOUNT_ADMIN_DATABASE']='ET_LOCAL_GAMEPLAY'
     $info.Environment['ET_ACCOUNT_ADMIN_ZONE']='1'
-    if($PasswordReset){$info.Environment['ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE']=$passwordPrivate}
+    if($PasswordReset){$info.Environment['ET_ACCOUNT_PASSWORD_KEYRING_FILE']=$passwordKeyRing}
     foreach($name in @($info.Environment.Keys)){if($name -match '^ET_MONGO_(URI|DATABASE)_ZONE_'){$info.Environment.Remove($name)|Out-Null}}
     $process=[Diagnostics.Process]::new();$process.StartInfo=$info
     if(-not $process.Start()){throw 'Admin server start failed'}
@@ -100,7 +102,7 @@ try {
         $env:ET_ADMIN_TEST_NEW_PASSWORD=[Guid]::NewGuid().ToString('N')
         $secure=ConvertTo-SecureString $env:ET_ADMIN_TEST_NEW_PASSWORD -AsPlainText -Force
         try {
-            & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action reset-password -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $restored.Version -ReasonCode local-test -OutputFile $reset -NewPassword $secure -PasswordEncryptionPublicKeyFile $passwordPublic
+            & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action reset-password -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $restored.Version -ReasonCode local-test -OutputFile $reset -NewPassword $secure -PasswordEncryptionPublicKeyFile $passwordPublic -PasswordEncryptionKeyId admin-current
         } finally {$secure.Dispose()}
         $resetEnvelope=Get-Content $reset -Raw|ConvertFrom-Json
         $resetPayload=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($resetEnvelope.Payload))
@@ -154,7 +156,7 @@ try {
     if(-not $process.WaitForExit(25000) -or $process.ExitCode -ne 0){throw 'Admin server shutdown failed'}
     $checks=@('tampered-signature-no-write','signed-disable','idempotent-repeat','signed-enable','audit-mutation-denied','account-delete-denied','role-access-denied')
     $checks += $(if($PasswordReset){@('encrypted-signed-reset','reset-idempotency','renewed-reset-idempotency','new-password-matches','old-password-rejected')}elseif($Lifecycle){@('signed-revoke','signed-close','close-idempotency','closed-cannot-enable')}else{@('two-audit-records','audit-unavailable-no-state-write','rate-limited','rejection-audits-persisted')})
-    @{Passed=$true;Lifecycle=[bool]$Lifecycle;Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Checks=$checks}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
+    @{Passed=$true;Lifecycle=[bool]$Lifecycle;PasswordReset=[bool]$PasswordReset;Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Checks=$checks}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
     Write-Host $(if($PasswordReset){'PASS password administration; isolated account has a new test password'}elseif($Lifecycle){'PASS lifecycle administration; isolated account retained as Closed'}else{'PASS signed administration end-to-end; isolated account restored'})
 } catch {
     @{Passed=$false;Commit=(& git -C $repo rev-parse HEAD).Trim();CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Reason='See test console failure; no command or credential content retained'}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
@@ -163,6 +165,7 @@ try {
     $rsa.Dispose()
     if($passwordEncryption){$passwordEncryption.Dispose()}
     if(Test-Path -LiteralPath $passwordPrivate){Remove-Item -LiteralPath $passwordPrivate}
+    if(Test-Path -LiteralPath $passwordKeyRing){Remove-Item -LiteralPath $passwordKeyRing}
     if($process){if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()};$process.Dispose()}
     $env:ET_MONGO_URI=$rootUri
     if($roleCreated){

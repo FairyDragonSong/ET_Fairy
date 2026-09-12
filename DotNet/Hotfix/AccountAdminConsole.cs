@@ -49,9 +49,8 @@ public sealed class AccountAdminConsole : IConsoleHandler
             if(command.Action=="reset-password")
             {
                 stage="credential_envelope";
-                string keyPath=Environment.GetEnvironmentVariable("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
                 passwordHash=AccountPasswordEnvelope.DecryptAndHash(command.EncryptedPassword,
-                    ProductionSecretPolicy.ReadManagedFile(keyPath,16384,Options.Instance.Develop==0));
+                    ProductionSecretPolicy.ReadPasswordPrivateKey(command.PasswordKeyId,Options.Instance.Develop==0));
                 credentialDigest=AccountPasswordEnvelope.Digest(command.EncryptedPassword);
             }
             stage="execution";
