@@ -82,8 +82,11 @@ jobs:
             [IO.File]::WriteAllText($publicKey, $rsa.ExportSubjectPublicKeyInfoPem())
           } finally { $rsa.Dispose() }
           try {
-            ./Tools/ServerOps/New-ServerRelease.ps1 -Version $version -OutputRoot $root -SigningPrivateKeyFile $privateKey -SigningKeyId ci-ephemeral
-            ./Tools/ServerOps/Test-ServerRelease.ps1 -ReleaseDirectory (Join-Path $root $version) -TrustedPublicKeyFile $publicKey -ExpectedSigningKeyId ci-ephemeral -RequireCleanProvenance -RuntimeSmoke
+            ./Tools/ServerOps/New-ServerRelease.ps1 -Version $version -OutputRoot $root -SigningPrivateKeyFile $privateKey -SigningKeyId ci-ephemeral `
+              -PackageSupplier 'ET CI Test' -SbomNamespaceBase 'https://example.invalid/et-ci/sbom'
+            ./Tools/ServerOps/Test-ServerRelease.ps1 -ReleaseDirectory (Join-Path $root $version) -TrustedPublicKeyFile $publicKey `
+              -ExpectedSigningKeyId ci-ephemeral -ExpectedPackageSupplier 'ET CI Test' `
+              -ExpectedSbomNamespaceBase 'https://example.invalid/et-ci/sbom' -RequireCleanProvenance -RuntimeSmoke
           } finally {
             Remove-Item -LiteralPath $privateKey -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $publicKey -Force -ErrorAction SilentlyContinue

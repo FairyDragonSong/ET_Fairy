@@ -3,6 +3,8 @@ param(
     [string]$OutputRoot=(Join-Path $PSScriptRoot '../../Publish/Server'),
     [string]$SigningPrivateKeyFile,
     [ValidatePattern('^[0-9A-Za-z._-]{3,64}$')][string]$SigningKeyId,
+    [Parameter(Mandatory)][ValidatePattern('^[^:\r\n]{2,120}$')][string]$PackageSupplier,
+    [Parameter(Mandatory)][uri]$SbomNamespaceBase,
     [switch]$AllowDirtyTestArtifact,
     [switch]$AllowUnsignedTestArtifact
 )
@@ -15,6 +17,7 @@ $commit=(& git -C $repositoryRoot rev-parse HEAD).Trim()
 if($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-f0-9]{40}$'){throw 'Source commit is unavailable'}
 $dirty=@(& git -C $repositoryRoot status --porcelain).Count -ne 0
 if($dirty -and -not $AllowDirtyTestArtifact){throw 'Release creation requires a clean worktree'}
+if(-not $SbomNamespaceBase.IsAbsoluteUri -or $SbomNamespaceBase.Scheme -ne 'https'){throw 'SBOM namespace base must be an absolute HTTPS URI'}
 $signed=-not [string]::IsNullOrWhiteSpace($SigningPrivateKeyFile)
 if($signed -ne (-not [string]::IsNullOrWhiteSpace($SigningKeyId))){throw 'Signing key file and key id must be provided together'}
 if(-not $signed -and -not $AllowUnsignedTestArtifact){throw 'Release creation requires an external signing key'}
@@ -58,6 +61,28 @@ try{
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'Config/Excel/s') -Destination (Join-Path $config 'Excel/s') -Recurse
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'Config/Recast') -Destination (Join-Path $config 'Recast') -Recurse
 
+    $toolManifest=Join-Path $repositoryRoot '.config/dotnet-tools.json'
+    & dotnet tool restore --tool-manifest $toolManifest
+    if($LASTEXITCODE -ne 0){throw 'Pinned SBOM tool restore failed'}
+    $sbomTimestamp=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $validationOutput=Join-Path $staging 'sbom-validation.json'
+    Push-Location $repositoryRoot
+    try{
+        & dotnet tool run sbom-tool -- Generate -b $package -bc (Join-Path $repositoryRoot 'DotNet') -pn ET.Server -pv $Version `
+            -ps $PackageSupplier -nsb $SbomNamespaceBase.AbsoluteUri.TrimEnd('/') -nsu "$commit-$Version" -gt $sbomTimestamp `
+            -F false -pm true -li false -mi SPDX:2.2 -V Warning
+        if($LASTEXITCODE -ne 0){throw 'SPDX SBOM generation failed'}
+        & dotnet tool run sbom-tool -- Validate -b $package -o $validationOutput -mi SPDX:2.2 -F false -n -V Warning
+        if($LASTEXITCODE -ne 0){throw 'SPDX SBOM validation failed'}
+    }
+    finally{Pop-Location}
+    $validation=Get-Content -LiteralPath $validationOutput -Raw|ConvertFrom-Json -Depth 12
+    if($validation.Result -ne 'Success' -or $validation.ValidationErrors.Count -ne 0 -or
+        $validation.Summary.ValidationTelemetery.TotalPackagesInManifest -lt 1){throw 'SPDX SBOM validation report is incomplete'}
+    Remove-Item -LiteralPath $validationOutput -Force
+    $spdxPath=Join-Path $package '_manifest/spdx_2.2/manifest.spdx.json'
+    if(-not(Test-Path -LiteralPath $spdxPath -PathType Leaf)){throw 'SPDX 2.2 manifest is missing'}
+
     $files=@(Get-ChildItem -LiteralPath $package -File -Recurse|Sort-Object FullName|ForEach-Object{
         [ordered]@{Path=$_.FullName.Substring($package.Length+1).Replace('\','/');Bytes=$_.Length;
             Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
@@ -66,7 +91,8 @@ try{
         WorktreeDirty=$dirty;CreatedAtUtc=[DateTime]::UtcNow.ToString('O');Platform='windows-x64';SelfContained=$false;
         RequiredRuntime='Microsoft.NETCore.App 8.0';StartWorkingDirectory='Bin';Files=$files}
     $utf8=[Text.UTF8Encoding]::new($false)
-    $manifestPath=Join-Path $package 'manifest.json'
+    $manifestPath=Join-Path $package '_manifest/et/release-manifest.json'
+    New-Item -ItemType Directory -Path (Split-Path $manifestPath -Parent) -Force|Out-Null
     [IO.File]::WriteAllText($manifestPath,($manifest|ConvertTo-Json -Depth 6),$utf8)
     $manifestHash=(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
 

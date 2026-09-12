@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory)][string]$ReleaseDirectory,
     [string]$TrustedPublicKeyFile,
     [ValidatePattern('^[0-9A-Za-z._-]{3,64}$')][string]$ExpectedSigningKeyId,
+    [ValidatePattern('^[^:\r\n]{2,120}$')][string]$ExpectedPackageSupplier,
+    [uri]$ExpectedSbomNamespaceBase,
     [switch]$RequireCleanProvenance,
     [switch]$RuntimeSmoke,
     [switch]$AllowUnsignedTestArtifact
@@ -18,6 +20,12 @@ if(-not(Test-Path -LiteralPath $checksumPath -PathType Leaf)){throw 'Detached ar
 $signed=-not [string]::IsNullOrWhiteSpace($TrustedPublicKeyFile)
 if($signed -ne (-not [string]::IsNullOrWhiteSpace($ExpectedSigningKeyId))){throw 'Trusted public key and expected key id must be provided together'}
 if(-not $signed -and -not $AllowUnsignedTestArtifact){throw 'Release verification requires a trusted public key'}
+if($signed -and ([string]::IsNullOrWhiteSpace($ExpectedPackageSupplier) -or $null -eq $ExpectedSbomNamespaceBase)){
+    throw 'Signed release verification requires the expected SBOM supplier and namespace'
+}
+if($null -ne $ExpectedSbomNamespaceBase -and (-not $ExpectedSbomNamespaceBase.IsAbsoluteUri -or $ExpectedSbomNamespaceBase.Scheme -ne 'https')){
+    throw 'Expected SBOM namespace base must be an absolute HTTPS URI'
+}
 $releaseFiles=@(Get-ChildItem -LiteralPath $release -File)
 $expectedReleaseFileCount=$(if($signed){4}else{2})
 if($releaseFiles.Count -ne $expectedReleaseFileCount){throw 'Release directory contains an unexpected number of files'}
@@ -62,7 +70,8 @@ if($signed){
 $extract=Join-Path $env:TEMP ('et-release-verify-'+[guid]::NewGuid().ToString('N'))
 try{
     Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extract
-    $manifestPath=Join-Path $extract 'manifest.json'
+    $manifestPath=Join-Path $extract '_manifest/et/release-manifest.json'
+    if(-not(Test-Path -LiteralPath $manifestPath -PathType Leaf)){$manifestPath=Join-Path $extract 'manifest.json'}
     if(-not(Test-Path -LiteralPath $manifestPath -PathType Leaf)){throw 'Release manifest is missing'}
     $manifest=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json -Depth 10
     if($manifest.SchemaVersion -ne 1 -or $manifest.Product -ne 'ET.Server' -or $manifest.SourceCommit -notmatch '^[a-f0-9]{40}$'){
@@ -74,9 +83,30 @@ try{
         if($manifestHash -ne $attestation.ManifestSha256 -or $manifest.SourceCommit -ne $attestation.SourceCommit -or
             $manifest.Version -ne $attestation.Version){throw 'Signed attestation does not match archive manifest'}
     }
+    $spdxPath=Join-Path $extract '_manifest/spdx_2.2/manifest.spdx.json'
+    $hasSpdx=Test-Path -LiteralPath $spdxPath -PathType Leaf
+    if(-not $hasSpdx -and -not $AllowUnsignedTestArtifact){throw 'SPDX 2.2 SBOM is missing'}
+    if($hasSpdx){
+        $spdx=Get-Content -LiteralPath $spdxPath -Raw|ConvertFrom-Json -Depth 30
+        if($spdx.spdxVersion -ne 'SPDX-2.2' -or $spdx.dataLicense -ne 'CC0-1.0' -or
+            $spdx.name -ne "ET.Server $($manifest.Version)" -or
+            $spdx.documentNamespace -ne "$($ExpectedSbomNamespaceBase.AbsoluteUri.TrimEnd('/'))/ET.Server/$($manifest.Version)/$($manifest.SourceCommit)-$($manifest.Version)"){
+            throw 'SPDX SBOM identity is invalid'
+        }
+        $packages=@{};foreach($packageEntry in @($spdx.packages)){$packages[[string]$packageEntry.name]=[string]$packageEntry.versionInfo}
+        foreach($requiredPackage in @{'ET.Server'=$manifest.Version;'MongoDB.Driver'='2.30.0';'SharpCompress'='0.50.4';'Snappier'='1.3.1'}.GetEnumerator()){
+            if($packages[$requiredPackage.Key] -ne $requiredPackage.Value){throw "Required SBOM package missing or wrong: $($requiredPackage.Key)"}
+        }
+        if($packages.ContainsKey('EPPlus')){throw 'Removed EPPlus dependency reappeared in SBOM'}
+        $rootPackage=@($spdx.packages|Where-Object{$_.SPDXID -eq 'SPDXRef-RootPackage'})
+        if($rootPackage.Count -ne 1 -or $rootPackage[0].supplier -ne "Organization: $ExpectedPackageSupplier"){
+            throw 'SPDX package supplier is not trusted'
+        }
+        $sbomPackageCount=@($spdx.packages).Count
+    }
     $expected=@{}
     foreach($entry in @($manifest.Files)){
-        if($entry.Path -notmatch '^(Bin|Config)/' -or $entry.Path -match '(^|/)\.\.(/|$)' -or $expected.ContainsKey($entry.Path)){
+        if($entry.Path -notmatch '^(Bin|Config|_manifest/spdx_2\.2)/' -or $entry.Path -match '(^|/)\.\.(/|$)' -or $expected.ContainsKey($entry.Path)){
             throw 'Manifest contains an unsafe or duplicate path'
         }
         $expected[$entry.Path]=$entry
@@ -91,8 +121,10 @@ try{
         $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         if($hash -ne ([string]$entry.Sha256).ToLowerInvariant()){throw "Release file hash mismatch: $relative"}
     }
-    foreach($required in @('Bin/App.exe','Bin/App.dll','Bin/App.runtimeconfig.json','Bin/Hotfix.dll','Bin/Hotfix.pdb',
-        'Config/NLog/NLog.config','Config/NLog/NLog.Bounded.config')){
+    $requiredFiles=@('Bin/App.exe','Bin/App.dll','Bin/App.runtimeconfig.json','Bin/Hotfix.dll','Bin/Hotfix.pdb',
+        'Config/NLog/NLog.config','Config/NLog/NLog.Bounded.config')
+    if($hasSpdx){$requiredFiles+=@('_manifest/spdx_2.2/manifest.spdx.json','_manifest/spdx_2.2/manifest.spdx.json.sha256')}
+    foreach($required in $requiredFiles){
         if(-not $expected.ContainsKey($required)){throw "Required manifest file missing: $required"}
     }
     $smokePassed=$false
@@ -124,6 +156,7 @@ try{
     [ordered]@{Passed=$true;Archive=$archive.FullName;Sha256=$actual;Version=$manifest.Version;
         SourceCommit=$manifest.SourceCommit;WorktreeDirty=[bool]$manifest.WorktreeDirty;Files=$actualFiles.Count;
         Signed=$signed;SigningKeyId=$(if($signed){$attestation.SigningKeyId}else{$null});
+        SbomPackages=$(if($hasSpdx){$sbomPackageCount}else{$null});
         RuntimeSmoke=$(if($RuntimeSmoke){$smokePassed}else{$null})}|ConvertTo-Json
 }
 finally{
