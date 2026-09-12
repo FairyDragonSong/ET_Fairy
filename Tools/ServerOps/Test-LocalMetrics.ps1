@@ -1,6 +1,11 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492)
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492,[switch]$Prometheus)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
+if($Prometheus){
+    if($Port -eq 30909 -or $PeerPort -eq 30909 -or (Get-NetTCPConnection -LocalPort 30909 -State Listen -ErrorAction SilentlyContinue)){throw 'Collector test port 30909 unavailable'}
+    $promRoot="$EnvironmentRoot/prometheus-3.13.3/prometheus-3.13.3.windows-amd64"
+    if(-not (Test-Path "$promRoot/prometheus.exe")){throw 'Run Install-LocalPrometheus.ps1 first'}
+}
 if(@($Port,$PeerPort,30300,30301,20008,20009|Select-Object -Unique).Count -ne 6){throw 'Metrics test ports must be distinct from each other and service ports'}
 foreach($testPort in @($Port,$PeerPort,30300,30301,20008,20009)){
     if(Get-NetTCPConnection -LocalPort $testPort -State Listen -ErrorAction SilentlyContinue){throw "Test port occupied: $testPort"}
@@ -16,6 +21,7 @@ $token=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::Get
 [IO.File]::WriteAllText($tokenFile,$token)
 $process=$null
 $peer=$null
+$collector=$null
 $peerTokenFile=Join-Path $fixture 'peer-token.txt'
 $peerToken=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 [IO.File]::WriteAllText($peerTokenFile,$peerToken)
@@ -23,6 +29,7 @@ $handler=[Net.Http.HttpClientHandler]::new();$handler.UseProxy=$false
 $client=[Net.Http.HttpClient]::new($handler)
 $client.Timeout=[TimeSpan]::FromSeconds(3)
 $checks=[Collections.Generic.List[string]]::new()
+$queryEvidence=[Collections.Generic.List[object]]::new()
 function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]$ProcessNumber=8){
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
     $info.WorkingDirectory="$repo/Bin"
@@ -49,6 +56,24 @@ function Request([string]$Path,[string]$Authorization,[string]$Method='GET',[int
 function Counter([string]$Body,[string]$Name){
     if($Body -notmatch "(?m)^$Name (\d+)\r?$"){throw 'Expected process counter missing'}
     return [long]$Matches[1]
+}
+function PromQuery([string]$Expression){
+    $url='http://127.0.0.1:30909/api/v1/query?query='+[Uri]::EscapeDataString($Expression)
+    return ($client.GetStringAsync($url).GetAwaiter().GetResult()|ConvertFrom-Json).data.result
+}
+function Wait-Prom([string]$Expression,[string]$Expected){
+    for($attempt=0;$attempt -lt 40;$attempt++){
+        if($collector.HasExited){throw 'Collector exited during acceptance'}
+        try {
+            $values=@(PromQuery $Expression)
+            if($values.Count -eq 1 -and $values[0].value[1] -eq $Expected){
+                $queryEvidence.Add([ordered]@{Expression=$Expression;Value=$values[0].value[1];SampleTimestamp=$values[0].value[0];ObservedAtUtc=[DateTime]::UtcNow.ToString('O')})
+                return
+            }
+        }catch { }
+        Start-Sleep -Milliseconds 500
+    }
+    throw 'Collector query did not reach expected state'
 }
 try {
     $process=Start-TestProcess ([string]$Port) $tokenFile
@@ -102,6 +127,29 @@ try {
     if((Counter $primaryBody 'et_startup_ready') -ne 1 -or (Counter $peerBody 'et_startup_ready') -ne 1){throw 'Both processes must be ready during the isolation test'}
     if((Counter $primaryBody 'et_http_requests_total') -le $beforePrimary -or (Counter $peerBody 'et_http_requests_total') -ne $beforePeer){throw 'Per-process counter isolation failed'}
     $checks.Add('two-ready-process-identities-credentials-and-counters-isolated')
+    if($Prometheus){
+        $jobs=@(
+            @{job_name='et-primary';authorization=@{type='Bearer';credentials_file=$tokenFile.Replace('\','/')};static_configs=@(@{targets=@("127.0.0.1:$Port")})},
+            @{job_name='et-peer';authorization=@{type='Bearer';credentials_file=$peerTokenFile.Replace('\','/')};static_configs=@(@{targets=@("127.0.0.1:$PeerPort")})}
+        )
+        $config=Join-Path $fixture 'prometheus.json'
+        @{global=@{scrape_interval='1s';scrape_timeout='500ms';evaluation_interval='1s'};rule_files=@("$PSScriptRoot/monitoring/et-local.rules.yml".Replace('\','/'));scrape_configs=$jobs}|ConvertTo-Json -Depth 10|Set-Content $config
+        & "$promRoot/promtool.exe" check config $config
+        if($LASTEXITCODE -ne 0){throw 'Collector config validation failed'}
+        $collectorInfo=[Diagnostics.ProcessStartInfo]::new("$promRoot/prometheus.exe")
+        $collectorInfo.UseShellExecute=$false;$collectorInfo.CreateNoWindow=$true
+        $collectorInfo.RedirectStandardOutput=$true;$collectorInfo.RedirectStandardError=$true
+        foreach($argument in @("--config.file=$config",'--web.listen-address=127.0.0.1:30909',"--storage.tsdb.path=$fixture/tsdb",'--storage.tsdb.retention.time=1d','--storage.tsdb.retention.size=128MB')){$collectorInfo.ArgumentList.Add($argument)}
+        $collector=[Diagnostics.Process]::new();$collector.StartInfo=$collectorInfo
+        if(-not $collector.Start()){throw 'Collector did not start'}
+        $collectorOutput=$collector.StandardOutput.ReadToEndAsync();$collectorError=$collector.StandardError.ReadToEndAsync()
+        Wait-Prom 'up{job="et-primary"}' '1'
+        Wait-Prom 'up{job="et-peer"}' '1'
+        Wait-Prom 'et_process_id{job="et-primary"}' ([string]$process.Id)
+        Wait-Prom 'et_process_id{job="et-peer"}' ([string]$peer.Id)
+        if(@(Get-NetTCPConnection -LocalPort 30909 -State Listen|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Collector is not loopback-only'}
+        $checks.Add('prometheus-two-authenticated-targets-and-identities')
+    }
     $address=Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.AddressState -eq 'Preferred'} | Select-Object -First 1 -ExpandProperty IPAddress
     if(-not $address){throw 'A local non-loopback address is required to verify legacy metrics isolation'}
     $legacy=$client.GetAsync("http://${address}:30300/metrics").GetAwaiter().GetResult()
@@ -112,6 +160,20 @@ try {
     $process.Dispose();$process=$null
     if(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue){throw 'Exporter port retained after shutdown'}
     $checks.Add('graceful-shutdown-releases-exporter-port')
+    if($Prometheus){
+        Wait-Prom 'up{job="et-primary"}' '0'
+        Wait-Prom 'ALERTS{alertname="ETLocalTargetDown",job="et-primary",alertstate="firing"}' '1'
+        Wait-Prom 'up{job="et-peer"}' '1'
+        $checks.Add('prometheus-target-down-and-firing-with-peer-healthy')
+        $process=Start-TestProcess ([string]$Port) $tokenFile
+        Wait-Prom 'up{job="et-primary"}' '1'
+        Wait-Prom 'et_process_id{job="et-primary"}' ([string]$process.Id)
+        Wait-Prom 'absent(ALERTS{alertname="ETLocalTargetDown",job="et-primary",alertstate="firing"})' '1'
+        $checks.Add('prometheus-restarted-target-new-pid-and-alert-cleared')
+        $process.StandardInput.WriteLine('shutdown')
+        if(-not $process.WaitForExit(12000) -or $process.ExitCode -ne 0){throw 'Recovered target shutdown failed'}
+        $process.Dispose();$process=$null
+    }
     $peerResponse=Request '/metrics' "Bearer $peerToken" 'GET' $PeerPort
     try {
         $peerBody=$peerResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
@@ -144,11 +206,12 @@ try {
     if(-not $process.WaitForExit(12000) -or $process.ExitCode -ne 0){throw 'Default-disabled shutdown failed'}
     $process.Dispose();$process=$null
     $checks.Add('disabled-by-default')
-    [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Checks=@($checks);ProductionMonitoringVerified=$false}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
+    [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Checks=@($checks);LocalCollectorVerified=[bool]$Prometheus;QueryEvidence=@($queryEvidence);ProductionMonitoringVerified=$false}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
     foreach($check in $checks){Write-Host "PASS $check"}
 }finally{
     if($process){if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()};$process.Dispose()}
     if($peer){if(-not $peer.HasExited){$peer.Kill($true);$peer.WaitForExit()};$peer.Dispose()}
+    if($collector){if(-not $collector.HasExited){$collector.Kill($true);$collector.WaitForExit()};$collector.Dispose()}
     $client.Dispose()
     if(Test-Path -LiteralPath $tokenFile){Remove-Item -LiteralPath $tokenFile -ErrorAction Stop}
     if(Test-Path -LiteralPath $peerTokenFile){Remove-Item -LiteralPath $peerTokenFile -ErrorAction Stop}

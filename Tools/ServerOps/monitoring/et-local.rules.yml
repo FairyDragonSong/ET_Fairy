@@ -1,0 +1,12 @@
+groups:
+  - name: et-local-acceptance
+    interval: 1s
+    rules:
+      - alert: ETLocalTargetDown
+        expr: up{job=~"et-primary|et-peer"} == 0
+        for: 3s
+        labels:
+          severity: test
+        annotations:
+          summary: Local ET scrape target is unavailable
+          description: Acceptance-only threshold; not a production SLO or notification policy.
