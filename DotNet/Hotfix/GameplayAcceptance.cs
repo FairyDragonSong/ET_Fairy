@@ -311,6 +311,9 @@ public sealed class GameplayAcceptance : IConsoleHandler
         List<Session> sessions=new();List<string> errors=new();List<ETTask> tasks=new();
         int count=ReadLoadSetting("ET_GAMEPLAY_CLIENTS",20,1,3000);
         int duration=ReadLoadSetting("ET_GAMEPLAY_DURATION",0,0,86400);
+        bool capacity = Environment.GetEnvironmentVariable("ET_GAMEPLAY_CAPACITY_PROFILE") == "1";
+        if (capacity) Check(Options.Instance.Develop == 1 && Options.Instance.LoginIpLimit >= count,
+            "Capacity profile requires explicit development login allowance");
         int batch=Math.Min(20,Options.Instance.LoginIpLimit);
         Check(batch>0,"Login IP limit must be positive");
         long[] latency=new long[count];Stopwatch total=Stopwatch.StartNew();
@@ -330,8 +333,15 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 await ETTaskHelper.WaitAll(tasks);
                 Check(errors.Count==0,$"Concurrent clients failed: {string.Join(';',errors)}");
                 Console.WriteLine($"GAMEPLAY_PROGRESS connected={sessions.Count} target={count}");
+                process.Refresh();
+                peakWorkingSet = Math.Max(peakWorkingSet, process.WorkingSet64);
                 if(sessions.Count<count)
                 {
+                    if (capacity)
+                    {
+                        await Probe();
+                        continue;
+                    }
                     // Keep the production anti-abuse limit; a single loopback source must ramp slowly.
                     for(int seconds=0;seconds<Options.Instance.LoginRateWindowSeconds+1;seconds+=5)
                     {
@@ -369,15 +379,26 @@ public sealed class GameplayAcceptance : IConsoleHandler
 
         async ETTask Probe()
         {
-            foreach(Session session in sessions)
+            if (capacity)
             {
+                for (int offset = 0; offset < sessions.Count; offset += 20)
+                {
+                    var probes = new List<ETTask>();
+                    for (int i = offset; i < Math.Min(offset + 20, sessions.Count); ++i) probes.Add(ProbeOne(sessions[i]));
+                    await ETTaskHelper.WaitAll(probes);
+                }
+            }
+            else foreach (Session session in sessions) await ProbeOne(session);
+        }
+
+        async ETTask ProbeOne(Session session)
+        {
                 Check(!session.IsDisposed,"Concurrent connection dropped");
                 Stopwatch request=Stopwatch.StartNew();
                 await Echo(session,701);
                 maxRpcMs=Math.Max(maxRpcMs,request.ElapsedMilliseconds);
                 ++requests;
                 if(requests%100==0)Console.WriteLine($"GAMEPLAY_PROGRESS rpc_count={requests} rpc_max_ms={maxRpcMs}");
-            }
         }
 
         async ETTask Connect(int index)

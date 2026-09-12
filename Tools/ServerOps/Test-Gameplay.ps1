@@ -1,7 +1,8 @@
 param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
-    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0)
+    [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile)
 $ErrorActionPreference='Stop'
 if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load parameters require -Baseline'}
+if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolated Baseline mode'}
 if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
 if($SaveFailure -or $LeaseExpiry){$Outage=$true}
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
@@ -18,10 +19,12 @@ foreach($port in @(20001,30002,30003,30004,30300,30301,30302,30303,30304)) {
 $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
 $info.WorkingDirectory="$repo/Bin"
 $info.Arguments='--Process=1 --StartConfig=StartConfig/Localhost --Develop=1 --PasswordLoginEnabled=1 --AccountAutoRegister=1 --Console=1 --ShutdownTimeoutSeconds=20'
+if($CapacityProfile){$info.Arguments+=" --LoginIpLimit=$Clients"}
 $info.UseShellExecute=$false;$info.CreateNoWindow=$true
 $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
 $info.Environment['ET_GAMEPLAY_CLIENTS']=[string]$Clients
 $info.Environment['ET_GAMEPLAY_DURATION']=[string]$DurationSeconds
+$info.Environment['ET_GAMEPLAY_CAPACITY_PROFILE']=$(if($CapacityProfile){'1'}else{'0'})
 foreach($name in @($info.Environment.Keys)){if($name -match '^ET_MONGO_(URI|DATABASE)_ZONE_'){$info.Environment.Remove($name)|Out-Null}}
 $process=[Diagnostics.Process]::new();$process.StartInfo=$info
 $lines=[Collections.Generic.List[string]]::new()
@@ -45,12 +48,20 @@ try {
     $process.StandardInput.WriteLine($(if($SelfCredentials){'gameplay-check self-credentials'}elseif($Credentials){'gameplay-check credentials'}elseif($LeaseExpiry){'gameplay-check lease-expiry'}elseif($Governance){'gameplay-check governance'}elseif($Resume){'gameplay-check resume'}elseif($SaveFailure){'gameplay-check save-failure'}elseif($Outage){'gameplay-check outage'}elseif($Baseline){'gameplay-check baseline'}else{'gameplay-check'}))
     $deadline=[DateTime]::UtcNow.AddSeconds($(if($Baseline){240+$DurationSeconds+[Math]::Ceiling($Clients/20.0)*90}else{240}))
     $passed=$false
+    $lastResourceCheck=[DateTime]::MinValue
     while([DateTime]::UtcNow -lt $deadline){
         $lineTask=$process.StandardOutput.ReadLineAsync()
         if(-not $lineTask.Wait([TimeSpan]::FromSeconds(60))){throw 'Gameplay output timed out'}
         $line=$lineTask.Result
         if($null -eq $line){break}
         if($line -match 'GAMEPLAY_'){$lines.Add($line);Write-Host $line}
+        if($CapacityProfile -and ([DateTime]::UtcNow-$lastResourceCheck).TotalSeconds -ge 5){
+            $lastResourceCheck=[DateTime]::UtcNow
+            $process.Refresh()
+            if($process.WorkingSet64 -gt 8GB -or (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 2MB){
+                throw 'Local capacity resource guard reached (8 GiB process or less than 2 GiB free host RAM)'
+            }
+        }
         if($Outage -and $line -match 'GAMEPLAY_OUTAGE_STOP'){
             & "$PSScriptRoot/LocalMongo.ps1" -Action Crash -EnvironmentRoot $EnvironmentRoot
             'stopped' | Set-Content "$env:ET_LOCAL_MONGO_ROOT/outage-stopped"
@@ -71,10 +82,16 @@ try {
     if(-not $process.WaitForExit(25000) -or $process.ExitCode -ne $expectedExit){throw "Gameplay server did not return expected shutdown exit code $expectedExit"}
     if($SaveFailure){$lines.Add('GAMEPLAY_PASS storage-failure-shutdown-exit-2');Write-Host 'GAMEPLAY_PASS storage-failure-shutdown-exit-2'}
     $report=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Clients=$Clients;DurationSeconds=$DurationSeconds;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_PASS'});Samples=@($lines|Where-Object{$_ -match 'GAMEPLAY_PROGRESS'});ProductionCapacityVerified=$false}
+    $report.CapacityProfile=[bool]$CapacityProfile
+    $report.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
+    $report.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
     $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/$(if($SelfCredentials){'gameplay-self-credentials'}elseif($Credentials){'gameplay-credentials'}elseif($LeaseExpiry){'gameplay-lease-expiry'}elseif($Governance){'gameplay-governance'}elseif($Resume){'gameplay-restart'}elseif($SaveFailure){'gameplay-save-failure'}elseif($Outage){'gameplay-outage'}elseif($Baseline){'gameplay-baseline'}else{'gameplay'}).json"
     $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/gameplay-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
+    $failure.CapacityProfile=[bool]$CapacityProfile
+    $failure.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
+    $failure.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
     $failure | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/gameplay-failed-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
     throw
 } finally {
