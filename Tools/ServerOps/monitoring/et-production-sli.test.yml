@@ -1,0 +1,46 @@
+rule_files:
+  - et-production-sli.rules.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: map transfer backlog fires and resolves
+    interval: 1m
+    input_series:
+      - series: 'et_map_transfers_inflight{job="gate"}'
+        values: '0 1 1 1 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ETMapTransferStuck
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: gate
+            exp_annotations:
+              summary: ET has a map transfer in flight for longer than two minutes
+              runbook_url: Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md
+      - eval_time: 5m
+        alertname: ETMapTransferStuck
+        exp_alerts: []
+
+  - name: sustained realm errors fire fast burn and recovery clears it
+    interval: 1m
+    input_series:
+      - series: 'et_login_successes_total{job="realm"}'
+        values: '0+10x80'
+      - series: 'et_login_service_errors_total{job="realm"}'
+        values: '0+1x65 65+0x15'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ETStageAvailabilityFastBurn
+        exp_alerts:
+          - exp_labels:
+              stage: realm
+              severity: critical
+              objective: internal-availability-99.5
+            exp_annotations:
+              summary: ET stage is rapidly consuming its availability error budget
+              runbook_url: Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md
+      - eval_time: 75m
+        alertname: ETStageAvailabilityFastBurn
+        exp_alerts: []

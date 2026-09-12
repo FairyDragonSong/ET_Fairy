@@ -1,0 +1,87 @@
+groups:
+  - name: et-sli-normalization
+    interval: 30s
+    rules:
+      - record: et_sli_stage_successes_total
+        labels:
+          stage: realm
+        expr: et_login_successes_total
+      - record: et_sli_stage_service_errors_total
+        labels:
+          stage: realm
+        expr: et_login_service_errors_total
+      - record: et_sli_stage_successes_total
+        labels:
+          stage: gate
+        expr: et_gate_login_successes_total
+      - record: et_sli_stage_service_errors_total
+        labels:
+          stage: gate
+        expr: et_gate_login_service_errors_total
+      - record: et_sli_stage_successes_total
+        labels:
+          stage: map-transfer
+        expr: et_map_transfer_successes_total
+      - record: et_sli_stage_service_errors_total
+        labels:
+          stage: map-transfer
+        expr: et_map_transfer_failures_total
+
+  - name: et-production-sli-alerts
+    interval: 30s
+    rules:
+      - alert: ETStageAvailabilityFastBurn
+        expr: |
+          (
+            sum by (stage) (rate(et_sli_stage_service_errors_total[5m]))
+            /
+            clamp_min(sum by (stage) (rate(et_sli_stage_successes_total[5m]) + rate(et_sli_stage_service_errors_total[5m])), 0.000000001)
+          ) > 0.07
+          and on (stage)
+          (
+            sum by (stage) (rate(et_sli_stage_service_errors_total[1h]))
+            /
+            clamp_min(sum by (stage) (rate(et_sli_stage_successes_total[1h]) + rate(et_sli_stage_service_errors_total[1h])), 0.000000001)
+          ) > 0.03
+          and on (stage)
+          sum by (stage) (increase(et_sli_stage_successes_total[5m]) + increase(et_sli_stage_service_errors_total[5m])) >= 20
+        for: 5m
+        labels:
+          severity: critical
+          objective: internal-availability-99.5
+        annotations:
+          summary: ET stage is rapidly consuming its availability error budget
+          runbook_url: Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md
+
+      - alert: ETStageAvailabilitySlowBurn
+        expr: |
+          (
+            sum by (stage) (rate(et_sli_stage_service_errors_total[30m]))
+            /
+            clamp_min(sum by (stage) (rate(et_sli_stage_successes_total[30m]) + rate(et_sli_stage_service_errors_total[30m])), 0.000000001)
+          ) > 0.03
+          and on (stage)
+          (
+            sum by (stage) (rate(et_sli_stage_service_errors_total[6h]))
+            /
+            clamp_min(sum by (stage) (rate(et_sli_stage_successes_total[6h]) + rate(et_sli_stage_service_errors_total[6h])), 0.000000001)
+          ) > 0.01
+          and on (stage)
+          sum by (stage) (increase(et_sli_stage_successes_total[30m]) + increase(et_sli_stage_service_errors_total[30m])) >= 100
+        for: 15m
+        labels:
+          severity: warning
+          objective: internal-availability-99.5
+        annotations:
+          summary: ET stage is persistently consuming its availability error budget
+          runbook_url: Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md
+
+      - alert: ETMapTransferStuck
+        expr: max(et_map_transfers_inflight) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: gate
+        annotations:
+          summary: ET has a map transfer in flight for longer than two minutes
+          runbook_url: Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md

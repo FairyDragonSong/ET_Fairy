@@ -178,6 +178,10 @@ Windows SCM 托管先用 `New-ServerSupervisorConfiguration.ps1` 生成签名生
 .\Test-SecretLeaseGovernance.ps1
 ```
 
+## 生产 SLI 规则
+
+`monitoring/et-production-sli.rules.yml` 将 Realm、Gate 和地图传送的成功/服务故障计数标准化为固定 `stage`，提供内部 99.5% 工程基线的快速/慢速错误预算告警及地图传送卡死告警。`Test-ProductionSloRules.ps1` 使用固定版本 promtool 做语法和 firing/resolved 行为测试；处置步骤见 `Book/服务器上线升级/运维模板/登录与地图SLI告警处置.md`。该基线不是对外 SLA，生产接收人和最终目标仍需签署。
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：
