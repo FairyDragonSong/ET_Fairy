@@ -1,6 +1,7 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492,[switch]$Prometheus,[switch]$Alertmanager)
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492,[switch]$Prometheus,[switch]$Alertmanager,[switch]$NotificationRetry)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
+if($NotificationRetry){$Alertmanager=$true}
 if($Alertmanager){
     $Prometheus=$true
     foreach($auxPort in @(30910,30911)){
@@ -157,6 +158,7 @@ try {
         $receiverInfo.RedirectStandardOutput=$true;$receiverInfo.RedirectStandardError=$true
         foreach($argument in @('-NoProfile','-File',"$PSScriptRoot/Receive-LocalAlerts.ps1")){$receiverInfo.ArgumentList.Add($argument)}
         $receiverInfo.Environment['ET_ALERT_TEST_DIRECTORY']=$fixture
+        $receiverInfo.Environment['ET_ALERT_TEST_REJECT_ONCE']=$(if($NotificationRetry){'1'}else{'0'})
         $receiver=[Diagnostics.Process]::new();$receiver.StartInfo=$receiverInfo
         if(-not $receiver.Start()){throw 'Receiver start failed'}
         $receiverOutput=$receiver.StandardOutput.ReadToEndAsync();$receiverError=$receiver.StandardError.ReadToEndAsync()
@@ -218,6 +220,13 @@ try {
         Wait-Prom 'up{job="et-peer"}' '1'
         $checks.Add('prometheus-target-down-and-firing-with-peer-healthy')
         if($Alertmanager){Wait-Notification 'firing';$checks.Add('alertmanager-firing-webhook-delivered')}
+        if($NotificationRetry){
+            $rejection=Get-Content (Join-Path $fixture 'rejected-alert.json') -Raw|ConvertFrom-Json
+            $delivered=@(Get-Content (Join-Path $fixture 'received-alerts.jsonl')|ForEach-Object {$_|ConvertFrom-Json})|
+                Where-Object {$_.Job -eq 'et-primary' -and $_.Status -eq 'firing' -and $_.Fingerprint -eq $rejection.Fingerprint}|Select-Object -First 1
+            if($rejection.StatusCode -ne 503 -or -not $delivered -or [DateTimeOffset]$rejection.RejectedAtUtc -ge [DateTimeOffset]$delivered.ReceivedAtUtc){throw 'Notification retry did not follow a matching 503 rejection'}
+            $checks.Add('alertmanager-retries-same-alert-after-receiver-503')
+        }
         $process=Start-TestProcess ([string]$Port) $tokenFile
         Wait-Prom 'up{job="et-primary"}' '1'
         Wait-Prom 'et_process_id{job="et-primary"}' ([string]$process.Id)
@@ -270,7 +279,7 @@ try {
     if(-not $process.WaitForExit(12000) -or $process.ExitCode -ne 0){throw 'Default-disabled shutdown failed'}
     $process.Dispose();$process=$null
     $checks.Add('disabled-by-default')
-    [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Checks=@($checks);LocalCollectorVerified=[bool]$Prometheus;LocalNotificationVerified=[bool]$Alertmanager;QueryEvidence=@($queryEvidence);ProductionMonitoringVerified=$false}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
+    [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Checks=@($checks);LocalCollectorVerified=[bool]$Prometheus;LocalNotificationVerified=[bool]$Alertmanager;LocalNotificationRetryVerified=[bool]$NotificationRetry;QueryEvidence=@($queryEvidence);ProductionMonitoringVerified=$false}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
     foreach($check in $checks){Write-Host "PASS $check"}
 }finally{
     if($process){if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()};$process.Dispose()}

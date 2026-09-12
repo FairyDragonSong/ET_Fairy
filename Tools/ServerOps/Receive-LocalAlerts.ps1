@@ -6,6 +6,7 @@ $token=Get-Content (Join-Path $root 'alert-token.txt') -Raw
 if($token -notmatch '^[A-F0-9]{64}$'){throw 'Invalid alert test token'}
 $expected=[Security.Cryptography.SHA256]::HashData([Text.Encoding]::ASCII.GetBytes("Bearer $token"))
 $listener=[Net.HttpListener]::new();$listener.Prefixes.Add('http://127.0.0.1:30911/')
+$rejectedOnce=$false
 try {
     $listener.Start()
     while($true){
@@ -21,6 +22,16 @@ try {
             try {$payload=$reader.ReadToEnd()|ConvertFrom-Json}finally{$reader.Dispose()}
             foreach($alert in $payload.alerts){
                 if($alert.labels.alertname -ne 'ETLocalTargetDown' -or $alert.labels.job -notin @('et-primary','et-peer') -or $alert.status -notin @('firing','resolved')){throw 'Unexpected test alert'}
+            }
+            $candidate=$payload.alerts|Where-Object {$_.labels.job -eq 'et-primary' -and $_.status -eq 'firing'}|Select-Object -First 1
+            if($env:ET_ALERT_TEST_REJECT_ONCE -eq '1' -and -not $rejectedOnce -and $candidate){
+                $failure=[ordered]@{StatusCode=503;Job='et-primary';Fingerprint=$candidate.fingerprint;RejectedAtUtc=[DateTime]::UtcNow.ToString('O')}
+                [IO.File]::WriteAllText((Join-Path $root 'rejected-alert.json'),($failure|ConvertTo-Json))
+                $rejectedOnce=$true
+                $context.Response.StatusCode=503
+                continue
+            }
+            foreach($alert in $payload.alerts){
                 $entry=[ordered]@{Status=$alert.status;Job=$alert.labels.job;Alertname=$alert.labels.alertname;Fingerprint=$alert.fingerprint;ReceivedAtUtc=[DateTime]::UtcNow.ToString('O')}
                 [IO.File]::AppendAllText((Join-Path $root 'received-alerts.jsonl'),($entry|ConvertTo-Json -Compress)+[Environment]::NewLine)
             }
