@@ -47,8 +47,7 @@ jobs:
             9.0.302
       - name: Restore server dependencies
         run: |
-          dotnet new globaljson --sdk-version 9.0.302 --roll-forward disable
-          if ($LASTEXITCODE -ne 0) { throw 'SDK selection failed' }
+          if ((dotnet --version) -ne '9.0.302') { throw 'Unexpected compiler SDK' }
           dotnet restore DotNet/DotNet.sln --locked-mode
           if ($LASTEXITCODE -ne 0) { throw 'Server restore failed' }
       - name: Reject known NuGet vulnerabilities
@@ -71,3 +70,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Potential credential detected in changed commits' }
       - name: Build, regressions, health, shutdown and unsafe-config rejection
         run: ./Tools/ServerOps/Test-Phase1.ps1
+      - name: Build and verify clean release artifact
+        run: |
+          $version = "0.0.0-ci-$env:GITHUB_RUN_ID"
+          $root = Join-Path $env:RUNNER_TEMP 'server-release'
+          ./Tools/ServerOps/New-ServerRelease.ps1 -Version $version -OutputRoot $root
+          ./Tools/ServerOps/Test-ServerRelease.ps1 -ReleaseDirectory (Join-Path $root $version) -RequireCleanProvenance -RuntimeSmoke
