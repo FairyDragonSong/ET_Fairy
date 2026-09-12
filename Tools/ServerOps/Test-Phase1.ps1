@@ -3,6 +3,8 @@ param([switch]$SkipRuntimeSmoke)
 $ErrorActionPreference = "Stop"
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 
+& (Join-Path $PSScriptRoot 'Test-GameplayEvidence.ps1')
+
 & dotnet build (Join-Path $repositoryRoot "DotNet\DotNet.sln") -c Release --no-restore
 if ($LASTEXITCODE -ne 0) { throw "server build failed" }
 

@@ -1,6 +1,7 @@
 param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
     [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs,[switch]$CrashJournal,[switch]$RecoverCrashJournal)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot/GameplayEvidence.ps1"
 if(($Clients -ne 20 -or $DurationSeconds -ne 0) -and -not $Baseline){throw 'Load parameters require -Baseline'}
 if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolated Baseline mode'}
 if($CrashJournal -and (-not $Baseline -or $Clients -gt 100 -or $DurationSeconds -lt 60)){throw 'Crash journal requires Baseline, at most 100 clients and at least 60 sustained seconds'}
@@ -32,6 +33,9 @@ if($BoundedLogs){$info.Environment['ET_LOG_PROFILE']='bounded'}
 foreach($name in @($info.Environment.Keys)){if($name -match '^ET_MONGO_(URI|DATABASE)_ZONE_'){$info.Environment.Remove($name)|Out-Null}}
 $process=[Diagnostics.Process]::new();$process.StartInfo=$info
 $lines=[Collections.Generic.List[string]]::new()
+$progressLinesObserved=0;$progressLinesRetained=0
+$evidenceSampleIntervalMilliseconds=[long]60000
+$lastOnlineSampleMilliseconds=[long]-1
 $selfRoleCreated=$false
 $processStarted=$false
 $shutdownObserved=$false;$shutdownExitCode=$null;$shutdownElapsedMs=$null
@@ -61,7 +65,18 @@ try {
         if(-not $lineTask.Wait([TimeSpan]::FromSeconds(60))){throw 'Gameplay output timed out'}
         $line=$lineTask.Result
         if($null -eq $line){break}
-        if($line -match 'GAMEPLAY_'){$lines.Add($line);Write-Host $line}
+        $line=ConvertTo-GameplayEvidenceLine $line
+        if($line -match 'GAMEPLAY_'){
+            if($line -match '^GAMEPLAY_PROGRESS'){$progressLinesObserved++}
+            $retainEvidence=Test-GameplayEvidenceLine -Line $line -CapacityProfile ([bool]$CapacityProfile) `
+                -TargetClients $Clients -DurationMilliseconds ([long]$DurationSeconds*1000) `
+                -SampleIntervalMilliseconds $evidenceSampleIntervalMilliseconds `
+                -LastOnlineSampleMilliseconds ([ref]$lastOnlineSampleMilliseconds)
+            if($retainEvidence){
+                $lines.Add($line);Write-Host $line
+                if($line -match '^GAMEPLAY_PROGRESS'){$progressLinesRetained++}
+            }
+        }
         if($CapacityProfile -and ([DateTime]::UtcNow-$lastResourceCheck).TotalSeconds -ge 5){
             $lastResourceCheck=[DateTime]::UtcNow
             $process.Refresh()
@@ -278,6 +293,8 @@ try {
     }
     $report=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$true;Clients=$Clients;DurationSeconds=$DurationSeconds;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_PASS'});Samples=@($lines|Where-Object{$_ -match 'GAMEPLAY_PROGRESS'});ProductionCapacityVerified=$false}
     $report.CapacityProfile=[bool]$CapacityProfile
+    $report.ProgressLinesObserved=$progressLinesObserved;$report.ProgressLinesRetained=$progressLinesRetained
+    $report.ProgressSampleIntervalSeconds=$(if($CapacityProfile){[int]($evidenceSampleIntervalMilliseconds/1000)}else{$null})
     $report.JournalVerification=$journalVerification
     $report.LogProfile=$info.Environment['ET_LOG_PROFILE'];$report.HostProcessId=$process.Id
     $report.ShutdownObserved=$shutdownObserved;$report.ShutdownExitCode=$shutdownExitCode;$report.ShutdownElapsedMs=$shutdownElapsedMs
@@ -288,6 +305,8 @@ try {
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
     $failure.CapacityProfile=[bool]$CapacityProfile
+    $failure.ProgressLinesObserved=$progressLinesObserved;$failure.ProgressLinesRetained=$progressLinesRetained
+    $failure.ProgressSampleIntervalSeconds=$(if($CapacityProfile){[int]($evidenceSampleIntervalMilliseconds/1000)}else{$null})
     $failure.JournalVerification=$journalVerification
     $failure.CrashJournal=[bool]$CrashJournal;$failure.CrashExitObserved=$crashExitObserved;$failure.CrashExitCode=$crashExit
     $failure.LogProfile=$info.Environment['ET_LOG_PROFILE'];$failure.HostProcessId=$(if($processStarted){$process.Id}else{$null})
