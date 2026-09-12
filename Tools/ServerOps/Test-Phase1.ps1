@@ -47,7 +47,8 @@ try {
         throw "readiness or metrics smoke test failed"
     }
     if(-not $metrics.Content.Contains("# TYPE et_session_journal_end_failures_total counter") -or
-       -not $metrics.Content.Contains("et_password_change_accepted_total 0")){
+       -not $metrics.Content.Contains("et_password_change_accepted_total 0") -or
+       -not $metrics.Content.Contains("et_shutdown_emergency 0")){
         throw 'Security counters missing from metrics HTTP response'
     }
     $methodRejected=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:30300/get_router' -Method POST -SkipHttpErrorCheck -TimeoutSec 2

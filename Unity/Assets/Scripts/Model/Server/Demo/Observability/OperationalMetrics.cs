@@ -202,6 +202,7 @@ namespace ET.Server
                 Append(text, name, Interlocked.Read(ref this.securityCounters[i]));
             }
             Append(text, "et_shutdown_requested", ShutdownCoordinator.Instance.IsRequested ? 1 : 0);
+            Append(text, "et_shutdown_emergency", ShutdownCoordinator.Instance.Reason == ShutdownReason.EmergencyStop ? 1 : 0);
             this.AppendHandlerLatency(text);
             text.Append("# TYPE et_map_ordered_mailbox_inflight gauge\n");
             Append(text, "et_map_ordered_mailbox_inflight", Interlocked.Read(ref this.mapMailboxInflight[0]));

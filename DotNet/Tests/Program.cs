@@ -21,6 +21,7 @@ internal static class Program
         ("商业模式启动配置门禁", TestProductionStartupValidation),
         ("生产 Secret 根目录与凭据门禁", TestProductionSecretPolicy),
         ("生产网络监听与入口暴露门禁", TestNetworkExposurePolicy),
+        ("签名紧急停服与部署隔离", TestEmergencyStopPolicy),
         ("认证敏感消息统一标记", TestSensitiveMessages),
         ("消息日志使用具体 BSON 类型", TestConcreteMessageLogging),
         ("登录与持久化安全架构回归", TestSourceGuards),
@@ -393,6 +394,48 @@ internal static class Program
         Assert(messages.All(message => message is ISensitiveMessage), "an authentication message is not marked sensitive");
     }
 
+    private static void TestEmergencyStopPolicy()
+    {
+        using RSA rsa = RSA.Create(3072);
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        EmergencyStopCommand command = new()
+        {
+            SchemaVersion = 1, Action = "stop", DeploymentId = "test-deployment",
+            OperationId = Guid.NewGuid().ToString("N"), ReasonCode = "security-incident",
+            IssuedAt = now - 1, ExpiresAt = now + 300,
+        };
+        byte[] payload = JsonSerializer.SerializeToUtf8Bytes(command);
+        string keyId = "emergency-test";
+        EmergencyStopTrustEntry trustEntry = new()
+        {
+            KeyId = keyId, PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(), DeploymentId = command.DeploymentId,
+            NotBefore = now - 60, NotAfter = now + 3600,
+        };
+        string trust = JsonSerializer.Serialize(new[] { trustEntry });
+        EmergencyStopEnvelope envelope = new()
+        {
+            SchemaVersion = 1, KeyId = keyId, Payload = Convert.ToBase64String(payload),
+            Signature = Convert.ToBase64String(rsa.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)),
+        };
+        string json = JsonSerializer.Serialize(envelope);
+        EmergencyStopSignal signal = EmergencyStopPolicy.Verify(json, trust, command.DeploymentId, now);
+        Assert(signal.OperationId == command.OperationId && signal.ReasonCode == command.ReasonCode, "valid emergency stop rejected");
+        AssertThrows(() => EmergencyStopPolicy.Verify(json, trust, "other-deployment", now), "cross-deployment emergency stop accepted");
+        AssertThrows(() => EmergencyStopPolicy.Verify(json, trust, command.DeploymentId, now + 301), "expired emergency stop accepted");
+        byte[] changed = Convert.FromBase64String(envelope.Payload); changed[0] ^= 1;
+        envelope.Payload = Convert.ToBase64String(changed);
+        AssertThrows(() => EmergencyStopPolicy.Verify(JsonSerializer.Serialize(envelope), trust, command.DeploymentId, now),
+            "tampered emergency stop accepted");
+        AssertThrows(() => EmergencyStopPolicy.ValidateTrust("{}", command.DeploymentId, now), "invalid emergency trust accepted");
+
+        ShutdownCoordinator shutdown = new();
+        shutdown.Awake();
+        shutdown.Request();
+        shutdown.Request(ShutdownReason.EmergencyStop);
+        shutdown.Request();
+        Assert(shutdown.Reason == ShutdownReason.EmergencyStop, "normal shutdown downgraded emergency reason");
+    }
+
     private static void TestSourceGuards()
     {
         string root = FindRepositoryRoot();
@@ -422,6 +465,9 @@ internal static class Program
         string compatibilityVerifier = Read(root, "Tools/ServerOps/Test-ServerReleaseCompatibility.ps1");
         string rolloutPlan = Read(root, "Tools/ServerOps/New-ServerRolloutPlan.ps1");
         string rolloutDecision = Read(root, "Tools/ServerOps/Get-ServerRolloutDecision.ps1");
+        string appProgram = Read(root, "DotNet/App/Program.cs");
+        string emergencyPolicy = Read(root, "DotNet/Core/EmergencyStopPolicy.cs");
+        string emergencySigner = Read(root, "Tools/ServerOps/New-EmergencyStopCommand.ps1");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -497,6 +543,14 @@ internal static class Program
         Assert(rolloutDecision.Contains("$decision='ROLLBACK'") && rolloutDecision.Contains("$decision='HOLD'") &&
                rolloutDecision.Contains("$decision='PROMOTE'") && rolloutDecision.Contains("Monitoring observation signature is not trusted"),
                "signed rollout health decision gate removed");
+        Assert(appProgram.Contains("emergencyStop.Check(true)") && appProgram.Contains("ShutdownReason.EmergencyStop") &&
+               appProgram.Contains("Environment.ExitCode = 4"), "startup or runtime emergency stop integration removed");
+        Assert(emergencyPolicy.Contains("RSASignaturePadding.Pss") && emergencyPolicy.Contains("DeploymentId != expectedDeployment") &&
+               emergencyPolicy.Contains("command.ExpiresAt - command.IssuedAt > 86400") && emergencyPolicy.Contains("ReadManagedFile"),
+               "emergency stop signature, deployment, expiry or managed-file boundary removed");
+        Assert(emergencySigner.Contains("ConfirmDeploymentId") && emergencySigner.Contains("refusing to overwrite") &&
+               emergencySigner.Contains("PrivateKeyFile") && emergencySigner.Contains("RSASignaturePadding]::Pss"),
+               "emergency stop command signing safeguards removed");
     }
 
     private static string FindRepositoryRoot()

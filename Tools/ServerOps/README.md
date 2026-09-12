@@ -42,6 +42,22 @@
 .\Test-ServerRollout.ps1
 ```
 
+## 签名紧急停服
+
+服务器可通过 `ET_EMERGENCY_STOP_FILE`、`ET_EMERGENCY_STOP_TRUST_FILE` 和 `ET_DEPLOYMENT_ID` 启用签名停服监测。生产信任表必须在 `ET_SECRET_ROOT` 下，命令文件必须位于应用目录外的受限控制目录。使用仓库外事故响应私钥生成命令：
+
+```powershell
+.\New-EmergencyStopCommand.ps1 -PrivateKeyFile '<仓库外私钥>' -KeyId incident-primary `
+  -DeploymentId prod-cn-1 -ReasonCode security-incident -ValidMinutes 60 `
+  -ConfirmDeploymentId prod-cn-1 -OutputFile 'D:\ET-Control\prod-cn-1\emergency-stop.json'
+```
+
+合法启动前命令和运行中优雅排空成功均退出 4；排空失败仍退出 2；配置、信任或启动命令无效退出 3。服务管理器不得对 2/3/4 无条件重启。完整信任 JSON、验证边界和恢复风险见 [020.10](../../Book/服务器上线升级/020.10-签名紧急停服与优雅排空.md)。本机自检：
+
+```powershell
+.\Test-EmergencyStop.ps1
+```
+
 ## 备份
 
 ```powershell

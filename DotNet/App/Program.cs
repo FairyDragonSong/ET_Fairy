@@ -33,6 +33,26 @@ namespace ET
                 World.Instance.Dispose();
                 return;
             }
+            EmergencyStopMonitor emergencyStop;
+            try
+            {
+                emergencyStop = EmergencyStopMonitor.FromEnvironment(Options.Instance);
+                EmergencyStopSignal initialStop = emergencyStop.Check(true);
+                if (initialStop != null)
+                {
+                    Console.Error.WriteLine($"Emergency stop active: operation={initialStop.OperationId} reason={initialStop.ReasonCode}");
+                    Environment.ExitCode = 4;
+                    World.Instance.Dispose();
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                Console.Error.WriteLine("Emergency stop startup validation failed");
+                Environment.ExitCode = 3;
+                World.Instance.Dispose();
+                return;
+            }
             LocalMetricsExporter metricsExporter;
             try {metricsExporter=LocalMetricsExporter.FromEnvironment();}
             catch(Exception)
@@ -68,6 +88,20 @@ namespace ET
                 Thread.Sleep(1);
                 try
                 {
+                    EmergencyStopSignal stop = emergencyStop.Check();
+                    if (stop != null)
+                    {
+                        Log.Error($"event=emergency_stop_requested operation_id={stop.OperationId} reason={stop.ReasonCode}");
+                        ShutdownCoordinator.Instance?.Request(ShutdownReason.EmergencyStop);
+                    }
+                }
+                catch (Exception)
+                {
+                    Log.Error("event=emergency_stop_validation_failed");
+                    ShutdownCoordinator.Instance?.Request(ShutdownReason.EmergencyStop);
+                }
+                try
+                {
                     init.Update();
                     init.LateUpdate();
                 }
@@ -97,6 +131,10 @@ namespace ET
                         Log.Error($"graceful shutdown incomplete: completed={shutdown.CompletedCount}, " +
                                   $"participants={shutdown.ParticipantCount}, elapsedMs={shutdownTimer.ElapsedMilliseconds}");
                         Environment.ExitCode = 2;
+                    }
+                    else if (shutdown.Reason == ShutdownReason.EmergencyStop)
+                    {
+                        Environment.ExitCode = 4;
                     }
                     break;
                 }

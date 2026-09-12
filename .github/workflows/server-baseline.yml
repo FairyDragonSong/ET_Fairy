@@ -95,3 +95,7 @@ jobs:
       - name: Verify signed rollout and rollback gates
         shell: pwsh
         run: ./Tools/ServerOps/Test-ServerRollout.ps1
+
+      - name: Verify signed emergency stop and graceful drain
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-EmergencyStop.ps1
