@@ -294,6 +294,8 @@ public sealed class GameplayAcceptance : IConsoleHandler
 
     private static async ETTask Baseline(Scene parent)
     {
+        long mapOrderedBefore = Metric("et_map_ordered_mailbox_seconds_count");
+        long mapUnorderedBefore = Metric("et_map_unordered_mailbox_seconds_count");
         long id=IdGenerater.Instance.GenerateId();
         using Scene client=EntitySceneFactory.CreateScene(parent,id,id,SceneType.BenchmarkClient,"AcceptanceLoad");
         NetComponent net=client.AddComponent<NetComponent,AddressFamily,NetworkProtocol>(AddressFamily.InterNetwork,NetworkProtocol.UDP);
@@ -352,6 +354,10 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(saveFailures==0,"Role saving failed during load test");
             Check(Metric("et_gate_bound_sessions")==count,"Online Gate gauge drifted during baseline");
             Console.WriteLine($"GAMEPLAY_PASS gate-online-gauge count={count}");
+            long mapOrdered = Metric("et_map_ordered_mailbox_seconds_count") - mapOrderedBefore;
+            long mapUnordered = Metric("et_map_unordered_mailbox_seconds_count") - mapUnorderedBefore;
+            Check(mapOrdered + mapUnordered >= requests, "Map mailbox observations missing RPCs");
+            Console.WriteLine($"GAMEPLAY_PASS map-mailbox-latency ordered={mapOrdered} unordered={mapUnordered} rpc_count={requests}");
             Console.WriteLine($"GAMEPLAY_PASS concurrent-clients count={count} errors=0 flow_p95_ms={latency[(int)Math.Ceiling(count*0.95)-1]} total_ms={total.ElapsedMilliseconds} sustained_ms={sustained.ElapsedMilliseconds} rpc_count={requests} rpc_max_ms={maxRpcMs} peak_sampled_working_set_bytes={peakWorkingSet} cpu_ms={(long)(process.TotalProcessorTime-cpuBefore).TotalMilliseconds} role_saves={Metric("et_role_save_successes_total")-savesBefore} role_save_failures={saveFailures}");
         }
         finally{foreach(Session session in sessions)session.Dispose();}

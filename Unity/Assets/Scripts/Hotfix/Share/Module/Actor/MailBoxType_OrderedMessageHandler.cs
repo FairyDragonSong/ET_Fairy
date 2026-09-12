@@ -29,6 +29,12 @@
             }
 
             long instanceId = mailBoxComponent.InstanceId;
+#if DOTNET
+            bool observe = mailBoxComponent.IScene.SceneType == SceneType.Map;
+            long started = observe ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            try
+            {
+#endif
             using (await fiber.Root.GetComponent<CoroutineLockComponent>().Wait(CoroutineLockType.Mailbox, mailBoxComponent.ParentInstanceId))
             {
                 if (mailBoxComponent.InstanceId != instanceId)
@@ -42,6 +48,14 @@
                 }
                 await MessageDispatcher.Instance.Handle(mailBoxComponent.Parent, args.FromAddress, messageObject);
             }
+#if DOTNET
+            }
+            finally
+            {
+                if (observe) Server.OperationalMetrics.Instance?.RecordHandlerDuration(Server.HandlerLatency.MapOrderedMailbox,
+                    System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+#endif
         }
     }
 }
