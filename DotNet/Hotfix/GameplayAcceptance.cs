@@ -464,6 +464,40 @@ public sealed class GameplayAcceptance : IConsoleHandler
         {
             await AccountStateStore.Change(db,active.Id,active.StateVersion+1,AccountStatus.Active,"local-test","test-enable",Guid.NewGuid().ToString("N"));
         }
+        active=await accounts.Find(a=>a.Id==stored.Id).SingleAsync();
+        using R2C_Login revokeKey=await RealmLogin(net,realm,name,password);
+        Check(revokeKey.Error==0,"Pre-revoke authentication failed");
+        using Session revoked=net.Create(NetworkHelper.ToIPEndPoint(revokeKey.Address));
+        using G2C_LoginGate beforeRevoke=await GateLogin(revoked,revokeKey);
+        Check(beforeRevoke.Error==0,"Pre-revoke gate failed");
+        await AccountStateStore.Execute(db,active.Id,active.StateVersion,"revoke","local-test","test-revoke",Guid.NewGuid().ToString("N"));
+        for(int i=0;i<100 && !revoked.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
+        Check(revoked.IsDisposed,"Explicit revoke left old connection alive");
+        using R2C_Login closeKey=await RealmLogin(net,realm,name,password);
+        Check(closeKey.Error==0,"Explicit revoke prevented fresh authentication");
+        var beforeClose=await accounts.Find(a=>a.Id==active.Id).SingleAsync();
+        Check(beforeClose.Status==AccountStatus.Active,"Explicit revoke changed active status");
+        bool rollback=false;
+        try {await AccountStateStore.Execute(db,active.Id,beforeClose.StateVersion,"close","local-test","test-close",Guid.NewGuid().ToString("N"),()=>throw new InvalidOperationException("Injected close failure"));}
+        catch(InvalidOperationException){rollback=true;}
+        Check(rollback,"Close fault injection did not run");
+        var rolledBack=await accounts.Find(a=>a.Id==active.Id).SingleAsync();
+        Check(rolledBack.Status==AccountStatus.Active && rolledBack.ClosedAt==0 && rolledBack.StateVersion==beforeClose.StateVersion,"Close rollback retained partial state");
+        string closeOperation=Guid.NewGuid().ToString("N");
+        Check(await AccountStateStore.Execute(db,active.Id,beforeClose.StateVersion,"close","local-test","test-close",closeOperation),"Close did not commit");
+        Check(!await AccountStateStore.Execute(db,active.Id,beforeClose.StateVersion,"close","local-test","test-close",closeOperation),"Close replay applied twice");
+        using Session closedSession=net.Create(NetworkHelper.ToIPEndPoint(closeKey.Address));
+        using G2C_LoginGate closedGate=await GateLogin(closedSession,closeKey);
+        Check(closedGate.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Closed account used prior gate key");
+        using R2C_Login closedRealm=await RealmLogin(net,realm,name,password);
+        Check(closedRealm.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Closed account authenticated or auto-registered");
+        var closed=await accounts.Find(a=>a.Id==active.Id).SingleAsync();
+        Check(closed.Status==AccountStatus.Closed && closed.ClosedAt>0 && closed.DefaultRoleId==stored.DefaultRoleId,"Soft close lost data or timestamp");
+        bool reopenRejected=false;
+        try {await AccountStateStore.Execute(db,closed.Id,closed.StateVersion,"enable","local-test","test-reopen",Guid.NewGuid().ToString("N"));}
+        catch(AccountStateConflictException){reopenRejected=true;}
+        Check(reopenRejected,"Enable reopened closed account");
+        Console.WriteLine("GAMEPLAY_PASS explicit-revoke-and-soft-close-login-denial-rollback-idempotency");
     }
 
     private static async ETTask AuditTransactions(DBComponent db,Account account)

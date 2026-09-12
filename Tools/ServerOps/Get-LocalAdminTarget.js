@@ -6,6 +6,7 @@ const target = testDb.getCollection('ET.Server.Account').findOne({LoginName: pro
 if (!target) throw new Error('Test account missing');
 print(JSON.stringify({AccountId: target._id.toString(), Status: target.Status,
     Version: (target.StateVersion || 0).toString(),
+    ClosedAt: (target.ClosedAt || 0).toString(),
     AuditCount: testDb.getCollection('ET.Server.AccountStateAudit').countDocuments({AccountId: target._id}),
     RejectedAttempts: testDb.getCollection('ET.Server.AccountAdminAttempt').countDocuments({DeploymentId: process.env.ET_ADMIN_TEST_DEPLOYMENT || '',Outcome:'rejected'}),
     LimitedAttempts: testDb.getCollection('ET.Server.AccountAdminAttempt').countDocuments({DeploymentId: process.env.ET_ADMIN_TEST_DEPLOYMENT || '',Outcome:'rejected',Stage:'rate_limit'})}));

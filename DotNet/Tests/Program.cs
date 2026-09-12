@@ -19,6 +19,7 @@ internal static class Program
         ("认证敏感消息统一标记", TestSensitiveMessages),
         ("登录与持久化安全架构回归", TestSourceGuards),
         ("管理签名与权限边界", TestAdminAuthorization),
+        ("账号生命周期状态机", TestAccountStatePolicy),
     ];
 
     private static int Main()
@@ -297,6 +298,10 @@ internal static class Program
         AssertThrows(()=>AccountAdminAuthorization.Verify(valid,trust,now+301),"expired command accepted");
         command.Action="enable";
         AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"unauthorized action accepted");
+        command.Action="close";
+        AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"ungranted close permission accepted");
+        command.Action="revoke";
+        AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"ungranted revoke permission accepted");
         command.Action="disable";command.Database="production";
         AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"wrong database accepted");
         command.Database="test";command.DeploymentId="another-deployment";
@@ -309,6 +314,17 @@ internal static class Program
         envelope.Payload=Convert.ToBase64String(altered);
         AssertThrows(()=>AccountAdminAuthorization.Verify(System.Text.Json.JsonSerializer.Serialize(envelope),trust,now),"tampered payload accepted");
         AssertThrows(()=>AccountAdminAuthorization.Verify(valid,"[]",now),"removed operator accepted");
+    }
+
+    private static void TestAccountStatePolicy()
+    {
+        Assert(AccountStatePolicy.Target(AccountStatus.Active,"revoke")==AccountStatus.Active,"revoke disabled account");
+        Assert(AccountStatePolicy.Target(AccountStatus.Disabled,"revoke")==AccountStatus.Disabled,"revoke enabled disabled account");
+        Assert(AccountStatePolicy.Target(AccountStatus.Active,"close")==AccountStatus.Closed,"close transition failed");
+        Assert(AccountStatePolicy.Target(AccountStatus.Disabled,"close")==AccountStatus.Closed,"disabled close transition failed");
+        foreach(string action in new[]{"enable","disable","revoke","close"})
+            AssertThrows(()=>AccountStatePolicy.Target(AccountStatus.Closed,action),"closed account changed state");
+        AssertThrows(()=>AccountStatePolicy.Target(AccountStatus.Active,"enable"),"no-op enable accepted");
     }
 
     private static string Read(string root, string relativePath) =>

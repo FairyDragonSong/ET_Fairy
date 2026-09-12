@@ -43,20 +43,21 @@ public sealed class AccountAdminConsole : IConsoleHandler
             stage="execution";
             await AccountAdminAttemptStore.Append(db,requestId,"authorized",stage,command);
             executionStarted=true;
-            bool applied=await AccountStateStore.Change(db,command.AccountId,command.ExpectedVersion,
-                command.Action=="disable"?AccountStatus.Disabled:AccountStatus.Active,command.OperatorId,command.ReasonCode,command.OperationId);
+            bool applied=await AccountStateStore.Execute(db,command.AccountId,command.ExpectedVersion,
+                command.Action,command.OperatorId,command.ReasonCode,command.OperationId);
             await AccountAdminAttemptStore.Append(db,requestId,applied?"applied":"already_applied",stage,command);
             Console.WriteLine($"ACCOUNT_ADMIN_RESULT {(applied?"APPLIED":"ALREADY_APPLIED")} operation_id={command.OperationId}");
         }
-        catch(Exception)
+        catch(Exception error)
         {
+            bool uncertain=executionStarted && error is not AccountStateConflictException;
             if(db!=null)
             {
-                try { await AccountAdminAttemptStore.Append(db,requestId,executionStarted?"uncertain":"rejected",stage,command); }
+                try { await AccountAdminAttemptStore.Append(db,requestId,uncertain?"uncertain":"rejected",stage,command); }
                 catch(Exception) { Log.Warning("event=account_admin_attempt_audit_unavailable"); }
             }
             // Never print the envelope, file content, signature or connection settings.
-            Console.WriteLine($"ACCOUNT_ADMIN_RESULT {(executionStarted?"UNCERTAIN":"REJECTED")} request_id={requestId}");
+            Console.WriteLine($"ACCOUNT_ADMIN_RESULT {(uncertain?"UNCERTAIN":"REJECTED")} request_id={requestId}");
             Log.Warning("event=account_admin_rejected");
         }
         finally { scope?.Dispose();context.Parent.RemoveComponent<ModeContex>(); }

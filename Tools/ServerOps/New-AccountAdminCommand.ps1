@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory)][string]$DeploymentId,
     [Parameter(Mandatory)][string]$Database,
     [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$Zone,
-    [Parameter(Mandatory)][ValidateSet('enable','disable')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('enable','disable','revoke','close')][string]$Action,
     [Parameter(Mandatory)][long]$AccountId,
     [Parameter(Mandatory)][long]$ConfirmAccountId,
     [Parameter(Mandatory)][long]$ExpectedVersion,

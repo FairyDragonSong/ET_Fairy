@@ -1,4 +1,4 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env')
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Lifecycle)
 $ErrorActionPreference='Stop'
 & "$PSScriptRoot/Test-Gameplay.ps1" -EnvironmentRoot $EnvironmentRoot -Baseline -Clients 1
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
@@ -34,7 +34,7 @@ try {
     $trust=Join-Path $fixture 'trust.json'
     $deployment='local-admin-'+[Guid]::NewGuid().ToString('N')
     $env:ET_ADMIN_TEST_DEPLOYMENT=$deployment
-    ConvertTo-Json -InputObject @(@{Id='local-operator';PublicKeyPem=$rsa.ExportSubjectPublicKeyInfoPem();Database='ET_LOCAL_GAMEPLAY';DeploymentId=$deployment;Zone=1;Actions=@('disable','enable');ExpiresAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+3600}) | Set-Content $trust
+    ConvertTo-Json -InputObject @(@{Id='local-operator';PublicKeyPem=$rsa.ExportSubjectPublicKeyInfoPem();Database='ET_LOCAL_GAMEPLAY';DeploymentId=$deployment;Zone=1;Actions=$(if($Lifecycle){@('disable','enable','revoke','close')}else{@('disable','enable')});ExpiresAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+3600}) | Set-Content $trust
     $target=Read-Target
     $env:ET_ADMIN_TEST_USER='et_admin_test_'+[Guid]::NewGuid().ToString('N')
     $env:ET_ADMIN_TEST_PASSWORD=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
@@ -85,6 +85,25 @@ try {
     Send-Command $enable 'APPLIED'
     $restored=Read-Target
     if($restored.Status -ne 0 -or [long]$restored.Version -ne ([long]$target.Version+2) -or $restored.AuditCount -ne 2){throw 'Enable audit failed'}
+    if($Lifecycle){
+        $revoke=Join-Path $fixture 'revoke.json'
+        & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action revoke -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $restored.Version -ReasonCode local-test -OutputFile $revoke
+        Send-Command $revoke 'APPLIED'
+        $revoked=Read-Target
+        if($revoked.Status -ne 0 -or [long]$revoked.Version -ne ([long]$target.Version+3) -or $revoked.AuditCount -ne 3){throw 'Explicit revoke failed'}
+        $close=Join-Path $fixture 'close.json'
+        & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action close -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $revoked.Version -ReasonCode local-test -OutputFile $close
+        Send-Command $close 'APPLIED'
+        Send-Command $close 'ALREADY_APPLIED'
+        $closed=Read-Target
+        if($closed.Status -ne 2 -or [long]$closed.Version -ne ([long]$target.Version+4) -or $closed.AuditCount -ne 4 -or [long]$closed.ClosedAt -le 0){throw 'Soft close failed'}
+        $reopen=Join-Path $fixture 'reopen.json'
+        & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action enable -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $closed.Version -ReasonCode local-test -OutputFile $reopen
+        Send-Command $reopen 'REJECTED'
+        $stillClosed=Read-Target
+        if($stillClosed.Status -ne 2 -or $stillClosed.Version -ne $closed.Version -or $stillClosed.AuditCount -ne 4){throw 'Closed account was reopened'}
+        Write-Host 'PASS signed revoke, soft close, close replay and reopen rejection'
+    }else{
     $blocked=Join-Path $fixture 'audit-unavailable.json'
     & "$PSScriptRoot/New-AccountAdminCommand.ps1" -PrivateKeyFile $private -OperatorId local-operator -DeploymentId $deployment -Database ET_LOCAL_GAMEPLAY -Zone 1 -Action disable -AccountId $target.AccountId -ConfirmAccountId $target.AccountId -ExpectedVersion $restored.Version -ReasonCode local-test -OutputFile $blocked
     $env:ET_ADMIN_TEST_AUDIT_POLICY='deny'
@@ -101,11 +120,14 @@ try {
     $limited=Read-Target
     if($limited.LimitedAttempts -lt 1 -or $limited.RejectedAttempts -ne 32 -or $limited.AuditCount -ne 2 -or $limited.Version -ne $restored.Version){throw 'Management rate limit or durable rejection audit failed'}
     Write-Host 'PASS administration burst limited and every rejected request audited'
+    }
     $process.StandardInput.WriteLine('shutdown')
     $stdout=$process.StandardOutput.ReadToEndAsync()
     if(-not $process.WaitForExit(25000) -or $process.ExitCode -ne 0){throw 'Admin server shutdown failed'}
-    @{Passed=$true;Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Checks=@('tampered-signature-no-write','signed-disable','idempotent-repeat','signed-enable','two-audit-records','audit-mutation-denied','account-delete-denied','role-access-denied','audit-unavailable-no-state-write','rate-limited','rejection-audits-persisted')}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
-    Write-Host 'PASS signed administration end-to-end; isolated account restored'
+    $checks=@('tampered-signature-no-write','signed-disable','idempotent-repeat','signed-enable','audit-mutation-denied','account-delete-denied','role-access-denied')
+    $checks += $(if($Lifecycle){@('signed-revoke','signed-close','close-idempotency','closed-cannot-enable')}else{@('two-audit-records','audit-unavailable-no-state-write','rate-limited','rejection-audits-persisted')})
+    @{Passed=$true;Lifecycle=[bool]$Lifecycle;Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=[bool](& git -C $repo status --porcelain);CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Checks=$checks}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
+    Write-Host $(if($Lifecycle){'PASS lifecycle administration; isolated account retained as Closed'}else{'PASS signed administration end-to-end; isolated account restored'})
 } catch {
     @{Passed=$false;Commit=(& git -C $repo rev-parse HEAD).Trim();CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Reason='See test console failure; no command or credential content retained'}|ConvertTo-Json|Set-Content (Join-Path $fixture 'result.json')
     throw

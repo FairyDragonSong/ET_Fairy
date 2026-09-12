@@ -4,6 +4,7 @@ namespace ET.Server
     {
         Active = 0,
         Disabled = 1,
+        Closed = 2,
     }
 
     public enum PasswordHashScheme
@@ -21,6 +22,7 @@ namespace ET.Server
         public AccountStatus Status { get; set; }
 
         public long StateVersion { get; set; }
+        public long ClosedAt { get; set; }
 
         public PasswordHashScheme PasswordScheme { get; set; }
 
