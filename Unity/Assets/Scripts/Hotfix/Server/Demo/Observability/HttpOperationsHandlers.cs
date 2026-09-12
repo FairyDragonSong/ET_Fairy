@@ -37,6 +37,13 @@ namespace ET.Server
     {
         public async ETTask Handle(Scene scene, HttpListenerContext context)
         {
+            // RouterManager also serves public routing endpoints; never expose metrics through that wildcard listener.
+            if(context.Request.RemoteEndPoint==null||!IPAddress.IsLoopback(context.Request.RemoteEndPoint.Address))
+            {
+                context.Response.StatusCode=(int)HttpStatusCode.Forbidden;
+                HttpHelper.TextResponse(context,"forbidden","text/plain");
+                return;
+            }
             HttpHelper.TextResponse(context, OperationalMetrics.Instance.ExportPrometheus(), "text/plain; version=0.0.4; charset=utf-8");
             await ETTask.CompletedTask;
         }

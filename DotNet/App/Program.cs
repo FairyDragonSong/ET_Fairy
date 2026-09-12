@@ -18,6 +18,15 @@ namespace ET
             
             Init init = new();
             init.Start();
+            LocalMetricsExporter metricsExporter;
+            try {metricsExporter=LocalMetricsExporter.FromEnvironment();}
+            catch(Exception)
+            {
+                Console.Error.WriteLine("Local metrics startup failed: check port and protected token configuration");
+                Environment.ExitCode=3;
+                World.Instance.Dispose();
+                return;
+            }
             
             int shutdownTimeoutSeconds = Math.Max(1, Options.Instance.ShutdownTimeoutSeconds);
             System.Diagnostics.Stopwatch shutdownTimer = null;
@@ -78,6 +87,7 @@ namespace ET
                 }
             }
 
+            metricsExporter?.Dispose();
             World.Instance.Dispose();
             sigtermRegistration?.Dispose();
         }
