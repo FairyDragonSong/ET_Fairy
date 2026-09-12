@@ -1,7 +1,11 @@
 # Acceptance receiver only; no arbitrary forwarding, commands, or raw payload logging.
 $ErrorActionPreference='Stop'
 $root=$env:ET_ALERT_TEST_DIRECTORY
-if(-not [IO.Path]::IsPathFullyQualified($root) -or (Split-Path $root -Leaf) -notmatch '^metrics-test-[a-f0-9]{32}$'){throw 'Invalid isolated alert fixture'}
+if(-not [IO.Path]::IsPathFullyQualified($root) -or (Split-Path $root -Leaf) -notmatch '^(metrics-test|gameplay-metrics)-[a-f0-9]{32}$'){throw 'Invalid isolated alert fixture'}
+$gameplay=(Split-Path $root -Leaf).StartsWith('gameplay-metrics-')
+$expectedAlert=if($gameplay){'ETLocalMapMailboxBacklog'}else{'ETLocalTargetDown'}
+$expectedJobs=if($gameplay){@('et-gameplay')}else{@('et-primary','et-peer')}
+$primaryJob=if($gameplay){'et-gameplay'}else{'et-primary'}
 $token=Get-Content (Join-Path $root 'alert-token.txt') -Raw
 if($token -notmatch '^[A-F0-9]{64}$'){throw 'Invalid alert test token'}
 $expected=[Security.Cryptography.SHA256]::HashData([Text.Encoding]::ASCII.GetBytes("Bearer $token"))
@@ -21,11 +25,11 @@ try {
             $reader=[IO.StreamReader]::new($context.Request.InputStream)
             try {$payload=$reader.ReadToEnd()|ConvertFrom-Json}finally{$reader.Dispose()}
             foreach($alert in $payload.alerts){
-                if($alert.labels.alertname -ne 'ETLocalTargetDown' -or $alert.labels.job -notin @('et-primary','et-peer') -or $alert.status -notin @('firing','resolved')){throw 'Unexpected test alert'}
+                if($alert.labels.alertname -ne $expectedAlert -or $alert.labels.job -notin $expectedJobs -or $alert.status -notin @('firing','resolved')){throw 'Unexpected test alert'}
             }
-            $candidate=$payload.alerts|Where-Object {$_.labels.job -eq 'et-primary' -and $_.status -eq 'firing'}|Select-Object -First 1
+            $candidate=$payload.alerts|Where-Object {$_.labels.job -eq $primaryJob -and $_.status -eq 'firing'}|Select-Object -First 1
             if($env:ET_ALERT_TEST_REJECT_ONCE -eq '1' -and -not $rejectedOnce -and $candidate){
-                $failure=[ordered]@{StatusCode=503;Job='et-primary';Fingerprint=$candidate.fingerprint;RejectedAtUtc=[DateTime]::UtcNow.ToString('O')}
+                $failure=[ordered]@{StatusCode=503;Job=$primaryJob;Fingerprint=$candidate.fingerprint;RejectedAtUtc=[DateTime]::UtcNow.ToString('O')}
                 [IO.File]::WriteAllText((Join-Path $root 'rejected-alert.json'),($failure|ConvertTo-Json))
                 $rejectedOnce=$true
                 $context.Response.StatusCode=503

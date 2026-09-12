@@ -1,11 +1,15 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env')
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Notifications)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
 $promRoot=Join-Path $EnvironmentRoot 'prometheus-3.13.3/prometheus-3.13.3.windows-amd64'
 if(-not(Test-Path "$promRoot/prometheus.exe")){throw 'Install the pinned local Prometheus first'}
+$amRoot=Join-Path $EnvironmentRoot 'alertmanager-0.34.0/alertmanager-0.34.0.windows-amd64'
+if($Notifications -and -not(Test-Path "$amRoot/alertmanager.exe")){throw 'Install the pinned local Alertmanager first'}
 $tcpPorts=@((Get-NetTCPConnection -State Listen).LocalPort)
 $udpPorts=@((Get-NetUDPEndpoint).LocalPort)
-foreach($port in @(30491,30909,20001,30002,30003,30004,30300,30301,30302,30303,30304)){
+$ports=@(30491,30909,20001,30002,30003,30004,30300,30301,30302,30303,30304)
+if($Notifications){$ports+=@(30910,30911)}
+foreach($port in $ports){
     if($port -in $tcpPorts -or $port -in $udpPorts){throw "Test port occupied: $port"}
 }
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
@@ -17,6 +21,10 @@ if($LASTEXITCODE -ne 0){throw 'Cannot protect fixture credentials'}
 $tokenFile=Join-Path $fixture 'token.txt'
 $app=$null;$collector=$null
 $appStarted=$false;$collectorStarted=$false
+$manager=$null;$receiver=$null;$managerStarted=$false;$receiverStarted=$false
+$alertTokenFile=Join-Path $fixture 'alert-token.txt'
+$notificationEvidence=[Collections.Generic.List[object]]::new()
+$notificationVerified=$false
 $queries=[Collections.Generic.List[object]]::new()
 $checks=[Collections.Generic.List[string]]::new()
 $passed=$false
@@ -35,13 +43,57 @@ function Wait-Query([string]$Expression,[string]$Expected){
     }
     throw "Query did not reach expected value: $Expression"
 }
+function Wait-Notification([string]$Status,[string]$Fingerprint=''){
+    for($attempt=0;$attempt -lt 40;$attempt++){
+        if($manager.HasExited -or $receiver.HasExited){throw 'Notification process exited'}
+        $path=Join-Path $fixture 'received-alerts.jsonl'
+        if(Test-Path -LiteralPath $path){
+            try {
+                $events=@(Get-Content -LiteralPath $path|ForEach-Object {$_|ConvertFrom-Json})
+                $event=$events|Where-Object {$_.Alertname -eq 'ETLocalMapMailboxBacklog' -and $_.Job -eq 'et-gameplay' -and
+                    $_.Status -eq $Status -and $_.Fingerprint -match '^[a-f0-9]{16}$' -and (-not $Fingerprint -or $_.Fingerprint -eq $Fingerprint)}|Select-Object -First 1
+                if($event){$notificationEvidence.Add($event);return $event}
+            }catch { }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "Expected local $Status notification did not arrive"
+}
 try {
     [IO.File]::WriteAllText($tokenFile,[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)))
     $config=Join-Path $fixture 'prometheus.json'
-    @{global=@{scrape_interval='1s';scrape_timeout='500ms';evaluation_interval='1s'};
+    $promConfig=@{global=@{scrape_interval='1s';scrape_timeout='500ms';evaluation_interval='1s'};
       rule_files=@("$PSScriptRoot/monitoring/et-gameplay-test.rules.yml".Replace('\','/'));
-      scrape_configs=@(@{job_name='et-gameplay';authorization=@{type='Bearer';credentials_file=$tokenFile.Replace('\','/')};static_configs=@(@{targets=@('127.0.0.1:30491')})})}|
-        ConvertTo-Json -Depth 10|Set-Content $config
+      scrape_configs=@(@{job_name='et-gameplay';authorization=@{type='Bearer';credentials_file=$tokenFile.Replace('\','/')};static_configs=@(@{targets=@('127.0.0.1:30491')})})}
+    if($Notifications){
+        [IO.File]::WriteAllText($alertTokenFile,[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)))
+        $receiverInfo=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
+        $receiverInfo.UseShellExecute=$false;$receiverInfo.CreateNoWindow=$true
+        $receiverInfo.RedirectStandardOutput=$true;$receiverInfo.RedirectStandardError=$true
+        foreach($argument in @('-NoProfile','-File',"$PSScriptRoot/Receive-LocalAlerts.ps1")){$receiverInfo.ArgumentList.Add($argument)}
+        $receiverInfo.Environment['ET_ALERT_TEST_DIRECTORY']=$fixture
+        $receiverInfo.Environment['ET_ALERT_TEST_REJECT_ONCE']='0'
+        $receiver=[Diagnostics.Process]::new();$receiver.StartInfo=$receiverInfo
+        if(-not $receiver.Start()){throw 'Receiver start failed'}
+        $receiverStarted=$true
+        $receiverOutput=$receiver.StandardOutput.ReadToEndAsync();$receiverError=$receiver.StandardError.ReadToEndAsync()
+        $amConfig=Join-Path $fixture 'alertmanager.json'
+        @{route=@{receiver='local-test';group_by=@('alertname','job');group_wait='1s';group_interval='1s';repeat_interval='1m'};
+          receivers=@(@{name='local-test';webhook_configs=@(@{url='http://127.0.0.1:30911/alerts';send_resolved=$true;
+            http_config=@{authorization=@{type='Bearer';credentials_file=$alertTokenFile.Replace('\','/')}}})})}|ConvertTo-Json -Depth 12|Set-Content $amConfig
+        & "$amRoot/amtool.exe" check-config $amConfig
+        if($LASTEXITCODE -ne 0){throw 'Alertmanager config invalid'}
+        $managerInfo=[Diagnostics.ProcessStartInfo]::new("$amRoot/alertmanager.exe")
+        $managerInfo.UseShellExecute=$false;$managerInfo.CreateNoWindow=$true
+        $managerInfo.RedirectStandardOutput=$true;$managerInfo.RedirectStandardError=$true
+        foreach($argument in @("--config.file=$amConfig",'--web.listen-address=127.0.0.1:30910','--cluster.listen-address=',"--storage.path=$fixture/alertmanager-data")){$managerInfo.ArgumentList.Add($argument)}
+        $manager=[Diagnostics.Process]::new();$manager.StartInfo=$managerInfo
+        if(-not $manager.Start()){throw 'Alertmanager start failed'}
+        $managerStarted=$true
+        $managerOutput=$manager.StandardOutput.ReadToEndAsync();$managerError=$manager.StandardError.ReadToEndAsync()
+        $promConfig.alerting=@{alertmanagers=@(@{static_configs=@(@{targets=@('127.0.0.1:30910')})})}
+    }
+    $promConfig|ConvertTo-Json -Depth 10|Set-Content $config
     & "$promRoot/promtool.exe" check config $config
     if($LASTEXITCODE -ne 0){throw 'Prometheus config invalid'}
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
@@ -87,6 +139,7 @@ try {
             Wait-Query 'et_map_unordered_mailbox_seconds_count{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'et_map_ordered_mailbox_inflight{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'ALERTS{alertname="ETLocalMapMailboxBacklog",job="et-gameplay",alertstate="firing"}' '1'
+            if($Notifications){$firing=Wait-Notification 'firing'}
             $held=$true
             [IO.File]::WriteAllText((Join-Path $fixture 'release'),'release')
         }
@@ -97,6 +150,11 @@ try {
             Wait-Query 'et_map_ordered_mailbox_exceptions_total{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'et_map_unordered_mailbox_exceptions_total{job="et-gameplay"} > bool 0' '1'
             Wait-Query '(count(ALERTS{alertname="ETLocalMapMailboxBacklog",job="et-gameplay",alertstate="firing"}) or vector(0))' '0'
+            if($Notifications){
+                $resolved=Wait-Notification 'resolved' $firing.Fingerprint
+                if([DateTime]$resolved.ReceivedAtUtc -lt [DateTime]$firing.ReceivedAtUtc){throw 'Notification order incorrect'}
+                $notificationVerified=$true
+            }
             $recovered=$true
             [IO.File]::WriteAllText((Join-Path $fixture 'finish'),'finish')
         }
@@ -108,8 +166,10 @@ try {
     if(-not $app.WaitForExit(25000) -or $app.ExitCode -ne 0){throw 'Gameplay host shutdown failed'}
     $passed=$true
     Write-Host 'PASS real-gameplay-scrape-mailbox-firing-and-recovery'
+    if($Notifications){Write-Host 'PASS map-backlog-firing-and-matching-recovery-webhook-delivered'}
 } finally {
-    foreach($entry in @(@{Process=$app;Started=$appStarted},@{Process=$collector;Started=$collectorStarted})){
+    foreach($entry in @(@{Process=$app;Started=$appStarted},@{Process=$collector;Started=$collectorStarted},
+        @{Process=$manager;Started=$managerStarted},@{Process=$receiver;Started=$receiverStarted})){
         $child=$entry.Process
         if($null -ne $child){
             try {if($entry.Started -and -not $child.HasExited){$child.Kill($true);$child.WaitForExit()}}finally{$child.Dispose()}
@@ -117,7 +177,9 @@ try {
     }
     # Exact credential file in this run's newly created fixture; retain non-secret evidence.
     if(Test-Path -LiteralPath $tokenFile){Remove-Item -LiteralPath $tokenFile}
+    if(Test-Path -LiteralPath $alertTokenFile){Remove-Item -LiteralPath $alertTokenFile}
     [ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));Passed=$passed;
         CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Checks=@($checks);Queries=@($queries);ProductionCapacityVerified=$false;
-        CrossHostVerified=$false;ExternalNotificationVerified=$false}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
+        CrossHostVerified=$false;ExternalNotificationVerified=$false;LocalNotificationVerified=$notificationVerified;
+        Notifications=@($notificationEvidence)}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $fixture 'result.json')
 }
