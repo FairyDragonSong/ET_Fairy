@@ -10,5 +10,6 @@ namespace ET.Server
     public class HttpComponent: Entity, IAwake<string>, IDestroy
     {
         public HttpListener Listener;
+        public int InflightRequests;
     }
 }

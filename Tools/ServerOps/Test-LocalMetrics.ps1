@@ -48,7 +48,7 @@ $queryEvidence=[Collections.Generic.List[object]]::new()
 function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]$ProcessNumber=8,[string]$PreviousCredentialFile=''){
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
     $info.WorkingDirectory="$repo/Bin"
-    $info.Arguments="--Process=$ProcessNumber --StartConfig=StartConfig/Release --Console=1 --ShutdownTimeoutSeconds=5"
+    $info.Arguments="--Process=$ProcessNumber --StartConfig=StartConfig/Release --Console=1 --Develop=1 --ShutdownTimeoutSeconds=5"
     $info.UseShellExecute=$false;$info.CreateNoWindow=$true
     $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
     $info.Environment.Remove('ET_METRICS_PORT')|Out-Null

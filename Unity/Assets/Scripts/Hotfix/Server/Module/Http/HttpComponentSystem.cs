@@ -65,11 +65,33 @@ namespace ET.Server
         {
             string requestId = Guid.NewGuid().ToString("N");
             context.Response.Headers["X-Request-Id"] = requestId;
+            context.Response.Headers["Cache-Control"] = "no-store";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+            context.Response.Headers["Referrer-Policy"] = "no-referrer";
             bool error = false;
             try
             {
-                IHttpHandler handler = HttpDispatcher.Instance.Get(self.IScene.SceneType, context.Request.Url.AbsolutePath);
-                await handler.Handle(self.Scene(), context);
+                if (++self.InflightRequests > 256)
+                {
+                    context.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
+                    HttpHelper.TextResponse(context, "busy\n", "text/plain; charset=utf-8");
+                }
+                else if (context.Request.HttpMethod != "GET" || context.Request.Url.Query.Length != 0 || context.Request.HasEntityBody)
+                {
+                    context.Response.StatusCode = context.Request.HttpMethod != "GET" ?
+                        (int)HttpStatusCode.MethodNotAllowed : (int)HttpStatusCode.BadRequest;
+                    if (context.Request.HttpMethod != "GET")
+                    {
+                        context.Response.Headers["Allow"] = "GET";
+                    }
+                    HttpHelper.TextResponse(context, "invalid request\n", "text/plain; charset=utf-8");
+                }
+                else
+                {
+                    IHttpHandler handler = HttpDispatcher.Instance.Get(self.IScene.SceneType, context.Request.Url.AbsolutePath);
+                    await handler.Handle(self.Scene(), context);
+                }
             }
             catch (KeyNotFoundException)
             {
@@ -83,6 +105,10 @@ namespace ET.Server
                 context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 Log.Error($"event=http_request_failed request_id={requestId} method={context.Request.HttpMethod} " +
                           $"path={context.Request.Url.AbsolutePath}\n{e}");
+            }
+            finally
+            {
+                --self.InflightRequests;
             }
             OperationalMetrics.Instance.RecordHttp(error || context.Response.StatusCode >= 500);
             context.Request.InputStream.Dispose();

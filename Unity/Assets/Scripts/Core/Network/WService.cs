@@ -13,11 +13,19 @@ namespace ET
         private HttpListener httpListener;
         
         private readonly Dictionary<long, WChannel> channels = new Dictionary<long, WChannel>();
+        private readonly string expectedPath;
+        private readonly int maxConnections;
 
         public ThreadSynchronizationContext ThreadSynchronizationContext;
 
-        public WService(IEnumerable<string> prefixs)
+        public WService(IEnumerable<string> prefixs, string expectedPath = null, int maxConnections = 4096)
         {
+            if (maxConnections < 1 || maxConnections > 100000)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxConnections));
+            }
+            this.expectedPath = expectedPath;
+            this.maxConnections = maxConnections;
             this.ThreadSynchronizationContext = new ThreadSynchronizationContext();
             
             this.httpListener = new HttpListener();
@@ -38,6 +46,8 @@ namespace ET
                 return ++this.idGenerater;
             }
         }
+
+        public bool IsListening => this.httpListener?.IsListening == true;
         
         public override void Create(long id, IPEndPoint ipEndpoint)
         {
@@ -111,6 +121,25 @@ namespace ET
                     {
                         HttpListenerContext httpListenerContext = await this.httpListener.GetContextAsync();
 
+                        if (this.expectedPath != null &&
+                            (httpListenerContext.Request.HttpMethod != "GET" ||
+                             httpListenerContext.Request.Url.AbsolutePath != this.expectedPath ||
+                             httpListenerContext.Request.Url.Query.Length != 0 ||
+                             !httpListenerContext.Request.IsWebSocketRequest))
+                        {
+                            httpListenerContext.Response.Headers["Cache-Control"] = "no-store";
+                            httpListenerContext.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                            httpListenerContext.Response.Close();
+                            continue;
+                        }
+                        if (this.channels.Count >= this.maxConnections)
+                        {
+                            httpListenerContext.Response.Headers["Cache-Control"] = "no-store";
+                            httpListenerContext.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
+                            httpListenerContext.Response.Close();
+                            continue;
+                        }
+
                         HttpListenerWebSocketContext webSocketContext = await httpListenerContext.AcceptWebSocketAsync(null);
 
                         WChannel channel = new WChannel(this.GetId, webSocketContext, this);
@@ -121,6 +150,10 @@ namespace ET
                     }
                     catch (Exception e)
                     {
+                        if (this.IsDisposed() || !this.IsListening)
+                        {
+                            return;
+                        }
                         Log.Error(e);
                     }
                 }
@@ -129,7 +162,7 @@ namespace ET
             {
                 if (e.ErrorCode == 5)
                 {
-                    throw new Exception($"CMD管理员中输入: netsh http add urlacl url=http://*:8080/ user=Everyone   {prefixs.ToList().ListToString()}", e);
+                    throw new Exception($"WebSocket URL ACL is not authorized for prefixes: {prefixs.ToList().ListToString()}", e);
                 }
 
                 Log.Error(e);

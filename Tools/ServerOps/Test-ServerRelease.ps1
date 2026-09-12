@@ -132,7 +132,7 @@ try{
         $start=[Diagnostics.ProcessStartInfo]::new()
         $start.FileName=Join-Path $extract 'Bin/App.exe'
         $start.WorkingDirectory=Join-Path $extract 'Bin'
-        $start.Arguments='--Process=8 --StartConfig=StartConfig/Release --Console=1 --ShutdownTimeoutSeconds=5'
+        $start.Arguments='--Process=8 --StartConfig=StartConfig/Release --Console=1 --Develop=1 --ShutdownTimeoutSeconds=5'
         $start.UseShellExecute=$false;$start.RedirectStandardInput=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
         $start.Environment['ET_LOG_PROFILE']='bounded'
         $process=[Diagnostics.Process]::new();$process.StartInfo=$start

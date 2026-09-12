@@ -16,6 +16,20 @@
 
 轮换时可用 `ET_ACCOUNT_PASSWORD_KEYRING_FILE` 替代单私钥文件，并用 `ET_METRICS_PREVIOUS_TOKEN_FILE` 提供指标 Token 重叠窗口；具体 JSON、部署顺序和回滚要求见 [020.7](../../Book/服务器上线升级/020.7-Secret旧新凭据重叠轮换.md)。禁止同时设置密码单私钥与 Key Ring。
 
+## 网络绑定与 Windows URL ACL
+
+生产 RouterManager 和明文 Router WebSocket 只允许绑定回环地址，并由同机 TLS/WSS 入口代理对外服务。分别设置 `ET_ROUTER_MANAGER_BIND_IP=127.0.0.1` 和（启用 WebSocket 时）`ET_ROUTER_WEBSOCKET_BIND_IP=127.0.0.1`。公网 Router UDP/TCP 还要求显式 OuterIP、私网 InnerIP，并设置 `ET_ROUTER_PUBLIC_EXPOSURE_ACK=firewall-ddos-rate-limit-v1`；该确认值不替代真实网络控制证据。
+
+只读审计和提升权限后的迁移示例：
+
+```powershell
+.\Set-ServerHttpUrlAcl.ps1 -Action Audit -Port 30300 -Path '/'
+.\Set-ServerHttpUrlAcl.ps1 -Action Apply -Port 30300 -Path '/' `
+  -ServiceIdentity '<ET服务账号>' -ConfirmUrl 'http://127.0.0.1:30300/'
+```
+
+每个启用的 WebSocket 端口使用 `/et/` 路径单独迁移。完整边界与验收项见 [020.8](../../Book/服务器上线升级/020.8-网络暴露面与入口防护门禁.md)。
+
 ## 备份
 
 ```powershell

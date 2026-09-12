@@ -1,4 +1,5 @@
 using ET.Server;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Unity.Mathematics;
@@ -19,6 +20,7 @@ internal static class Program
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
         ("商业模式启动配置门禁", TestProductionStartupValidation),
         ("生产 Secret 根目录与凭据门禁", TestProductionSecretPolicy),
+        ("生产网络监听与入口暴露门禁", TestNetworkExposurePolicy),
         ("认证敏感消息统一标记", TestSensitiveMessages),
         ("消息日志使用具体 BSON 类型", TestConcreteMessageLogging),
         ("登录与持久化安全架构回归", TestSourceGuards),
@@ -331,6 +333,49 @@ internal static class Program
         }
     }
 
+    private static void TestNetworkExposurePolicy()
+    {
+        string[] variables = ["ET_ROUTER_MANAGER_BIND_IP", "ET_ROUTER_WEBSOCKET_BIND_IP", "ET_ROUTER_PUBLIC_EXPOSURE_ACK"];
+        Dictionary<string, string> previous = variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        try
+        {
+            foreach (string variable in variables) Environment.SetEnvironmentVariable(variable, null);
+            Assert(NetworkExposurePolicy.ResolveRouterManagerPrefix(new Options { Develop = 1 }, 30300) == "http://*:30300/",
+                "development wildcard compatibility changed");
+            AssertThrows(() => NetworkExposurePolicy.ResolveRouterManagerPrefix(new Options { Develop = 0 }, 30300),
+                "production RouterManager accepted an implicit wildcard");
+            Environment.SetEnvironmentVariable("ET_ROUTER_MANAGER_BIND_IP", "127.0.0.1");
+            Assert(NetworkExposurePolicy.ResolveRouterManagerPrefix(new Options { Develop = 0 }, 30300) == "http://127.0.0.1:30300/",
+                "production loopback RouterManager rejected");
+            Environment.SetEnvironmentVariable("ET_ROUTER_MANAGER_BIND_IP", "0.0.0.0");
+            AssertThrows(() => NetworkExposurePolicy.ResolveRouterManagerPrefix(new Options { Develop = 0 }, 30300),
+                "production RouterManager wildcard accepted");
+
+            Environment.SetEnvironmentVariable("ET_ROUTER_WEBSOCKET_BIND_IP", "127.0.0.1");
+            Assert(NetworkExposurePolicy.ResolveRouterWebSocketBindHost(new Options { Develop = 0 }) == "127.0.0.1",
+                "production loopback WebSocket rejected");
+            Environment.SetEnvironmentVariable("ET_ROUTER_WEBSOCKET_BIND_IP", "192.168.10.5");
+            AssertThrows(() => NetworkExposurePolicy.ResolveRouterWebSocketBindHost(new Options { Develop = 0 }),
+                "plain production WebSocket accepted a non-loopback bind");
+
+            Options production = new() { Develop = 0 };
+            IPEndPoint publicRouter = new(IPAddress.Parse("203.0.113.10"), 30301);
+            AssertThrows(() => NetworkExposurePolicy.ValidateRouter(production, publicRouter, "10.1.0.5"),
+                "public Router lacked firewall acknowledgement");
+            Environment.SetEnvironmentVariable("ET_ROUTER_PUBLIC_EXPOSURE_ACK", NetworkExposurePolicy.RouterPublicAcknowledgement);
+            NetworkExposurePolicy.ValidateRouter(production, publicRouter, "10.1.0.5");
+            AssertThrows(() => NetworkExposurePolicy.ValidateRouter(production, publicRouter, "203.0.113.20"),
+                "public Router inner transport was accepted");
+            AssertThrows(() => NetworkExposurePolicy.ValidateRouter(production, new IPEndPoint(IPAddress.Any, 30301), "10.1.0.5"),
+                "Router wildcard outer listener was accepted");
+            NetworkExposurePolicy.ValidateRouter(new Options { Develop = 1 }, new IPEndPoint(IPAddress.Any, 30301), "203.0.113.20");
+        }
+        finally
+        {
+            foreach ((string name, string value) in previous) Environment.SetEnvironmentVariable(name, value);
+        }
+    }
+
     private static void TestSensitiveMessages()
     {
         object[] messages =
@@ -368,6 +413,11 @@ internal static class Program
         string databaseResolver = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Module/DB/DatabaseConnectionResolver.cs");
         string messageLogger = Read(root, "Unity/Assets/Scripts/Model/Share/Module/Message/LogMsg.cs");
         string sessionMonitor = Read(root, "DotNet/Hotfix/AccountSessionMonitorSystem.cs");
+        string routerManagerInit = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Module/Router/FiberInit_RouterManager.cs");
+        string httpSystem = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Module/Http/HttpComponentSystem.cs");
+        string routerSystem = Read(root, "Unity/Assets/Scripts/Hotfix/Server/Module/Router/RouterComponentSystem.cs");
+        string webSocketService = Read(root, "Unity/Assets/Scripts/Core/Network/WService.cs");
+        string urlAclScript = Read(root, "Tools/ServerOps/Set-ServerHttpUrlAcl.ps1");
 
         Assert(!System.Text.RegularExpressions.Regex.IsMatch(realmLogin, @"Log\.\w+\([^;\r\n]*Password"), "password logging returned");
         Assert(gateLogin.Contains(".Take(request.Key)"), "Gate login no longer consumes one-time key");
@@ -411,6 +461,21 @@ internal static class Program
         Assert(shutdown.Contains("saver.SaveNow()") && shutdown.Contains("CompleteParticipant(success)"), "shutdown save coordination removed");
         Assert(shutdown.Contains("const int batchSize = 16") && shutdown.Contains("await ETTaskHelper.WaitAll(tasks)")
             && shutdown.Contains("success &= saved") && shutdown.Contains("retry < 3"), "bounded shutdown drain or failure aggregation removed");
+        Assert(routerManagerInit.Contains("NetworkExposurePolicy.ResolveRouterManagerPrefix") &&
+               routerManagerInit.Contains("!http.Listener.IsListening"), "RouterManager exact bind policy or listener failure guard removed");
+        Assert(httpSystem.Contains("InflightRequests > 256") && httpSystem.Contains("Request.HasEntityBody") &&
+               httpSystem.Contains("Content-Security-Policy") && httpSystem.Contains("MethodNotAllowed"),
+               "RouterManager request boundary, overload guard or security headers removed");
+        Assert(routerSystem.Contains("NetworkExposurePolicy.ValidateRouter") &&
+               routerSystem.Contains("ResolveRouterWebSocketBindHost") && routerSystem.Contains("RouterWebSocketMaxConnections"),
+               "Router exposure validation or WebSocket connection cap removed");
+        Assert(webSocketService.Contains("Request.IsWebSocketRequest") && webSocketService.Contains("this.expectedPath") &&
+               webSocketService.Contains("this.channels.Count >= this.maxConnections") &&
+               !webSocketService.Contains("netsh http add urlacl url=http://*"),
+               "WebSocket path, upgrade, capacity boundary or safe ACL guidance removed");
+        Assert(urlAclScript.Contains("ServiceIdentity") && urlAclScript.Contains("ConfirmUrl") &&
+               urlAclScript.Contains("http://*:") && urlAclScript.Contains("http://+:") &&
+               urlAclScript.Contains("WindowsBuiltInRole]::Administrator"), "exact URL ACL migration safeguards removed");
     }
 
     private static string FindRepositoryRoot()

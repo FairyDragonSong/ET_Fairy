@@ -17,14 +17,21 @@ namespace ET
         private readonly Dictionary<string, long> endpointChannels = new();
         private readonly Queue<(IPEndPoint EndPoint, MemoryBuffer Buffer)> received = new();
 
-        public WebSocketRouterTransport(int port, string path = "et")
+        public WebSocketRouterTransport(int port, string path = "et", string bindHost = "+", int maxConnections = 4096)
         {
             string normalizedPath = string.IsNullOrWhiteSpace(path) ? "et" : path.Trim('/');
-            this.service = new WService(new[] { $"http://+:{port}/{normalizedPath}/" });
+            this.service = new WService(
+                new[] { $"http://{bindHost}:{port}/{normalizedPath}/" },
+                $"/{normalizedPath}/",
+                maxConnections);
+            if (!this.service.IsListening)
+            {
+                throw new InvalidOperationException("Router WebSocket listener failed to start");
+            }
             this.service.AcceptCallback = this.OnAccept;
             this.service.ReadCallback = this.OnRead;
             this.service.ErrorCallback = this.OnChannelError;
-            Log.Info($"Router WebSocket listener started: ws://0.0.0.0:{port}/{normalizedPath}/");
+            Log.Info($"Router WebSocket listener started: host={bindHost} port={port} path=/{normalizedPath}/");
         }
 
         public void Send(byte[] bytes, int index, int length, EndPoint endPoint, ChannelType channelType)

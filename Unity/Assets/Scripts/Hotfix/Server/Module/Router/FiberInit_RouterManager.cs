@@ -3,6 +3,7 @@
 namespace ET.Server
 {
     [Invoke((long)SceneType.RouterManager)]
+    [FriendOf(typeof(HttpComponent))]
     public class FiberInit_RouterManager: AInvokeHandler<FiberInit, ETTask>
     {
         public override async ETTask Handle(FiberInit fiberInit)
@@ -10,7 +11,8 @@ namespace ET.Server
             Scene root = fiberInit.Fiber.Root;
             StartSceneConfig startSceneConfig = StartSceneConfigCategory.Instance.Get((int)root.Id);
             root.AddComponent<GracefulShutdownComponent>();
-            root.AddComponent<HttpComponent, string>($"http://*:{startSceneConfig.Port}/");
+            HttpComponent http=root.AddComponent<HttpComponent, string>(NetworkExposurePolicy.ResolveRouterManagerPrefix(Options.Instance,startSceneConfig.Port));
+            if(http.Listener==null||!http.Listener.IsListening)throw new System.InvalidOperationException("RouterManager HTTP listener failed to start");
 
             await ETTask.CompletedTask;
         }

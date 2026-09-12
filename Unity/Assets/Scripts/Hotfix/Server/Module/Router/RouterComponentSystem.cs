@@ -13,12 +13,16 @@ namespace ET.Server
         [EntitySystem]
         private static void Awake(this RouterComponent self, IPEndPoint outerAddress, string innerIP)
         {
+            NetworkExposurePolicy.ValidateRouter(Options.Instance, outerAddress, innerIP);
             self.OuterUdp = new UdpTransport(outerAddress);
             self.OuterTcp = new TcpTransport(outerAddress);
             if (Options.Instance.RouterWebSocket == 1)
             {
                 self.OuterWebSocket = new WebSocketRouterTransport(
-                    outerAddress.Port + Options.Instance.RouterWebSocketPortOffset);
+                    outerAddress.Port + Options.Instance.RouterWebSocketPortOffset,
+                    "et",
+                    NetworkExposurePolicy.ResolveRouterWebSocketBindHost(Options.Instance),
+                    Options.Instance.RouterWebSocketMaxConnections);
             }
             self.InnerSocket = new UdpTransport(new IPEndPoint(IPAddress.Parse(innerIP), 0));
         }

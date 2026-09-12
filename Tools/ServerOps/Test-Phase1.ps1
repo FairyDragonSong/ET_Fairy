@@ -14,7 +14,7 @@ if ($SkipRuntimeSmoke) { exit 0 }
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = (Join-Path $repositoryRoot "Bin\App.exe")
 $startInfo.WorkingDirectory = (Join-Path $repositoryRoot "Bin")
-$startInfo.Arguments = "--Process=8 --StartConfig=StartConfig/Release --Console=1 --ShutdownTimeoutSeconds=5"
+$startInfo.Arguments = "--Process=8 --StartConfig=StartConfig/Release --Console=1 --Develop=1 --ShutdownTimeoutSeconds=5"
 $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardInput = $true
 $startInfo.RedirectStandardOutput = $true
@@ -36,6 +36,10 @@ try {
     if ($null -eq $live -or $live.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($live.Headers["X-Request-Id"])) {
         throw "liveness smoke test failed"
     }
+    if($live.Headers['Cache-Control'] -ne 'no-store' -or $live.Headers['X-Content-Type-Options'] -ne 'nosniff' -or
+       $live.Headers['Content-Security-Policy'] -ne "default-src 'none'" -or $live.Headers['Referrer-Policy'] -ne 'no-referrer'){
+        throw 'RouterManager security headers missing'
+    }
 
     $ready = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:30300/health/ready" -TimeoutSec 2
     $metrics = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:30300/metrics" -TimeoutSec 2
@@ -45,6 +49,11 @@ try {
     if(-not $metrics.Content.Contains("# TYPE et_session_journal_end_failures_total counter") -or
        -not $metrics.Content.Contains("et_password_change_accepted_total 0")){
         throw 'Security counters missing from metrics HTTP response'
+    }
+    $methodRejected=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:30300/get_router' -Method POST -SkipHttpErrorCheck -TimeoutSec 2
+    $queryRejected=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:30300/health/live?debug=1' -SkipHttpErrorCheck -TimeoutSec 2
+    if($methodRejected.StatusCode -ne 405 -or $methodRejected.Headers['Allow'] -ne 'GET' -or $queryRejected.StatusCode -ne 400){
+        throw 'RouterManager method or query hardening failed'
     }
 
     $process.StandardInput.WriteLine("shutdown")

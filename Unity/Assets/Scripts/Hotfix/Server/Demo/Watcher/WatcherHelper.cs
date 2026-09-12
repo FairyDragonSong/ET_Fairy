@@ -50,6 +50,7 @@ namespace ET.Server
                     $" --Console={Options.Instance.Console}" +
                     $" --RouterWebSocket={Options.Instance.RouterWebSocket}" +
                     $" --RouterWebSocketPortOffset={Options.Instance.RouterWebSocketPortOffset}" +
+                    $" --RouterWebSocketMaxConnections={Options.Instance.RouterWebSocketMaxConnections}" +
                     $" --AccountAutoRegister={Options.Instance.AccountAutoRegister}" +
                     $" --LoginIpLimit={Options.Instance.LoginIpLimit}" +
                     $" --LoginAccountLimit={Options.Instance.LoginAccountLimit}" +
