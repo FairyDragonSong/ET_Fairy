@@ -134,6 +134,12 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin"
 .\Test-DisasterRecoveryGovernance.ps1
 ```
 
+跨故障域存储接入后，由只读存储审计身份准备副本与保留库存，再用 `New-BackupStorageInventory.ps1` 生成观察者/请求人/批准人三签证据；发布前以 `Test-BackupStorageInventory.ps1` 复验最新签名备份的 RPO、两个真实故障域、静态加密、Compliance 对象锁和日/周/月恢复点。详情见 [020.16](../../Book/服务器上线升级/020.16-跨故障域备份库存与保留门禁.md)，离线自检：
+
+```powershell
+.\Test-BackupStorageGovernance.ps1
+```
+
 ## 账号与角色一致性审计
 
 安装 MongoDB Shell 后，可在迁移前、恢复后和正式发布前执行：

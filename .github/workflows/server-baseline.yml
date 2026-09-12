@@ -107,3 +107,7 @@ jobs:
       - name: Verify disaster recovery objectives and drill evidence
         shell: pwsh
         run: ./Tools/ServerOps/Test-DisasterRecoveryGovernance.ps1
+
+      - name: Verify backup storage inventory governance
+        shell: pwsh
+        run: ./Tools/ServerOps/Test-BackupStorageGovernance.ps1
