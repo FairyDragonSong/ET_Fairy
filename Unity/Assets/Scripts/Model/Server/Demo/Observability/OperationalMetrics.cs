@@ -82,6 +82,8 @@ namespace ET.Server
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             Process process = Process.GetCurrentProcess();
             StringBuilder text = new();
+            Append(text, "et_process_id", process.Id);
+            Append(text, "et_config_process_id", Options.Instance.Process);
             Append(text, "et_process_start_time_seconds", this.startedAtUnixSeconds);
             Append(text, "et_process_uptime_seconds", Math.Max(0, now - this.startedAtUnixSeconds));
             Append(text, "et_process_working_set_bytes", process.WorkingSet64);

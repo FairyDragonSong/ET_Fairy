@@ -384,6 +384,7 @@ internal static class Program
         Parallel.For(0,1000,_=>metrics.RecordSecurity(SecurityMetric.PasswordChangeAccepted));
         foreach(var metric in Enum.GetValues<SecurityMetric>().Where(v=>v!=SecurityMetric.Count))metrics.RecordSecurity(metric);
         string text=metrics.ExportPrometheus();
+        Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
         Assert(!text.Contains('{')&&!text.Contains('}'),"Unexpected dynamic metric labels");

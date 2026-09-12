@@ -1,8 +1,10 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491)
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[ValidateRange(1024,65535)][int]$Port=30491,[ValidateRange(1024,65535)][int]$PeerPort=30492)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
-foreach($testPort in @($Port,30300)){
+if(@($Port,$PeerPort,30300,30301,20008,20009|Select-Object -Unique).Count -ne 6){throw 'Metrics test ports must be distinct from each other and service ports'}
+foreach($testPort in @($Port,$PeerPort,30300,30301,20008,20009)){
     if(Get-NetTCPConnection -LocalPort $testPort -State Listen -ErrorAction SilentlyContinue){throw "Test port occupied: $testPort"}
+    if(Get-NetUDPEndpoint -LocalPort $testPort -ErrorAction SilentlyContinue){throw "Test UDP port occupied: $testPort"}
 }
 $fixture=Join-Path $EnvironmentRoot ('metrics-test-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture | Out-Null
@@ -13,14 +15,18 @@ $tokenFile=Join-Path $fixture 'token.txt'
 $token=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 [IO.File]::WriteAllText($tokenFile,$token)
 $process=$null
+$peer=$null
+$peerTokenFile=Join-Path $fixture 'peer-token.txt'
+$peerToken=[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+[IO.File]::WriteAllText($peerTokenFile,$peerToken)
 $handler=[Net.Http.HttpClientHandler]::new();$handler.UseProxy=$false
 $client=[Net.Http.HttpClient]::new($handler)
 $client.Timeout=[TimeSpan]::FromSeconds(3)
 $checks=[Collections.Generic.List[string]]::new()
-function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile){
+function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]$ProcessNumber=8){
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
     $info.WorkingDirectory="$repo/Bin"
-    $info.Arguments='--Process=8 --StartConfig=StartConfig/Release --Console=1 --ShutdownTimeoutSeconds=5'
+    $info.Arguments="--Process=$ProcessNumber --StartConfig=StartConfig/Release --Console=1 --ShutdownTimeoutSeconds=5"
     $info.UseShellExecute=$false;$info.CreateNoWindow=$true
     $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
     $info.Environment.Remove('ET_METRICS_PORT')|Out-Null
@@ -33,12 +39,16 @@ function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile){
     $script:stderr=$child.StandardError.ReadToEndAsync()
     return $child
 }
-function Request([string]$Path,[string]$Authorization,[string]$Method='GET'){
-    $request=[Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::new($Method),"http://127.0.0.1:$Port$Path")
+function Request([string]$Path,[string]$Authorization,[string]$Method='GET',[int]$TargetPort=$Port){
+    $request=[Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::new($Method),"http://127.0.0.1:$TargetPort$Path")
     try {
         if($Authorization){$request.Headers.TryAddWithoutValidation('Authorization',$Authorization)|Out-Null}
         return $client.SendAsync($request).GetAwaiter().GetResult()
     } finally {$request.Dispose()}
+}
+function Counter([string]$Body,[string]$Name){
+    if($Body -notmatch "(?m)^$Name (\d+)\r?$"){throw 'Expected process counter missing'}
+    return [long]$Matches[1]
 }
 try {
     $process=Start-TestProcess ([string]$Port) $tokenFile
@@ -64,6 +74,34 @@ try {
     $listeners=@(Get-NetTCPConnection -LocalPort $Port -State Listen)
     if($listeners.Count -eq 0 -or @($listeners|Where-Object LocalAddress -ne '127.0.0.1').Count){throw 'Exporter is not loopback-only'}
     $checks.Add('loopback-only')
+    $peer=Start-TestProcess ([string]$PeerPort) $peerTokenFile 9
+    $peerBody=''
+    for($attempt=0;$attempt -lt 100;$attempt++){
+        if($peer.HasExited){throw 'Peer process exited before readiness'}
+        try {
+            $peerResponse=Request '/metrics' "Bearer $peerToken" 'GET' $PeerPort
+            try {if([int]$peerResponse.StatusCode -eq 200){$peerBody=$peerResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()}}finally{$peerResponse.Dispose()}
+        }catch { }
+        if($peerBody -match '(?m)^et_startup_ready 1$'){break}
+        Start-Sleep -Milliseconds 100
+    }
+    if((Counter $peerBody 'et_startup_ready') -ne 1 -or (Counter $peerBody 'et_process_id') -ne $peer.Id -or (Counter $peerBody 'et_config_process_id') -ne 9){throw 'Peer metrics not from the expected ready process'}
+    if((Counter $body 'et_process_id') -ne $process.Id -or (Counter $body 'et_config_process_id') -ne 8){throw 'Primary metric identity incorrect'}
+    $wrong=Request '/metrics' "Bearer $token" 'GET' $PeerPort
+    try {if([int]$wrong.StatusCode -ne 401){throw 'Primary credential accepted by peer'}}finally{$wrong.Dispose()}
+    $wrong=Request '/metrics' "Bearer $peerToken"
+    try {if([int]$wrong.StatusCode -ne 401){throw 'Peer credential accepted by primary'}}finally{$wrong.Dispose()}
+    $beforePrimary=Counter $body 'et_http_requests_total'
+    $beforePeer=Counter $peerBody 'et_http_requests_total'
+    $probe=$client.GetAsync('http://127.0.0.1:30300/health/live').GetAwaiter().GetResult();$probe.Dispose()
+    Start-Sleep -Milliseconds 200
+    $primaryResponse=Request '/metrics' "Bearer $token"
+    try {$primaryBody=$primaryResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()}finally{$primaryResponse.Dispose()}
+    $peerResponse=Request '/metrics' "Bearer $peerToken" 'GET' $PeerPort
+    try {$peerBody=$peerResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()}finally{$peerResponse.Dispose()}
+    if((Counter $primaryBody 'et_startup_ready') -ne 1 -or (Counter $peerBody 'et_startup_ready') -ne 1){throw 'Both processes must be ready during the isolation test'}
+    if((Counter $primaryBody 'et_http_requests_total') -le $beforePrimary -or (Counter $peerBody 'et_http_requests_total') -ne $beforePeer){throw 'Per-process counter isolation failed'}
+    $checks.Add('two-ready-process-identities-credentials-and-counters-isolated')
     $address=Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.AddressState -eq 'Preferred'} | Select-Object -First 1 -ExpandProperty IPAddress
     if(-not $address){throw 'A local non-loopback address is required to verify legacy metrics isolation'}
     $legacy=$client.GetAsync("http://${address}:30300/metrics").GetAwaiter().GetResult()
@@ -74,6 +112,16 @@ try {
     $process.Dispose();$process=$null
     if(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue){throw 'Exporter port retained after shutdown'}
     $checks.Add('graceful-shutdown-releases-exporter-port')
+    $peerResponse=Request '/metrics' "Bearer $peerToken" 'GET' $PeerPort
+    try {
+        $peerBody=$peerResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        if([int]$peerResponse.StatusCode -ne 200 -or (Counter $peerBody 'et_process_id') -ne $peer.Id){throw 'Primary shutdown disrupted peer scrape'}
+    }finally{$peerResponse.Dispose()}
+    $peer.StandardInput.WriteLine('shutdown')
+    if(-not $peer.WaitForExit(12000) -or $peer.ExitCode -ne 0){throw 'Peer shutdown failed'}
+    $peer.Dispose();$peer=$null
+    if(Get-NetTCPConnection -LocalPort $PeerPort -State Listen -ErrorAction SilentlyContinue){throw 'Peer exporter port retained'}
+    $checks.Add('one-process-stop-does-not-disrupt-peer-scrape')
     foreach($badPort in @('', '0', '65536')){
         $process=Start-TestProcess $badPort $tokenFile
         if(-not $process.WaitForExit(12000) -or $process.ExitCode -ne 3){throw 'Invalid exporter configuration did not fail closed'}
@@ -100,6 +148,8 @@ try {
     foreach($check in $checks){Write-Host "PASS $check"}
 }finally{
     if($process){if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()};$process.Dispose()}
+    if($peer){if(-not $peer.HasExited){$peer.Kill($true);$peer.WaitForExit()};$peer.Dispose()}
     $client.Dispose()
     if(Test-Path -LiteralPath $tokenFile){Remove-Item -LiteralPath $tokenFile -ErrorAction Stop}
+    if(Test-Path -LiteralPath $peerTokenFile){Remove-Item -LiteralPath $peerTokenFile -ErrorAction Stop}
 }
