@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Database,
+    [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$Database,
 
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "backups")
 )
@@ -13,10 +13,11 @@ if ([string]::IsNullOrWhiteSpace($mongoUri)) {
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
 [System.IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null
-$timestamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
+$timestamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssfffffffZ")
 $backupPath = Join-Path $resolvedOutput "$Database-$timestamp"
 
-& mongodump --uri=$mongoUri --db=$Database --out=$backupPath
+. "$PSScriptRoot/MongoTool.ps1"
+Invoke-MongoTool -Tool mongodump -Arguments @("--db=$Database", "--out=$backupPath")
 if ($LASTEXITCODE -ne 0) {
     throw "mongodump failed with exit code $LASTEXITCODE"
 }
@@ -28,3 +29,4 @@ $manifest = @{
 }
 $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backupPath "backup-manifest.json") -Encoding UTF8
 Write-Host "MongoDB backup completed: $backupPath"
+Write-Output $backupPath

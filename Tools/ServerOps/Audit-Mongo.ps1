@@ -12,7 +12,7 @@ if ([string]::IsNullOrWhiteSpace($mongoUri)) {
 
 $env:ET_AUDIT_DATABASE = $Database
 try {
-    & mongosh $mongoUri --quiet --file (Join-Path $PSScriptRoot "Audit-Mongo.js")
+    & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file (Join-Path $PSScriptRoot "Audit-Mongo.js")
     if ($LASTEXITCODE -ne 0) {
         throw "MongoDB account-role audit failed with exit code $LASTEXITCODE"
     }

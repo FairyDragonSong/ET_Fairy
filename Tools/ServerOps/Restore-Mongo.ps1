@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Database,
+    [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$Database,
 
     [Parameter(Mandatory = $true)]
     [string]$BackupPath,
@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $sourceDatabase = [string]$manifest.Database
-if ([string]::IsNullOrWhiteSpace($sourceDatabase)) {
+if ($sourceDatabase -notmatch '^[A-Za-z0-9_-]+$') {
     throw "Backup manifest does not contain a source database name."
 }
 
@@ -38,7 +38,6 @@ if (-not (Test-Path -LiteralPath $databaseDump -PathType Container)) {
 }
 
 $arguments = @(
-    "--uri=$mongoUri"
     "--stopOnError"
     "--nsInclude=$sourceDatabase.*"
 )
@@ -51,7 +50,8 @@ if ($DropExisting) {
 }
 $arguments += $resolvedBackup
 
-& mongorestore @arguments
+. "$PSScriptRoot/MongoTool.ps1"
+Invoke-MongoTool -Tool mongorestore -Arguments $arguments
 if ($LASTEXITCODE -ne 0) {
     throw "mongorestore failed with exit code $LASTEXITCODE"
 }

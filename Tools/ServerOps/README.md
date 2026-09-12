@@ -45,6 +45,8 @@ $env:ET_MONGO_URI = "mongodb://user:password@host:27017/?authSource=admin&tls=tr
 
 ## 014 预发布验收
 
+本机已配置的隔离环境与启停命令见 [LOCAL-ENV.md](LOCAL-ENV.md)。本机 CA 通过 `ET_MONGO_CA_FILE` 传入，凭据通过受限配置文件或环境变量传入子进程。
+
 在干净工作区和真实预发布 MongoDB Replica Set 上执行统一验收入口。目标恢复库必须与源库不同、以 `_DR_TEST` 结尾，并再次精确确认；脚本会覆盖该隔离恢复库，禁止填写生产库名。
 
 ```powershell
@@ -53,8 +55,11 @@ $env:ET_MONGO_URI = "mongodb://user:password@node1,node2,node3/?authSource=admin
   -Database ET_PREPRODUCTION `
   -RestoreDatabase ET_PREPRODUCTION_DR_TEST `
   -ConfirmRestoreDatabase ET_PREPRODUCTION_DR_TEST `
+  -SourceWritesStopped `
   -BackupOutputDirectory D:\Backups\ET-Acceptance `
   -EvidenceOutputDirectory D:\Evidence\ET-Acceptance
 ```
 
 该入口执行第一阶段回归、MongoDB 认证/拓扑/会话检查、事务提交与回滚、索引及账号角色审计、备份、隔离恢复和恢复数据核对。证据 JSON 不包含连接串。MongoDB 切主、网络故障、多客户端重连和负载测试依赖具体部署平台，必须另外执行并附证据，不能由此脚本的 PASS 替代。
+
+数据库范围备份须先停写源库，再传 `-SourceWritesStopped`；核验比较文档数量、全部文档内容摘要和索引。此开关是操作者确认，不会自动停止 ET 服务。

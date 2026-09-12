@@ -14,12 +14,14 @@ param(
 
     [string]$EvidenceOutputDirectory = (Join-Path $PSScriptRoot "acceptance-results"),
 
-    [switch]$SkipPhase1Regression
+    [switch]$SkipPhase1Regression,
+    [Parameter(Mandatory = $true)][switch]$SourceWritesStopped
 )
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $startedAtUtc = [DateTime]::UtcNow
+if (-not $SourceWritesStopped) { throw 'Stop source writes before a consistent database-scoped backup.' }
 
 if ($Database -ceq $RestoreDatabase) {
     throw "RestoreDatabase must differ from Database."
@@ -60,13 +62,13 @@ $dirty = -not [string]::IsNullOrWhiteSpace((& git -C $repositoryRoot status --po
 if ($dirty) { throw "Acceptance must run from a clean Git worktree so evidence identifies an exact version." }
 
 if (-not $SkipPhase1Regression) {
-    & (Join-Path $PSScriptRoot "Test-Phase1.ps1")
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot "Test-Phase1.ps1")
     if ($LASTEXITCODE -ne 0) { throw "Phase-one regression gate failed." }
 }
 
 $env:ET_ACCEPTANCE_DATABASE = $Database
 try {
-    $mongoCheck = & mongosh $mongoUri --quiet --file (Join-Path $PSScriptRoot "Test-MongoPreproduction.js")
+    $mongoCheck = & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file (Join-Path $PSScriptRoot "Test-MongoPreproduction.js")
     if ($LASTEXITCODE -ne 0) { throw "MongoDB preproduction checks failed with exit code $LASTEXITCODE" }
 }
 finally {
@@ -77,13 +79,9 @@ finally {
 if ($LASTEXITCODE -ne 0) { throw "Source database consistency audit failed." }
 
 $backupRoot = [System.IO.Path]::GetFullPath($BackupOutputDirectory)
-& (Join-Path $PSScriptRoot "Backup-Mongo.ps1") -Database $Database -OutputDirectory $backupRoot
+$backupPath = & (Join-Path $PSScriptRoot "Backup-Mongo.ps1") -Database $Database -OutputDirectory $backupRoot
 if ($LASTEXITCODE -ne 0) { throw "MongoDB backup failed." }
-$backup = Get-ChildItem -LiteralPath $backupRoot -Directory |
-    Where-Object { $_.Name -like "$Database-*" -and $_.LastWriteTimeUtc -ge $startedAtUtc.AddMinutes(-1) } |
-    Sort-Object LastWriteTimeUtc -Descending |
-    Select-Object -First 1
-if ($null -eq $backup) { throw "Unable to identify the backup produced by this run." }
+$backup = Get-Item -LiteralPath $backupPath
 
 & (Join-Path $PSScriptRoot "Restore-Mongo.ps1") `
     -Database $RestoreDatabase `
@@ -95,7 +93,7 @@ if ($LASTEXITCODE -ne 0) { throw "MongoDB isolated restore failed." }
 $env:ET_RESTORE_SOURCE_DATABASE = $Database
 $env:ET_RESTORE_TARGET_DATABASE = $RestoreDatabase
 try {
-    $restoreCheck = & mongosh $mongoUri --quiet --file (Join-Path $PSScriptRoot "Verify-MongoRestore.js")
+    $restoreCheck = & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file (Join-Path $PSScriptRoot "Verify-MongoRestore.js")
     if ($LASTEXITCODE -ne 0) { throw "MongoDB restore verification failed with exit code $LASTEXITCODE" }
 }
 finally {
@@ -118,7 +116,8 @@ $evidence = [ordered]@{
     Phase1RegressionExecuted = (-not $SkipPhase1Regression)
     MongoCheck = ($mongoCheck | Select-Object -Last 1 | ConvertFrom-Json)
     RestoreCheck = ($restoreCheck | Select-Object -Last 1 | ConvertFrom-Json)
-    Result = "PASS"
+    Result = "PASS_DATABASE_CHECKS"
+    FullUpgrade014Accepted = $false
 }
 $evidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $evidencePath -Encoding UTF8
 Write-Host "PASS preproduction MongoDB, transaction, backup and isolated restore checks"

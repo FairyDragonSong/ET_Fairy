@@ -20,15 +20,15 @@ if (!hello.logicalSessionTimeoutMinutes) {
 
 const target = db.getSiblingDB(databaseName);
 const expectedIndexes = [
-    ["ET.Server.Account", "ux_account_login_name", true],
-    ["ET.Server.Account", "ix_account_default_role", false],
-    ["ET.Server.Role", "ux_role_account_id", true],
-    ["ET.Server.Role", "ix_role_last_save_time", false]
+    ["ET.Server.Account", "ux_account_login_name", true, {LoginName:1}],
+    ["ET.Server.Account", "ix_account_default_role", false, {DefaultRoleId:1}],
+    ["ET.Server.Role", "ux_role_account_id", true, {AccountId:1}],
+    ["ET.Server.Role", "ix_role_last_save_time", false, {LastSaveTime:1}]
 ];
 const missingIndexes = [];
-for (const [collectionName, indexName, unique] of expectedIndexes) {
+for (const [collectionName, indexName, unique, key] of expectedIndexes) {
     const index = target.getCollection(collectionName).getIndexes().find(candidate => candidate.name === indexName);
-    if (!index || (unique && index.unique !== true)) {
+    if (!index || (unique && index.unique !== true) || JSON.stringify(index.key) !== JSON.stringify(key) || (indexName === 'ix_account_default_role' && !index.sparse)) {
         missingIndexes.push({ collectionName, indexName, uniqueRequired: unique });
     }
 }
@@ -37,6 +37,7 @@ if (missingIndexes.length > 0) {
 }
 
 const probeCollection = target.getCollection("ET.Server.PreproductionProbe");
+if (!target.getCollectionNames().includes('ET.Server.PreproductionProbe')) target.createCollection('ET.Server.PreproductionProbe');
 const marker = `acceptance-${new ObjectId().toString()}`;
 probeCollection.deleteMany({ _id: marker });
 
