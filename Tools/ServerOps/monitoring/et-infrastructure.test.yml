@@ -1,0 +1,174 @@
+rule_files:
+  - et-infrastructure.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: exporter outages fire and recover
+    interval: 1m
+    input_series:
+      - series: 'up{job="windows-host",instance="host-a"}'
+        values: '0 0 0 1 1'
+      - series: 'up{job="mongodb",instance="mongo-a"}'
+        values: '1 1 1 1 1'
+      - series: 'mongodb_up{job="mongodb",instance="mongo-a"}'
+        values: '0 0 0 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ETWindowsHostExporterDown
+        exp_alerts:
+          - exp_labels:
+              job: windows-host
+              instance: host-a
+              severity: critical
+              component: windows-host
+            exp_annotations:
+              summary: Windows host metrics exporter is unreachable
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 2m
+        alertname: ETMongoDBExporterDown
+        exp_alerts:
+          - exp_labels:
+              job: mongodb
+              instance: mongo-a
+              severity: critical
+              component: mongodb
+            exp_annotations:
+              summary: MongoDB metrics exporter or database probe is unavailable
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 4m
+        alertname: ETWindowsHostExporterDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: ETMongoDBExporterDown
+        exp_alerts: []
+
+  - name: host resource alerts fire and recover
+    interval: 1m
+    input_series:
+      - series: 'windows_cpu_time_total{job="windows-host",instance="host-a",core="0",mode="idle"}'
+        values: '0+6x20 120+60x5'
+      - series: 'windows_memory_available_bytes{job="windows-host",instance="host-a"}'
+        values: '5x8 50x17'
+      - series: 'windows_memory_physical_total_bytes{job="windows-host",instance="host-a"}'
+        values: '100x25'
+      - series: 'windows_logical_disk_free_bytes{job="windows-host",instance="host-a",volume="D:"}'
+        values: '5x13 50x12'
+      - series: 'windows_logical_disk_size_bytes{job="windows-host",instance="host-a",volume="D:"}'
+        values: '100x25'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ETWindowsHighCpu
+        exp_alerts:
+          - exp_labels:
+              instance: host-a
+              severity: warning
+              component: windows-host
+            exp_annotations:
+              summary: Windows host CPU usage is above 85 percent
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 6m
+        alertname: ETWindowsHighMemory
+        exp_alerts:
+          - exp_labels:
+              job: windows-host
+              instance: host-a
+              severity: critical
+              component: windows-host
+            exp_annotations:
+              summary: Windows host memory usage is above 90 percent
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 11m
+        alertname: ETWindowsDiskLow
+        exp_alerts:
+          - exp_labels:
+              job: windows-host
+              instance: host-a
+              volume: 'D:'
+              severity: critical
+              component: windows-host
+            exp_annotations:
+              summary: Windows volume has less than 10 percent free space
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 24m
+        alertname: ETWindowsHighCpu
+        exp_alerts: []
+      - eval_time: 24m
+        alertname: ETWindowsHighMemory
+        exp_alerts: []
+      - eval_time: 24m
+        alertname: ETWindowsDiskLow
+        exp_alerts: []
+
+  - name: mongodb health and saturation alerts fire and recover
+    interval: 1m
+    input_series:
+      - series: 'mongodb_rs_members_health{job="mongodb",instance="mongo-a",member_idx="mongo-1"}'
+        values: '0x8 1x5'
+      - series: 'mongodb_rs_members_state{job="mongodb",instance="mongo-a",member_idx="mongo-1"}'
+        values: '2x8 1x5'
+      - series: 'mongodb_rs_members_state{job="mongodb",instance="mongo-a",member_idx="mongo-2"}'
+        values: '2x13'
+      - series: 'mongodb_rs_members_optimeDate{job="mongodb",instance="mongo-a",member_idx="mongo-1"}'
+        values: '20000x8 10000x5'
+      - series: 'mongodb_rs_members_optimeDate{job="mongodb",instance="mongo-a",member_idx="mongo-2"}'
+        values: '0x8 10000x5'
+      - series: 'mongodb_ss_connections{job="mongodb",instance="mongo-a",conn_type="current"}'
+        values: '90x8 10x5'
+      - series: 'mongodb_ss_connections{job="mongodb",instance="mongo-a",conn_type="available"}'
+        values: '10x8 90x5'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ETMongoDBMemberUnhealthy
+        exp_alerts:
+          - exp_labels:
+              job: mongodb
+              instance: mongo-a
+              member_idx: mongo-1
+              severity: critical
+              component: mongodb
+            exp_annotations:
+              summary: MongoDB replica-set member is unhealthy
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 2m
+        alertname: ETMongoDBPrimaryCardinalityInvalid
+        exp_alerts:
+          - exp_labels:
+              instance: mongo-a
+              severity: critical
+              component: mongodb
+            exp_annotations:
+              summary: MongoDB replica set does not have exactly one primary
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 5m
+        alertname: ETMongoDBReplicationLag
+        exp_alerts:
+          - exp_labels:
+              instance: mongo-a
+              severity: warning
+              component: mongodb
+            exp_annotations:
+              summary: MongoDB replica-set member optime differs by more than 10 seconds
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 5m
+        alertname: ETMongoDBConnectionSaturation
+        exp_alerts:
+          - exp_labels:
+              instance: mongo-a
+              severity: warning
+              component: mongodb
+            exp_annotations:
+              summary: MongoDB connection utilization is above 80 percent
+              runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+      - eval_time: 12m
+        alertname: ETMongoDBMemberUnhealthy
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ETMongoDBPrimaryCardinalityInvalid
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ETMongoDBReplicationLag
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ETMongoDBConnectionSaturation
+        exp_alerts: []

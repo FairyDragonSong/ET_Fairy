@@ -1,0 +1,93 @@
+groups:
+  - name: et-infrastructure-alerts
+    interval: 30s
+    rules:
+      - alert: ETWindowsHostExporterDown
+        expr: up{job="windows-host"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: windows-host
+        annotations:
+          summary: Windows host metrics exporter is unreachable
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETMongoDBExporterDown
+        expr: (up{job="mongodb"} == 0) or on (job, instance) (mongodb_up{job="mongodb"} == 0)
+        for: 2m
+        labels:
+          severity: critical
+          component: mongodb
+        annotations:
+          summary: MongoDB metrics exporter or database probe is unavailable
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETWindowsHighCpu
+        expr: 1 - avg by (instance) (rate(windows_cpu_time_total{job="windows-host",mode="idle"}[5m])) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: windows-host
+        annotations:
+          summary: Windows host CPU usage is above 85 percent
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETWindowsHighMemory
+        expr: 1 - (windows_memory_available_bytes{job="windows-host"} / windows_memory_physical_total_bytes{job="windows-host"}) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          component: windows-host
+        annotations:
+          summary: Windows host memory usage is above 90 percent
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETWindowsDiskLow
+        expr: (windows_logical_disk_free_bytes{job="windows-host",volume!="_Total"} / windows_logical_disk_size_bytes{job="windows-host",volume!="_Total"} < 0.10) and windows_logical_disk_size_bytes{job="windows-host",volume!="_Total"} > 0
+        for: 10m
+        labels:
+          severity: critical
+          component: windows-host
+        annotations:
+          summary: Windows volume has less than 10 percent free space
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETMongoDBMemberUnhealthy
+        expr: mongodb_rs_members_health{job="mongodb"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: mongodb
+        annotations:
+          summary: MongoDB replica-set member is unhealthy
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETMongoDBPrimaryCardinalityInvalid
+        expr: sum by (instance) (mongodb_rs_members_state{job="mongodb"} == bool 1) != 1
+        for: 2m
+        labels:
+          severity: critical
+          component: mongodb
+        annotations:
+          summary: MongoDB replica set does not have exactly one primary
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETMongoDBReplicationLag
+        expr: max by (instance) (mongodb_rs_members_optimeDate{job="mongodb"}) - min by (instance) (mongodb_rs_members_optimeDate{job="mongodb"}) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          component: mongodb
+        annotations:
+          summary: MongoDB replica-set member optime differs by more than 10 seconds
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
+
+      - alert: ETMongoDBConnectionSaturation
+        expr: sum by (instance) (mongodb_ss_connections{job="mongodb",conn_type="current"}) / (sum by (instance) (mongodb_ss_connections{job="mongodb",conn_type="current"}) + sum by (instance) (mongodb_ss_connections{job="mongodb",conn_type="available"})) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          component: mongodb
+        annotations:
+          summary: MongoDB connection utilization is above 80 percent
+          runbook_url: Book/服务器上线升级/运维模板/主机与MongoDB告警处置.md
