@@ -562,10 +562,32 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(state.Pending==0&&state.Failures==0&&Metric("et_session_journal_end_failures_total")==failures,"Burst failed writes or leaked pending work");
         Check(elapsed.ElapsedMilliseconds<20000,"Journal burst exceeded original drain budget");
         Console.WriteLine($"GAMEPLAY_PASS session-journal-3000-burst-persisted-and-drained elapsed_ms={elapsed.ElapsedMilliseconds}");
+        long endedCount=Metric("et_session_journal_ended_total");
+        var firstFilter=Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",saved[0]["_id"]);
+        await AccountSessionJournal.EndTracked(scope,records,saved[0]["_id"].AsString,12345);
+        var repeated=await records.Find(firstFilter).SingleAsync();
+        Check(repeated.Equals(saved[0]) && state.Failures==0 && Metric("et_session_journal_ended_total")==endedCount,
+            "Idempotent journal retry altered evidence or counted another end");
+        Console.WriteLine("GAMEPLAY_PASS session-journal-idempotent-end-preserves-evidence");
+        string missingId=Guid.NewGuid().ToString("N");
+        await AccountSessionJournal.EndTracked(scope,records,missingId,0);
+        Check(state.Failures==1 && state.Pending==0 && !await AccountSessionJournal.Drain(scope),"Missing journal falsely passed drain");
+        Check(await records.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",missingId))==0,
+            "Missing journal was fabricated");
+        string malformedId=Guid.NewGuid().ToString("N");
+        var malformed=new MongoDB.Bson.BsonDocument {{"_id",malformedId},{"AccountId",id},{"State","ended"}};
+        await records.InsertOneAsync(malformed);
+        await AccountSessionJournal.EndTracked(scope,records,malformedId,0);
+        var malformedAfter=await records.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",malformedId)).SingleAsync();
+        Check(state.Failures==2 && malformedAfter.Equals(malformed) && !await AccountSessionJournal.Drain(scope),
+            "Invalid terminal journal was accepted or overwritten");
+        Check(Metric("et_session_journal_end_failures_total")==failures+2 && Metric("et_session_journal_ended_total")==endedCount,
+            "No-match outcomes were miscounted");
+        Console.WriteLine("GAMEPLAY_PASS session-journal-missing-and-invalid-terminal-fail-without-repair");
         // Deterministic saturation, with no fabricated success or database write on overflow.
         state.Pending=4096;
         await AccountSessionJournal.EndQueued(state,records,Guid.NewGuid().ToString("N"),0);
-        Check(state.Pending==4096&&state.Failures==1,"Journal queue overflow was not bounded and failed");
+        Check(state.Pending==4096&&state.Failures==3,"Journal queue overflow was not bounded and failed");
         state.Pending=0;
         Check(!await AccountSessionJournal.Drain(scope),"Failed journal queue falsely passed drain");
         Console.WriteLine("GAMEPLAY_PASS session-journal-overflow-fails-drain");

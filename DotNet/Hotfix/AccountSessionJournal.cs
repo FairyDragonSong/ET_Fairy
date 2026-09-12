@@ -113,8 +113,24 @@ public static class AccountSessionJournal
                 Builders<BsonDocument>.Filter.Eq("_id",recordId)&Builders<BsonDocument>.Filter.Eq("State","admitted"),
                 Builders<BsonDocument>.Update.Set("State","ended").Set("EndedAtUtc",DateTime.UtcNow).Set("DisconnectError",error),
                 cancellationToken:timeout.Token);
-            if(result.ModifiedCount==1)OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEnded);
-            return true;
+            if(result.ModifiedCount==1)
+            {
+                OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEnded);
+                return true;
+            }
+            // A successful command with no matching row is not proof of completion.
+            // Verify an idempotent retry against majority-visible terminal evidence.
+            var existing=await records.WithReadConcern(ReadConcern.Majority)
+                .Find(Builders<BsonDocument>.Filter.Eq("_id",recordId))
+                .Project(Builders<BsonDocument>.Projection.Include("State").Include("EndedAtUtc").Include("DisconnectError"))
+                .FirstOrDefaultAsync(timeout.Token);
+            if(existing!=null && existing.TryGetValue("State",out var status) && status.IsString && status.AsString=="ended" &&
+                existing.TryGetValue("EndedAtUtc",out var ended) && ended.IsBsonDateTime &&
+                existing.TryGetValue("DisconnectError",out var disconnect) && disconnect.IsInt32)
+                return true;
+            OperationalMetrics.Instance.RecordSecurity(SecurityMetric.JournalEndFailures);
+            Log.Warning($"event=account_session_journal_failed stage=disconnect reason={(existing==null?"missing_record":"invalid_terminal")}");
+            return false;
         }
         catch(Exception exception)
         {
