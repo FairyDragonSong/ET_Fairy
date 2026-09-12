@@ -74,5 +74,17 @@ jobs:
         run: |
           $version = "0.0.0-ci-$env:GITHUB_RUN_ID"
           $root = Join-Path $env:RUNNER_TEMP 'server-release'
-          ./Tools/ServerOps/New-ServerRelease.ps1 -Version $version -OutputRoot $root
-          ./Tools/ServerOps/Test-ServerRelease.ps1 -ReleaseDirectory (Join-Path $root $version) -RequireCleanProvenance -RuntimeSmoke
+          $privateKey = Join-Path $env:RUNNER_TEMP 'release-test-private.pem'
+          $publicKey = Join-Path $env:RUNNER_TEMP 'release-test-public.pem'
+          $rsa = [Security.Cryptography.RSA]::Create(3072)
+          try {
+            [IO.File]::WriteAllText($privateKey, $rsa.ExportPkcs8PrivateKeyPem())
+            [IO.File]::WriteAllText($publicKey, $rsa.ExportSubjectPublicKeyInfoPem())
+          } finally { $rsa.Dispose() }
+          try {
+            ./Tools/ServerOps/New-ServerRelease.ps1 -Version $version -OutputRoot $root -SigningPrivateKeyFile $privateKey -SigningKeyId ci-ephemeral
+            ./Tools/ServerOps/Test-ServerRelease.ps1 -ReleaseDirectory (Join-Path $root $version) -TrustedPublicKeyFile $publicKey -ExpectedSigningKeyId ci-ephemeral -RequireCleanProvenance -RuntimeSmoke
+          } finally {
+            Remove-Item -LiteralPath $privateKey -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $publicKey -Force -ErrorAction SilentlyContinue
+          }

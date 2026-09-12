@@ -1,7 +1,10 @@
 param(
     [Parameter(Mandatory)][ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$')][string]$Version,
     [string]$OutputRoot=(Join-Path $PSScriptRoot '../../Publish/Server'),
-    [switch]$AllowDirtyTestArtifact
+    [string]$SigningPrivateKeyFile,
+    [ValidatePattern('^[0-9A-Za-z._-]{3,64}$')][string]$SigningKeyId,
+    [switch]$AllowDirtyTestArtifact,
+    [switch]$AllowUnsignedTestArtifact
 )
 
 $ErrorActionPreference='Stop'
@@ -12,6 +15,23 @@ $commit=(& git -C $repositoryRoot rev-parse HEAD).Trim()
 if($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-f0-9]{40}$'){throw 'Source commit is unavailable'}
 $dirty=@(& git -C $repositoryRoot status --porcelain).Count -ne 0
 if($dirty -and -not $AllowDirtyTestArtifact){throw 'Release creation requires a clean worktree'}
+$signed=-not [string]::IsNullOrWhiteSpace($SigningPrivateKeyFile)
+if($signed -ne (-not [string]::IsNullOrWhiteSpace($SigningKeyId))){throw 'Signing key file and key id must be provided together'}
+if(-not $signed -and -not $AllowUnsignedTestArtifact){throw 'Release creation requires an external signing key'}
+$privateKeyPath=$null
+if($signed){
+    $privateKeyPath=[IO.Path]::GetFullPath($SigningPrivateKeyFile)
+    if(-not(Test-Path -LiteralPath $privateKeyPath -PathType Leaf)){throw 'Signing private key file does not exist'}
+    $repositoryPrefix=$repositoryRoot.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+    if($privateKeyPath.StartsWith($repositoryPrefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Signing private key must not be stored inside the repository'}
+    $rsaCheck=[Security.Cryptography.RSA]::Create()
+    try{
+        $rsaCheck.ImportFromPem([IO.File]::ReadAllText($privateKeyPath))
+        if($rsaCheck.KeySize -lt 3072){throw 'Signing RSA key must be at least 3072 bits'}
+        $rsaCheck.ExportParameters($true)|Out-Null
+    }
+    finally{$rsaCheck.Dispose()}
+}
 
 $final=Join-Path $resolvedOutput $Version
 if(Test-Path -LiteralPath $final){throw 'Release version already exists; refusing to overwrite'}
@@ -45,17 +65,37 @@ try{
     $manifest=[ordered]@{SchemaVersion=1;Product='ET.Server';Version=$Version;SourceCommit=$commit;
         WorktreeDirty=$dirty;CreatedAtUtc=[DateTime]::UtcNow.ToString('O');Platform='windows-x64';SelfContained=$false;
         RequiredRuntime='Microsoft.NETCore.App 8.0';StartWorkingDirectory='Bin';Files=$files}
-    [IO.File]::WriteAllText((Join-Path $package 'manifest.json'),($manifest|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $utf8=[Text.UTF8Encoding]::new($false)
+    $manifestPath=Join-Path $package 'manifest.json'
+    [IO.File]::WriteAllText($manifestPath,($manifest|ConvertTo-Json -Depth 6),$utf8)
+    $manifestHash=(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
     $archiveName="ET.Server-$Version.zip"
     $archive=Join-Path $staging $archiveName
     Compress-Archive -Path (Join-Path $package '*') -DestinationPath $archive -CompressionLevel Optimal
     $archiveHash=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    [IO.File]::WriteAllText((Join-Path $staging "$archiveName.sha256"),"$archiveHash  $archiveName`n",[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $staging "$archiveName.sha256"),"$archiveHash  $archiveName`n",$utf8)
+    if($signed){
+        $attestation=[ordered]@{SchemaVersion=1;Product='ET.Server';Version=$Version;SourceCommit=$commit;
+            ArchiveFile=$archiveName;ArchiveSha256=$archiveHash;ManifestSha256=$manifestHash;SigningKeyId=$SigningKeyId;
+            SignatureAlgorithm='RSASSA-PSS-SHA256';SignedAtUtc=[DateTime]::UtcNow.ToString('O')}
+        $attestationBytes=$utf8.GetBytes(($attestation|ConvertTo-Json -Depth 4))
+        $attestationPath=Join-Path $staging "$archiveName.attestation.json"
+        [IO.File]::WriteAllBytes($attestationPath,$attestationBytes)
+        $rsa=[Security.Cryptography.RSA]::Create()
+        try{
+            $rsa.ImportFromPem([IO.File]::ReadAllText($privateKeyPath))
+            if($rsa.KeySize -lt 3072){throw 'Signing RSA key must be at least 3072 bits'}
+            $signature=$rsa.SignData($attestationBytes,[Security.Cryptography.HashAlgorithmName]::SHA256,
+                [Security.Cryptography.RSASignaturePadding]::Pss)
+            [IO.File]::WriteAllBytes((Join-Path $staging "$archiveName.attestation.sig"),$signature)
+        }
+        finally{$rsa.Dispose()}
+    }
     Remove-Item -LiteralPath $package -Recurse -Force
     Move-Item -LiteralPath $staging -Destination $final
     [ordered]@{Passed=$true;Version=$Version;SourceCommit=$commit;WorktreeDirty=$dirty;Files=$files.Count;
-        Archive=(Join-Path $final $archiveName);Sha256=$archiveHash}|ConvertTo-Json
+        Archive=(Join-Path $final $archiveName);Sha256=$archiveHash;Signed=$signed;SigningKeyId=$SigningKeyId}|ConvertTo-Json
 }
 finally{
     if(Test-Path -LiteralPath $staging){Remove-Item -LiteralPath $staging -Recurse -Force}
