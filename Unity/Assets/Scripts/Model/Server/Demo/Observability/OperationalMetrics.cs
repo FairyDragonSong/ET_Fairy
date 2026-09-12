@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace ET.Server
 {
-    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, Count }
+    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, RoleSaveSuccess, RoleSaveFailure, Count }
     public enum SecurityMetric
     {
         PasswordChangeAccepted, PasswordChangeUnconfirmed, PasswordChangeRateLimited,
@@ -51,6 +51,8 @@ namespace ET.Server
                         HandlerLatency.RealmLogin=>"et_realm_login_handler_seconds",
                         HandlerLatency.GateLogin=>"et_gate_login_handler_seconds",
                         HandlerLatency.PasswordChange=>"et_password_change_handler_seconds",
+                        HandlerLatency.RoleSaveSuccess=>"et_role_save_success_seconds",
+                        HandlerLatency.RoleSaveFailure=>"et_role_save_failure_seconds",
                         _=>throw new InvalidOperationException()
                     };
                     text.Append("# TYPE ").Append(name).Append(" histogram\n");

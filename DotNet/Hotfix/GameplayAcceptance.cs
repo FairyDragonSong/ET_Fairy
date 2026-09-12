@@ -129,6 +129,9 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 await client.GetComponent<TimerComponent>().WaitAsync(1000);
             }
             Check(Metric("et_role_save_successes_total")>savesBefore,"Periodic saving did not recover");
+            Check(Metric("et_role_save_success_seconds_count")>0&&Metric("et_role_save_failure_seconds_count")>0,
+                "Role save latency did not observe outage failures and restored successful writes");
+            Console.WriteLine("GAMEPLAY_PASS role-save-latency-outage-failure-and-restored-success");
             Console.WriteLine("GAMEPLAY_PASS database-outage-map-kept-and-service-recovered");
             Console.WriteLine("GAMEPLAY_PASS periodic-save-failed-then-recovered");
             return;

@@ -88,6 +88,8 @@ namespace ET.Server
 
         public static async ETTask<bool> SaveProgress(Scene root, long roleId, string mapName, float3 position)
         {
+            long started=System.Diagnostics.Stopwatch.GetTimestamp();
+            bool saved=false;
             try
             {
                 DBComponent database = root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
@@ -104,12 +106,18 @@ namespace ET.Server
                 role.PositionZ = position.z;
                 role.LastSaveTime = TimeInfo.Instance.ServerNow();
                 await database.Save(roleId, role);
+                saved=true;
                 return true;
             }
             catch (Exception e)
             {
                 Log.Error($"save role progress error: {roleId} map: {mapName}\n{e}");
                 return false;
+            }
+            finally
+            {
+                OperationalMetrics.Instance?.RecordHandlerDuration(saved?HandlerLatency.RoleSaveSuccess:HandlerLatency.RoleSaveFailure,
+                    (System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency);
             }
         }
 
