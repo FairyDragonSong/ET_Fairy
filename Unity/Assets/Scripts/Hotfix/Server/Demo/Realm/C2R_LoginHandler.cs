@@ -66,34 +66,48 @@ namespace ET.Server
 				return;
 			}
 
-			// 随机分配一个Gate
-			StartSceneConfig config = RealmGateAddressHelper.GetGate(session.Zone(), authenticationResult.LoginName);
-			Log.Debug($"gate address: {config}");
+			StartSceneConfig config = null;
+			G2R_GetLoginKey g2RGetLoginKey = null;
+			RpcCallResult<G2R_GetLoginKey> lastResult = default;
+			int gateCount = RealmGateAddressHelper.GetGateCount(session.Zone());
 			
-			// 向gate请求一个key,客户端可以拿着这个key连接gate
-			R2G_GetLoginKey r2GGetLoginKey = R2G_GetLoginKey.Create();
-			r2GGetLoginKey.Account = authenticationResult.LoginName;
-			r2GGetLoginKey.AccountStateVersion = authenticationResult.StateVersion;
-			RpcCallResult<G2R_GetLoginKey> loginKeyResult = await session.Root().CallService<G2R_GetLoginKey>(
-				ServiceAddress.From(config.ActorId), r2GGetLoginKey);
-			if (!loginKeyResult.IsSuccess)
+			for (int attempt = 0; attempt < gateCount; ++attempt)
 			{
-				response.Error = loginKeyResult.Error == 0 ? ErrorCore.ERR_RpcFail : loginKeyResult.Error;
-				response.Message = loginKeyResult.Message;
+				StartSceneConfig candidate = RealmGateAddressHelper.GetGate(session.Zone(), authenticationResult.LoginName, attempt);
+				R2G_GetLoginKey requestKey = R2G_GetLoginKey.Create();
+				requestKey.Account = authenticationResult.LoginName;
+				requestKey.AccountStateVersion = authenticationResult.StateVersion;
+				lastResult = await session.Root().CallService<G2R_GetLoginKey>(ServiceAddress.From(candidate.ActorId), requestKey);
+				if (lastResult.IsSuccess)
+				{
+					config = candidate;
+					g2RGetLoginKey = lastResult.Response;
+					break;
+				}
+				lastResult.Response?.Dispose();
+				if (!RealmGateAddressHelper.ShouldTryNext(lastResult.FailureKind, lastResult.Error)) break;
+				Log.Warning($"event=gate_key_retry trace_id={traceId} failed_gate={candidate.Id} attempt={attempt + 1} failure={lastResult.FailureKind}");
+			}
+			if (g2RGetLoginKey == null)
+			{
+				response.Error = lastResult.Error == 0 ? ErrorCore.ERR_RpcFail : lastResult.Error;
+				response.Message = lastResult.Message;
 				OperationalMetrics.Instance.RecordLoginFailure(LoginFailureKind.ServiceError);
-				outcomeRecorded=true;
-				Log.Error($"event=login_rejected trace_id={traceId} reason=gate_key_rpc error={response.Error}");
+				outcomeRecorded = true;
+				Log.Error($"event=login_rejected trace_id={traceId} reason=all_gate_key_rpc_failed error={response.Error}");
 				return;
 			}
 
-			using G2R_GetLoginKey g2RGetLoginKey = loginKeyResult.Response;
+			using (g2RGetLoginKey)
+			{
 
-			response.Address = config.InnerIPPort.ToString();
-			response.Key = g2RGetLoginKey.Key;
-			response.GateId = g2RGetLoginKey.GateId;
-			OperationalMetrics.Instance.RecordLoginSuccess();
-			outcomeRecorded=true;
-			Log.Info($"event=login_succeeded trace_id={traceId} gate_id={response.GateId}");
+				response.Address = config.InnerIPPort.ToString();
+				response.Key = g2RGetLoginKey.Key;
+				response.GateId = g2RGetLoginKey.GateId;
+				OperationalMetrics.Instance.RecordLoginSuccess();
+				outcomeRecorded=true;
+				Log.Info($"event=login_succeeded trace_id={traceId} gate_id={response.GateId}");
+			}
 			
 			CloseSession(session).Coroutine();
 			}

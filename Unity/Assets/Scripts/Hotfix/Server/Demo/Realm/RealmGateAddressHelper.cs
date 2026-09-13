@@ -7,11 +7,29 @@ namespace ET.Server
 	{
 		public static StartSceneConfig GetGate(int zone, string account)
 		{
-			ulong hash = (ulong)account.GetLongHashCode();
-			
-			List<StartSceneConfig> zoneGates = StartSceneConfigCategory.Instance.Gates[zone];
-			
-			return zoneGates[(int)(hash % (ulong)zoneGates.Count)];
+			return GetGate(zone, account, 0);
 		}
+
+		public static StartSceneConfig GetGate(int zone, string account, int attempt)
+		{
+			List<StartSceneConfig> zoneGates = StartSceneConfigCategory.Instance.Gates[zone];
+			if (zoneGates.Count == 0) throw new System.InvalidOperationException($"Zone {zone} has no Gate");
+			int index = GetCandidateIndex(zoneGates.Count, account, attempt);
+			return zoneGates[index];
+		}
+
+		public static int GetGateCount(int zone) => StartSceneConfigCategory.Instance.Gates[zone].Count;
+
+		public static int GetCandidateIndex(int gateCount, string account, int attempt)
+		{
+			if (gateCount <= 0 || string.IsNullOrEmpty(account) || attempt < 0 || attempt >= gateCount)
+				throw new System.InvalidOperationException("Gate candidate attempt is outside the bounded candidate set");
+			ulong hash = (ulong)account.GetLongHashCode();
+			return (int)((hash + (ulong)attempt) % (ulong)gateCount);
+		}
+
+		public static bool ShouldTryNext(RpcFailureKind failureKind, int error) =>
+			failureKind is RpcFailureKind.TargetNotFound or RpcFailureKind.Timeout or RpcFailureKind.InfrastructureError ||
+			(failureKind == RpcFailureKind.RemoteError && error == ErrorCore.ERR_AccountStorageUnavailable);
 	}
 }

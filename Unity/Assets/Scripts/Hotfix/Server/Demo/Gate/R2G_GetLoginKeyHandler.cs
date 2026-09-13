@@ -8,6 +8,12 @@ namespace ET.Server
 	{
 		protected override async ETTask Run(Scene scene, R2G_GetLoginKey request, G2R_GetLoginKey response)
 		{
+			if (ShutdownCoordinator.Instance.IsRequested)
+			{
+				response.Error = ErrorCore.ERR_AccountStorageUnavailable;
+				response.Message = "Gate is draining";
+				return;
+			}
 			long key = scene.GetComponent<GateSessionKeyComponent>().Issue(request.Account, request.AccountStateVersion);
 			response.Key = key;
 			response.GateId = scene.Id;

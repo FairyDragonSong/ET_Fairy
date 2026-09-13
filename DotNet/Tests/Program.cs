@@ -15,6 +15,7 @@ internal static class Program
         ("PBKDF2 哈希、随机盐与错误密码", TestPasswordHashing),
         ("Gate Key 只能消费一次", TestOneTimeGateKey),
         ("Gate Key 使用密码学随机源", TestSecureGateKey),
+        ("Gate 候选顺序与有限故障转移", TestGateCandidateFallback),
         ("外网消息与字节限流", TestTrafficLimit),
         ("登录 IP 与账号爆破限流", TestLoginRateLimit),
         ("跨 Realm 登录准入身份隔离", TestSharedLoginAdmissionIdentity),
@@ -148,6 +149,20 @@ internal static class Program
             Assert(key >= 0, "secure Gate key was outside protocol range");
             Assert(keys.Add(key), "secure Gate key collision in sample");
         }
+    }
+
+    private static void TestGateCandidateFallback()
+    {
+        int first = RealmGateAddressHelper.GetCandidateIndex(3, "player_01", 0);
+        int second = RealmGateAddressHelper.GetCandidateIndex(3, "player_01", 1);
+        int third = RealmGateAddressHelper.GetCandidateIndex(3, "player_01", 2);
+        Assert(new HashSet<int> { first, second, third }.SetEquals(new[] { 0, 1, 2 }), "Gate fallback repeated or skipped a candidate");
+        Assert(first == RealmGateAddressHelper.GetCandidateIndex(3, "player_01", 0), "Gate candidate order is not deterministic");
+        Assert(RealmGateAddressHelper.ShouldTryNext(RpcFailureKind.Timeout, 0), "Gate timeout was not retryable");
+        Assert(RealmGateAddressHelper.ShouldTryNext(RpcFailureKind.TargetNotFound, 0), "Missing Gate was not retryable");
+        Assert(RealmGateAddressHelper.ShouldTryNext(RpcFailureKind.RemoteError, ErrorCore.ERR_AccountStorageUnavailable), "Draining Gate was not retryable");
+        Assert(!RealmGateAddressHelper.ShouldTryNext(RpcFailureKind.ResponseTypeMismatch, 0), "Protocol mismatch was retried");
+        AssertThrows(() => RealmGateAddressHelper.GetCandidateIndex(2, "player_01", 2), "Unbounded Gate retry attempt was accepted");
     }
 
     private static void TestRoleSnapshot()
@@ -638,7 +653,7 @@ internal static class Program
                "Gate login outcome classification removed");
         Assert(keyHandler.Contains(".Issue(request.Account, request.AccountStateVersion)") && !keyHandler.Contains("RandomGenerator.RandInt64"), "Gate key lost version binding or cryptographic randomness");
         Assert(gateLogin.Contains("accounts[0].StateVersion != ticket.StateVersion") &&
-               realmLogin.Contains("r2GGetLoginKey.AccountStateVersion = authenticationResult.StateVersion"), "authenticated version no longer reaches Gate validation");
+               realmLogin.Contains("requestKey.AccountStateVersion = authenticationResult.StateVersion"), "authenticated version no longer reaches Gate validation");
         Assert(passwordAuthenticator.Contains("PasswordHasher.SimulateVerification(request.Credential)"), "unknown-account timing equalization removed");
         Assert(realmLogin.Contains("authenticationResult.Error==ErrorCore.ERR_AccountStorageUnavailable?LoginFailureKind.ServiceError:LoginFailureKind.Rejected") &&
                realmLogin.Contains("RecordLoginFailure(LoginFailureKind.ServiceError)") && realmLogin.Contains("if(!outcomeRecorded)"),
