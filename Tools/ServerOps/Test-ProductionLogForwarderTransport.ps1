@@ -49,9 +49,10 @@ if ($Receiver) {
                         $offset += $read
                     }
                     $contentType = [regex]::Match($headers,'(?im)^Content-Type:\s*([^\r\n]+)').Groups[1].Value.Trim()
+                    $contentEncoding = [regex]::Match($headers,'(?im)^Content-Encoding:\s*([^\r\n]+)').Groups[1].Value.Trim()
                     $authorized = $headers -match '(?im)^Authorization:\s*Bearer\s+\S+\s*$'
                     $receipt = [ordered]@{
-                        Attempt=$requestIndex+1;Path=$path;ContentType=$contentType;Bytes=$length
+                        Attempt=$requestIndex+1;Path=$path;ContentType=$contentType;ContentEncoding=$contentEncoding;Bytes=$length
                         BodySha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($body)).ToLowerInvariant()
                         AuthorizationPresent=[bool]$authorized;ReceivedAtUtc=[DateTime]::UtcNow.ToString('O')
                         Status=$(if($requestIndex -eq 0){503}else{200})
