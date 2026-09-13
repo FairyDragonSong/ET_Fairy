@@ -65,6 +65,46 @@ namespace ET.Server
             }
         }
 
+        public static async ETTask<RpcCallResult<TResponse>> CallServiceWithTimeout<TResponse>(
+            this Scene root,
+            ServiceAddress target,
+            IRequest request,
+            long timeoutMilliseconds) where TResponse : class, IResponse
+        {
+            if (timeoutMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
+            ETTask<RpcCallResult<TResponse>> completion = ETTask<RpcCallResult<TResponse>>.Create(true);
+            bool settled = false;
+            long started = TimeInfo.Instance.ServerNow();
+
+            async ETTask Invoke()
+            {
+                RpcCallResult<TResponse> result = await root.CallService<TResponse>(target, request);
+                if (settled)
+                {
+                    if (result.Response is IDisposable disposable) disposable.Dispose();
+                    return;
+                }
+                settled = true;
+                completion.SetResult(result);
+            }
+
+            async ETTask Timeout()
+            {
+                await root.GetComponent<TimerComponent>().WaitAsync(timeoutMilliseconds);
+                if (settled) return;
+                settled = true;
+                completion.SetResult(RpcCallResult<TResponse>.Failure(
+                    RpcFailureKind.Timeout,
+                    ErrorCore.ERR_Timeout,
+                    "Service RPC exceeded its bounded caller timeout",
+                    TimeInfo.Instance.ServerNow() - started));
+            }
+
+            Invoke().Coroutine();
+            Timeout().Coroutine();
+            return await completion;
+        }
+
         /// <summary>
         /// 向通过 Location 定位的实体发送 ILocationMessage 单向消息。
         /// 适用于 Unit 等可能在进程或 Fiber 之间迁移的实体；底层会查询并缓存其当前 ActorId，

@@ -9,6 +9,8 @@ namespace ET.Server
         public static void Validate(Options options, IReadOnlyCollection<StartSceneConfig> scenes)
         {
             if (options == null || scenes == null) throw new InvalidOperationException("Server topology is unavailable");
+            if (options.GateKeyRpcTimeoutMilliseconds is < 250 or > 5000)
+                throw new InvalidOperationException("Gate key RPC timeout must be between 250 and 5000 milliseconds");
             int locations = scenes.Count(scene => scene.Type == SceneType.Location);
             if (locations != 1) throw new InvalidOperationException("Exactly one Location is supported until consistent failover is implemented");
 

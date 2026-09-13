@@ -31,6 +31,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 await Baseline(fiber.Root);
                 await MapMailboxObservation(fiber.Root, true);
             }
+            else if(content.EndsWith(" gate-failover",StringComparison.Ordinal)) await GateFailover(fiber.Root);
             else if(content.EndsWith(" shared-admission",StringComparison.Ordinal)) await SharedAdmission(fiber.Root);
             else if(content.EndsWith(" self-credentials",StringComparison.Ordinal)) await SelfCredentials(fiber.Root);
             else if(content.EndsWith(" credentials",StringComparison.Ordinal)) await Credentials(fiber.Root);
@@ -44,6 +45,39 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Console.WriteLine($"GAMEPLAY_RESULT FAIL {exception.GetType().Name}: {exception.Message}");
         }
         finally { context.Parent.RemoveComponent<ModeContex>(); }
+    }
+
+    private static async ETTask GateFailover(Scene parent)
+    {
+        string marker = Environment.GetEnvironmentVariable("ET_GATE_FAILOVER_MARKER");
+        if (string.IsNullOrWhiteSpace(marker) || !Path.IsPathFullyQualified(marker))
+            throw new InvalidOperationException("Gate failover marker is missing");
+        marker = Path.GetFullPath(marker);
+        if (File.Exists(marker)) throw new InvalidOperationException("Gate failover marker already exists");
+
+        long id = IdGenerater.Instance.GenerateId();
+        using Scene client = EntitySceneFactory.CreateScene(parent, id, IdGenerater.Instance.GenerateInstanceId(), SceneType.BenchmarkClient, "GateFailoverTest");
+        client.AddComponent<TimerComponent>();
+        NetComponent net = client.AddComponent<NetComponent, AddressFamily, NetworkProtocol>(AddressFamily.InterNetwork, NetworkProtocol.UDP);
+        string account = Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT") ?? throw new InvalidOperationException("Test account missing");
+        string password = Environment.GetEnvironmentVariable("ET_GAMEPLAY_PASSWORD") ?? throw new InvalidOperationException("Test password missing");
+        StartSceneConfig target = RealmGateAddressHelper.GetGate(1, account);
+        Console.WriteLine($"GAMEPLAY_GATE_KILL process={target.Process} gate={target.Id}");
+        long deadline = TimeInfo.Instance.ServerNow() + 20000;
+        while (!File.Exists(marker) && TimeInfo.Instance.ServerNow() < deadline)
+            await client.GetComponent<TimerComponent>().WaitAsync(100);
+        if (!File.Exists(marker)) throw new TimeoutException("Gate failover controller did not confirm the kill");
+
+        using R2C_Login login = await RealmLogin(net, StartSceneConfigCategory.Instance.Realms[0].InnerIPPort, account, password);
+        Check(login.Error == 0, $"Realm did not fail over from the terminated Gate: {login.Error}");
+        Check(login.GateId != target.Id, "Realm returned a key from the terminated Gate");
+        using Session gate = net.Create(NetworkHelper.ToIPEndPoint(login.Address));
+        using G2C_LoginGate accepted = await GateLogin(gate, login);
+        Check(accepted.Error == 0 && accepted.PlayerId != 0, $"Fallback Gate rejected the issued key: {accepted.Error}");
+        using Session replay = net.Create(NetworkHelper.ToIPEndPoint(login.Address));
+        using G2C_LoginGate rejected = await GateLogin(replay, login);
+        Check(rejected.Error == ErrorCore.ERR_ConnectGateKeyError, "Fallback Gate key replay was accepted");
+        Console.WriteLine($"GAMEPLAY_PASS gate-process-failover killed_gate={target.Id} fallback_gate={login.GateId}");
     }
 
     private static async ETTask SharedAdmission(Scene root)

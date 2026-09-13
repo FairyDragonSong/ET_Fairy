@@ -68,6 +68,9 @@ namespace ET
         [Option("SharedLoginAdmissionEnabled", Required = false, Default = 0, HelpText = "use MongoDB atomic login admission across Realm instances, 0 off 1 on")]
         public int SharedLoginAdmissionEnabled { get; set; }
 
+        [Option("GateKeyRpcTimeoutMilliseconds", Required = false, Default = 2000, HelpText = "per-Gate login key RPC timeout before trying another Gate")]
+        public int GateKeyRpcTimeoutMilliseconds { get; set; }
+
         [Option("OuterMessageLimit", Required = false, Default = 100, HelpText = "max outer messages per session per second")]
         public int OuterMessageLimit { get; set; }
 

@@ -77,7 +77,8 @@ namespace ET.Server
 				R2G_GetLoginKey requestKey = R2G_GetLoginKey.Create();
 				requestKey.Account = authenticationResult.LoginName;
 				requestKey.AccountStateVersion = authenticationResult.StateVersion;
-				lastResult = await session.Root().CallService<G2R_GetLoginKey>(ServiceAddress.From(candidate.ActorId), requestKey);
+				lastResult = await session.Root().CallServiceWithTimeout<G2R_GetLoginKey>(
+					ServiceAddress.From(candidate.ActorId), requestKey, Options.Instance.GateKeyRpcTimeoutMilliseconds);
 				if (lastResult.IsSuccess)
 				{
 					config = candidate;
