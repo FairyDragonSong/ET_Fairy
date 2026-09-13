@@ -156,21 +156,30 @@ namespace ET.Server
 
         private static async ETTask CheckRoom(Player player, Session session)
         {
-            Fiber fiber = player.Fiber();
-            await fiber.WaitFrameFinish();
-
-            G2Room_Reconnect g2RoomReconnect = G2Room_Reconnect.Create();
-            g2RoomReconnect.PlayerId = player.Id;
-            using Room2G_Reconnect room2GateReconnect = (await fiber.Root.CallService<Room2G_Reconnect>(
-                ServiceAddress.From(player.GetComponent<PlayerRoomComponent>().RoomActorId),
-                g2RoomReconnect)).ResponseOrThrow();
-            G2C_Reconnect g2CReconnect = G2C_Reconnect.Create();
-            g2CReconnect.StartTime = room2GateReconnect.StartTime;
-            g2CReconnect.Frame = room2GateReconnect.Frame;
-            g2CReconnect.UnitInfos.AddRange(room2GateReconnect.UnitInfos);
-            if (!session.IsDisposed && player.GetComponent<PlayerSessionComponent>().Session == session)
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            try
             {
-                session.Send(g2CReconnect);
+                Fiber fiber = player.Fiber();
+                await fiber.WaitFrameFinish();
+
+                G2Room_Reconnect g2RoomReconnect = G2Room_Reconnect.Create();
+                g2RoomReconnect.PlayerId = player.Id;
+                using Room2G_Reconnect room2GateReconnect = (await fiber.Root.CallService<Room2G_Reconnect>(
+                    ServiceAddress.From(player.GetComponent<PlayerRoomComponent>().RoomActorId),
+                    g2RoomReconnect)).ResponseOrThrow();
+                G2C_Reconnect g2CReconnect = G2C_Reconnect.Create();
+                g2CReconnect.StartTime = room2GateReconnect.StartTime;
+                g2CReconnect.Frame = room2GateReconnect.Frame;
+                g2CReconnect.UnitInfos.AddRange(room2GateReconnect.UnitInfos);
+                if (!session.IsDisposed && player.GetComponent<PlayerSessionComponent>().Session == session)
+                {
+                    session.Send(g2CReconnect);
+                }
+            }
+            finally
+            {
+                OperationalMetrics.Instance?.RecordHandlerDuration(HandlerLatency.RoomReconnect,
+                    (System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency);
             }
         }
 

@@ -806,8 +806,8 @@ internal static class Program
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
-        Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change|map_entry)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+40,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change|map_entry|room_reconnect)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+41,"Metric count changed unexpectedly");
         Assert(text.Contains("et_login_failures_total 2000\n")&&text.Contains("# TYPE et_login_rejections_total counter\n")&&
             text.Contains("et_login_rejections_total 1000\n")&&text.Contains("# TYPE et_login_service_errors_total counter\n")&&
             text.Contains("et_login_service_errors_total 1000\n"),"Login rejection and service-error counters are not isolated");
@@ -851,6 +851,7 @@ internal static class Program
         metrics.RecordHandlerDuration(HandlerLatency.RoleSaveSuccess,10);
         metrics.RecordHandlerDuration(HandlerLatency.RoleSaveFailure,6000);
         metrics.RecordHandlerDuration(HandlerLatency.MapEntry,75);
+        metrics.RecordHandlerDuration(HandlerLatency.RoomReconnect,250);
         metrics.RecordHandlerDuration(HandlerLatency.MapOrderedMailbox,25);
         metrics.RecordHandlerDuration(HandlerLatency.MapUnorderedMailbox,50);
         var culture=System.Globalization.CultureInfo.CurrentCulture;
@@ -869,6 +870,9 @@ internal static class Program
         Assert(text.Contains("et_map_entry_handler_seconds_bucket{le=\"0.1\"} 1\n") &&
             text.Contains("et_map_entry_handler_seconds_count 1\n") && text.Contains("et_map_entry_handler_seconds_sum 0.075\n"),
             "Map entry handler latency missing or incorrectly bucketed");
+        Assert(text.Contains("et_room_reconnect_handler_seconds_bucket{le=\"0.25\"} 1\n") &&
+            text.Contains("et_room_reconnect_handler_seconds_count 1\n") && text.Contains("et_room_reconnect_handler_seconds_sum 0.25\n"),
+            "Room reconnect handler latency missing or incorrectly bucketed");
         foreach(double invalid in new[]{-1.0,double.NaN,double.PositiveInfinity})
         {
             bool rejected=false;

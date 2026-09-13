@@ -238,6 +238,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         List<Session> members = new();
         GameplayProbe probe=client.GetComponent<GameplayProbe>();
         long firstId=0;
+        long reconnectSamplesBefore=Metric("et_room_reconnect_handler_seconds_count");
         try
         {
             for(int i=0;i<LSConstValue.MatchCount;i++)
@@ -264,6 +265,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Check(loginAgain.Error==0 && loginAgain.PlayerId==firstId,"Room reconnect changed player identity");
             for(int i=0;i<30 && probe.Reconnects==0;i++)await client.GetComponent<TimerComponent>().WaitAsync(100);
             Check(probe.Reconnects==1 && probe.ReconnectUnits==LSConstValue.MatchCount && probe.ReconnectStartTime>0,"Room reconnect snapshot missing or invalid");
+            Check(Metric("et_room_reconnect_handler_seconds_count")==reconnectSamplesBefore+1,"Room reconnect latency sample missing or duplicated");
             Console.WriteLine("GAMEPLAY_PASS room-match-start-and-reconnect-snapshot");
         }
         finally {foreach(Session member in members)member.Dispose();}
