@@ -148,6 +148,7 @@ try {
             if(-not $held){throw 'Recovery arrived before verified firing'}
             Wait-Query 'up{job="et-gameplay"}' '1'
             Wait-Query 'et_map_ordered_mailbox_inflight{job="et-gameplay"}' '0'
+            Wait-Query '(sum(et_map_ordered_mailbox_seconds_bucket{job="et-gameplay",le="+Inf"}) - sum(et_map_ordered_mailbox_seconds_bucket{job="et-gameplay",le="0.1"})) > bool 0' '1'
             Wait-Query 'et_map_ordered_mailbox_exceptions_total{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'et_map_unordered_mailbox_exceptions_total{job="et-gameplay"} > bool 0' '1'
             Wait-Query '(count(ALERTS{alertname="ETLocalMapMailboxBacklog",job="et-gameplay",alertstate="firing"}) or vector(0))' '0'
