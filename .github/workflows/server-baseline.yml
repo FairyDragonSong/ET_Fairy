@@ -161,6 +161,7 @@ jobs:
           ./Tools/ServerOps/Test-CentralLogCollection.ps1 -EnvironmentRoot $env:RUNNER_TEMP
           $collector = Join-Path $env:RUNNER_TEMP 'otelcol-contrib-0.153.0/otelcol-contrib.exe'
           ./Tools/ServerOps/Test-ProductionLogForwarderConfiguration.ps1 -CollectorPath $collector
+          ./Tools/ServerOps/Test-ProductionLogForwarderTransport.ps1 -CollectorPath $collector
 
       - name: Verify production Alertmanager routing governance
         shell: pwsh
