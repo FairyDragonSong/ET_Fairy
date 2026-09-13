@@ -23,6 +23,7 @@ public static class ProductionSecretPolicy
             return;
         }
 
+        ValidateProductionLogging();
         SecretLeasePolicy.ValidateConfigured(true);
 
         bool metricsConfigured = HasValue("ET_METRICS_PORT") || HasValue("ET_METRICS_TOKEN_FILE") || HasValue("ET_METRICS_PREVIOUS_TOKEN_FILE");
@@ -329,6 +330,28 @@ public static class ProductionSecretPolicy
     }
 
     private static bool HasValue(string variable) => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(variable));
+
+    private static void ValidateProductionLogging()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("ET_LOG_PROFILE"), "bounded", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Production logging requires the bounded profile");
+        }
+
+        string value = Environment.GetEnvironmentVariable("ET_LOG_ROOT");
+        if (string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value))
+        {
+            throw new InvalidOperationException("Production log root must be an absolute path");
+        }
+
+        string root = Path.GetFullPath(value).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string applicationRoot = Directory.GetParent(Path.GetFullPath(AppContext.BaseDirectory))?.FullName ?? AppContext.BaseDirectory;
+        if (root == Path.GetPathRoot(root)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ||
+            !Directory.Exists(root) || IsReparsePoint(root) || IsWithin(root, applicationRoot))
+        {
+            throw new InvalidOperationException("Production log root is unsafe");
+        }
+    }
 
     private static bool IsReparsePoint(string path) => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 

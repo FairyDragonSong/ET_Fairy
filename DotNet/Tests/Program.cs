@@ -228,11 +228,14 @@ internal static class Program
             "ET_METRICS_PORT", "ET_METRICS_TOKEN_FILE", "ET_METRICS_PREVIOUS_TOKEN_FILE",
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
             "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
+            "ET_LOG_PROFILE", "ET_LOG_ROOT",
         ];
         Dictionary<string, string> previous = variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
         string root = Path.Combine(Path.GetTempPath(), "et-secret-policy-" + Guid.NewGuid().ToString("N"));
+        string logRoot = Path.Combine(Path.GetTempPath(), "et-production-logs-" + Guid.NewGuid().ToString("N"));
         string escape = Path.Combine(Path.GetTempPath(), "et-secret-escape-" + Guid.NewGuid().ToString("N") + ".pem");
         Directory.CreateDirectory(root);
+        Directory.CreateDirectory(logRoot);
         string passwordKey = Path.Combine(root, "password-private.pem");
         string passwordKeyRing = Path.Combine(root, "password-keyring.json");
         string metricsToken = Path.Combine(root, "metrics-token");
@@ -269,9 +272,25 @@ internal static class Program
             Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_DATABASE", "ET_PROD");
             Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_ZONE", "1");
             Environment.SetEnvironmentVariable("ET_ACCOUNT_ADMIN_DEPLOYMENT_ID", "prod-1");
+            Environment.SetEnvironmentVariable("ET_LOG_PROFILE", "bounded");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", logRoot);
             Options production = new() { Develop = 0, PasswordLoginEnabled = 1, PasswordLoginTransportSecure = 1 };
             ProductionSecretPolicy.Validate(production);
             ProductionSecretPolicy.ValidatePasswordLogin(production);
+            Environment.SetEnvironmentVariable("ET_LOG_PROFILE", "legacy");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "legacy logging was accepted in production");
+            Environment.SetEnvironmentVariable("ET_LOG_PROFILE", "bounded");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", null);
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "missing production log root was accepted");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", "relative-logs");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "relative production log root was accepted");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", Path.GetPathRoot(logRoot));
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "volume root was accepted as production log root");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", Path.Combine(Path.GetTempPath(), "missing-et-log-root-" + Guid.NewGuid().ToString("N")));
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "missing production log directory was accepted");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", Directory.GetParent(Path.GetFullPath(AppContext.BaseDirectory))?.FullName);
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "application directory was accepted as production log root");
+            Environment.SetEnvironmentVariable("ET_LOG_ROOT", logRoot);
             Environment.SetEnvironmentVariable("ET_METRICS_PREVIOUS_TOKEN_FILE", previousMetricsToken);
             ProductionSecretPolicy.Validate(production);
 
@@ -332,6 +351,7 @@ internal static class Program
             foreach ((string name, string value) in previous) Environment.SetEnvironmentVariable(name, value);
             if (File.Exists(escape)) File.Delete(escape);
             if (Directory.Exists(root)) Directory.Delete(root, true);
+            if (Directory.Exists(logRoot)) Directory.Delete(logRoot, true);
         }
     }
 
