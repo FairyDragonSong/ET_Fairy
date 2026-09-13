@@ -4,7 +4,15 @@ const password=process.env.ET_ADMIN_TEST_PASSWORD;
 if(process.env.ET_MONGO_DATABASE!=='ET_LOCAL_GAMEPLAY'||!/^et_admin_test_[a-f0-9]{32}$/.test(user||''))throw new Error('Invalid test identity');
 if(db.adminCommand({hello:1}).setName!=='et-local-rs')throw new Error('Only local test replica set allowed');
 const adminDb=db.getSiblingDB('ET_LOCAL_GAMEPLAY');
-const privileges=(auditWrite)=>[
+const exportMode=process.env.ET_ADMIN_TEST_EXPORT==='1';
+const privileges=(auditWrite)=>exportMode?[
+    {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.Account'},actions:['find']},
+    {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.Role'},actions:['find']},
+    {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.AccountSessionJournal'},actions:['find']},
+    {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.AccountStateAudit'},actions:['find']},
+    {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.AccountDataRequestAudit'},actions:['find','insert']},
+    {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.AccountAdminAttempt'},actions:auditWrite?['find','insert']:['find']}
+]:[
     {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.Account'},actions:['find','update']},
     {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.AccountStateAudit'},actions:['find','insert']},
     {resource:{db:'ET_LOCAL_GAMEPLAY',collection:'ET.Server.AccountAdminAttempt'},actions:auditWrite?['find','insert']:['find']}
@@ -17,7 +25,8 @@ if(process.env.ET_ADMIN_TEST_CLEANUP==='1'){
     print('Local test attempt audit permission changed');
 }else{
     if(!password||password.length<32)throw new Error('Test password missing');
-    for(const name of ['ET.Server.AccountStateAudit','ET.Server.AccountAdminAttempt']){
+    const collections=exportMode?['ET.Server.AccountDataRequestAudit','ET.Server.AccountAdminAttempt']:['ET.Server.AccountStateAudit','ET.Server.AccountAdminAttempt'];
+    for(const name of collections){
         if(!adminDb.getCollectionNames().includes(name))adminDb.createCollection(name);
     }
     adminDb.createRole({role:user,privileges:privileges(true),roles:[]});

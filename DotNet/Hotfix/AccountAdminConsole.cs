@@ -56,8 +56,17 @@ public sealed class AccountAdminConsole : IConsoleHandler
             stage="execution";
             await AccountAdminAttemptStore.Append(db,requestId,"authorized",stage,command);
             executionStarted=true;
-            bool applied=await AccountStateStore.Execute(db,command.AccountId,command.ExpectedVersion,
-                command.Action,command.OperatorId,command.ReasonCode,command.OperationId,passwordHash:passwordHash,credentialDigest:credentialDigest);
+            bool applied;
+            if(command.Action=="export")
+            {
+                string exportRoot=Environment.GetEnvironmentVariable("ET_ACCOUNT_EXPORT_ROOT");
+                applied=await AccountDataExportStore.Export(db,command,exportRoot,Options.Instance.Develop==0);
+            }
+            else
+            {
+                applied=await AccountStateStore.Execute(db,command.AccountId,command.ExpectedVersion,
+                    command.Action,command.OperatorId,command.ReasonCode,command.OperationId,passwordHash:passwordHash,credentialDigest:credentialDigest);
+            }
             await AccountAdminAttemptStore.Append(db,requestId,applied?"applied":"already_applied",stage,command);
             Console.WriteLine($"ACCOUNT_ADMIN_RESULT {(applied?"APPLIED":"ALREADY_APPLIED")} operation_id={command.OperationId}");
         }

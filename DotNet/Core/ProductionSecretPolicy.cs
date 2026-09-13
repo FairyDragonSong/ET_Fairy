@@ -31,6 +31,7 @@ public static class ProductionSecretPolicy
         [
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
             "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
+            "ET_ACCOUNT_EXPORT_ROOT",
         ];
         bool administrationConfigured = adminVariables.Any(HasValue);
 
@@ -81,7 +82,11 @@ public static class ProductionSecretPolicy
             string database = Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_DATABASE");
             string deployment = Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_DEPLOYMENT_ID");
             string trust = ReadManagedEnvironmentFile("ET_ACCOUNT_ADMIN_TRUST_FILE", 131072, true);
-            ValidateAdministrationTrust(trust, database, deployment, zone);
+            bool exportEnabled = ValidateAdministrationTrust(trust, database, deployment, zone);
+            if (exportEnabled)
+            {
+                ValidateDataExportRoot(Environment.GetEnvironmentVariable("ET_ACCOUNT_EXPORT_ROOT"), true);
+            }
             string administrationUri = Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI");
             if (fileUri)
             {
@@ -273,7 +278,29 @@ public static class ProductionSecretPolicy
         return privateKey;
     }
 
-    private static void ValidateAdministrationTrust(string json, string expectedDatabase, string expectedDeployment, int expectedZone)
+    public static string ValidateDataExportRoot(string value, bool production)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value))
+        {
+            throw new InvalidOperationException("Account export root is not configured");
+        }
+        string root = Path.GetFullPath(value).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!Directory.Exists(root) || IsReparsePoint(root) || root == Path.GetPathRoot(root)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            throw new InvalidOperationException("Account export root is unsafe");
+        }
+        if (production)
+        {
+            string applicationRoot = Directory.GetParent(Path.GetFullPath(AppContext.BaseDirectory))?.FullName ?? AppContext.BaseDirectory;
+            if (IsWithin(root, applicationRoot))
+            {
+                throw new InvalidOperationException("Production account exports must be outside the application root");
+            }
+        }
+        return root;
+    }
+
+    private static bool ValidateAdministrationTrust(string json, string expectedDatabase, string expectedDeployment, int expectedZone)
     {
         using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 8 });
         if (document.RootElement.ValueKind != JsonValueKind.Array || document.RootElement.GetArrayLength() == 0)
@@ -282,6 +309,7 @@ public static class ProductionSecretPolicy
         }
 
         HashSet<string> identities = new(StringComparer.Ordinal);
+        bool exportEnabled = false;
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         foreach (JsonElement item in document.RootElement.EnumerateArray())
         {
@@ -297,7 +325,7 @@ public static class ProductionSecretPolicy
                 string.IsNullOrWhiteSpace(publicKey) || publicKey.Contains("PRIVATE KEY", StringComparison.Ordinal) ||
                 actions.ValueKind != JsonValueKind.Array || actions.GetArrayLength() == 0 ||
                 actions.EnumerateArray().Any(action => action.ValueKind != JsonValueKind.String ||
-                    action.GetString() is not ("enable" or "disable" or "revoke" or "close" or "reset-password")))
+                    action.GetString() is not ("enable" or "disable" or "revoke" or "close" or "reset-password" or "export")))
             {
                 throw new InvalidOperationException("Administration trust identity is invalid");
             }
@@ -308,7 +336,9 @@ public static class ProductionSecretPolicy
             {
                 throw new InvalidOperationException("Administration trust key must be RSA-3072 or stronger");
             }
+            exportEnabled |= actions.EnumerateArray().Any(action => action.GetString() == "export");
         }
+        return exportEnabled;
     }
 
     private static void ValidateAdministrationUri(string connectionString)

@@ -703,6 +703,20 @@ internal static class Program
         }
         string valid=Sign();
         Assert(AccountAdminAuthorization.Verify(valid,trust,now).AccountId==123,"valid signature rejected");
+        identity.Actions=["disable","export"];
+        trust=System.Text.Json.JsonSerializer.Serialize(new[]{identity});
+        command.Action="export";
+        Assert(AccountAdminAuthorization.Verify(Sign(),trust,now).Action=="export","authorized export rejected");
+        string exportRoot=Path.Combine(Path.GetTempPath(),"et-account-export-root-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(exportRoot);
+        try
+        {
+            Assert(ProductionSecretPolicy.ValidateDataExportRoot(exportRoot,false)==Path.GetFullPath(exportRoot),"valid export root rejected");
+            AssertThrows(()=>ProductionSecretPolicy.ValidateDataExportRoot(Path.GetPathRoot(exportRoot),false),"filesystem root accepted for account exports");
+            AssertThrows(()=>ProductionSecretPolicy.ValidateDataExportRoot(AppContext.BaseDirectory,true),"application directory accepted for production exports");
+        }
+        finally { Directory.Delete(exportRoot); }
+        command.Action="disable";
         AssertThrows(()=>AccountAdminAuthorization.Verify(valid,trust,now+301),"expired command accepted");
         command.Action="enable";
         AssertThrows(()=>AccountAdminAuthorization.Verify(Sign(),trust,now),"unauthorized action accepted");
