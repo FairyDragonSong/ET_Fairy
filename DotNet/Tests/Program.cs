@@ -230,14 +230,17 @@ internal static class Program
             "ET_METRICS_PORT", "ET_METRICS_TOKEN_FILE", "ET_METRICS_PREVIOUS_TOKEN_FILE",
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
             "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
+            "ET_ACCOUNT_EXPORT_ROOT", "ET_ACCOUNT_EXPORT_RETENTION_DAYS",
             "ET_LOG_PROFILE", "ET_LOG_ROOT",
         ];
         Dictionary<string, string> previous = variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
         string root = Path.Combine(Path.GetTempPath(), "et-secret-policy-" + Guid.NewGuid().ToString("N"));
         string logRoot = Path.Combine(Path.GetTempPath(), "et-production-logs-" + Guid.NewGuid().ToString("N"));
+        string exportRoot = Path.Combine(Path.GetTempPath(), "et-production-exports-" + Guid.NewGuid().ToString("N"));
         string escape = Path.Combine(Path.GetTempPath(), "et-secret-escape-" + Guid.NewGuid().ToString("N") + ".pem");
         Directory.CreateDirectory(root);
         Directory.CreateDirectory(logRoot);
+        Directory.CreateDirectory(exportRoot);
         string passwordKey = Path.Combine(root, "password-private.pem");
         string passwordKeyRing = Path.Combine(root, "password-keyring.json");
         string metricsToken = Path.Combine(root, "metrics-token");
@@ -279,6 +282,32 @@ internal static class Program
             Options production = new() { Develop = 0, PasswordLoginEnabled = 1, PasswordLoginTransportSecure = 1 };
             ProductionSecretPolicy.Validate(production);
             ProductionSecretPolicy.ValidatePasswordLogin(production);
+            File.WriteAllText(adminTrust, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    Id = "operations", PublicKeyPem = operatorRsa.ExportSubjectPublicKeyInfoPem(),
+                    Database = "ET_PROD", DeploymentId = "prod-1", Zone = 1,
+                    Actions = new[] { "export" }, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
+                },
+            }));
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_EXPORT_ROOT", exportRoot);
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "missing production export retention was accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_EXPORT_RETENTION_DAYS", "7");
+            ProductionSecretPolicy.Validate(production);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_EXPORT_RETENTION_DAYS", "0");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "invalid production export retention was accepted");
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_EXPORT_ROOT", null);
+            Environment.SetEnvironmentVariable("ET_ACCOUNT_EXPORT_RETENTION_DAYS", null);
+            File.WriteAllText(adminTrust, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    Id = "operations", PublicKeyPem = operatorRsa.ExportSubjectPublicKeyInfoPem(),
+                    Database = "ET_PROD", DeploymentId = "prod-1", Zone = 1,
+                    Actions = new[] { "disable" }, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
+                },
+            }));
             Environment.SetEnvironmentVariable("ET_LOG_PROFILE", "legacy");
             AssertThrows(() => ProductionSecretPolicy.Validate(production), "legacy logging was accepted in production");
             Environment.SetEnvironmentVariable("ET_LOG_PROFILE", "bounded");
@@ -354,6 +383,7 @@ internal static class Program
             if (File.Exists(escape)) File.Delete(escape);
             if (Directory.Exists(root)) Directory.Delete(root, true);
             if (Directory.Exists(logRoot)) Directory.Delete(logRoot, true);
+            if (Directory.Exists(exportRoot)) Directory.Delete(exportRoot, true);
         }
     }
 

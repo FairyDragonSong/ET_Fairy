@@ -31,7 +31,7 @@ public static class ProductionSecretPolicy
         [
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
             "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
-            "ET_ACCOUNT_EXPORT_ROOT",
+            "ET_ACCOUNT_EXPORT_ROOT", "ET_ACCOUNT_EXPORT_RETENTION_DAYS",
         ];
         bool administrationConfigured = adminVariables.Any(HasValue);
 
@@ -86,6 +86,10 @@ public static class ProductionSecretPolicy
             if (exportEnabled)
             {
                 ValidateDataExportRoot(Environment.GetEnvironmentVariable("ET_ACCOUNT_EXPORT_ROOT"), true);
+                if (!int.TryParse(Environment.GetEnvironmentVariable("ET_ACCOUNT_EXPORT_RETENTION_DAYS"), out int retentionDays) || retentionDays is < 1 or > 365)
+                {
+                    throw new InvalidOperationException("Production account export retention must be 1 to 365 days");
+                }
             }
             string administrationUri = Environment.GetEnvironmentVariable("ET_ACCOUNT_ADMIN_MONGO_URI");
             if (fileUri)
