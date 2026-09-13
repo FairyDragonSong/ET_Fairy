@@ -143,6 +143,12 @@ jobs:
           $promtool = Join-Path $env:RUNNER_TEMP 'prometheus-3.13.3/prometheus-3.13.3.windows-amd64/promtool.exe'
           ./Tools/ServerOps/Test-ProductionSloRules.ps1 -PromtoolPath $promtool
 
+      - name: Verify production per-host metrics relay configuration
+        shell: pwsh
+        run: |
+          $promtool = Join-Path $env:RUNNER_TEMP 'prometheus-3.13.3/prometheus-3.13.3.windows-amd64/promtool.exe'
+          ./Tools/ServerOps/Test-ProductionMetricsRelayConfiguration.ps1 -PromtoolPath $promtool
+
       - name: Verify host and MongoDB alert rules and recovery behavior
         shell: pwsh
         run: |
