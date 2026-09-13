@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace ET.Server
 {
-    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, RoleSaveSuccess, RoleSaveFailure, MapOrderedMailbox, MapUnorderedMailbox, Count }
+    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, RoleSaveSuccess, RoleSaveFailure, MapEntry, MapOrderedMailbox, MapUnorderedMailbox, Count }
     public enum LoginFailureKind { Rejected, ServiceError }
     public enum SecurityMetric
     {
@@ -81,6 +81,7 @@ namespace ET.Server
                         HandlerLatency.PasswordChange=>"et_password_change_handler_seconds",
                         HandlerLatency.RoleSaveSuccess=>"et_role_save_success_seconds",
                         HandlerLatency.RoleSaveFailure=>"et_role_save_failure_seconds",
+                        HandlerLatency.MapEntry=>"et_map_entry_handler_seconds",
                         HandlerLatency.MapOrderedMailbox=>"et_map_ordered_mailbox_seconds",
                         HandlerLatency.MapUnorderedMailbox=>"et_map_unordered_mailbox_seconds",
                         _=>throw new InvalidOperationException()

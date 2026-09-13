@@ -7,6 +7,7 @@ namespace ET.Server
     {
         protected override async ETTask Run(Session session, C2G_EnterMap request, G2C_EnterMap response)
         {
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
             OperationalMetrics.Instance.RecordMapEntryAttempt();
             bool outcomeRecorded = false;
             Player player = null;
@@ -64,6 +65,12 @@ namespace ET.Server
                     ResetFailedTransfer(player, gateMapComponent);
                 }
                 throw;
+            }
+            finally
+            {
+                OperationalMetrics.Instance?.RecordHandlerDuration(
+                    HandlerLatency.MapEntry,
+                    (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
             }
         }
 

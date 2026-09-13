@@ -135,6 +135,7 @@ try {
         if($line -match 'GAMEPLAY_PASS'){$checks.Add($line)}
         if($line -match 'GAMEPLAY_RESULT FAIL'){throw 'Gameplay acceptance failed'}
         if($line -match 'GAMEPLAY_METRICS_HELD'){
+            Wait-Query 'et_map_entry_handler_seconds_count{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'et_map_ordered_mailbox_seconds_count{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'et_map_unordered_mailbox_seconds_count{job="et-gameplay"} > bool 0' '1'
             Wait-Query 'et_map_ordered_mailbox_inflight{job="et-gameplay"} > bool 0' '1'
