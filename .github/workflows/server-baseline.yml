@@ -72,6 +72,8 @@ jobs:
         run: ./Tools/ServerOps/Test-Phase1.ps1
       - name: Verify account export retention safety
         run: ./Tools/ServerOps/Test-AccountDataExportRetention.ps1
+      - name: Reject unsafe server deployment topologies
+        run: ./Tools/ServerOps/Test-ServerTopologyPolicy.ps1
       - name: Build and verify clean release artifact
         run: |
           $version = "0.0.0-ci-$env:GITHUB_RUN_ID"
