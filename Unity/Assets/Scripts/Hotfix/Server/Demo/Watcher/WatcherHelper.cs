@@ -55,6 +55,7 @@ namespace ET.Server
                     $" --LoginIpLimit={Options.Instance.LoginIpLimit}" +
                     $" --LoginAccountLimit={Options.Instance.LoginAccountLimit}" +
                     $" --LoginRateWindowSeconds={Options.Instance.LoginRateWindowSeconds}" +
+                    $" --SharedLoginAdmissionEnabled={Options.Instance.SharedLoginAdmissionEnabled}" +
                     $" --OuterMessageLimit={Options.Instance.OuterMessageLimit}" +
                     $" --OuterBytesLimit={Options.Instance.OuterBytesLimit}";
             Log.Debug($"{exe} {arguments}");

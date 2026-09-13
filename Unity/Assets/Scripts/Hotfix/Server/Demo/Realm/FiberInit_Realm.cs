@@ -13,6 +13,7 @@ namespace ET.Server
             root.AddComponent<CoroutineLockComponent>();
             root.AddComponent<DBManagerComponent>();
             root.AddComponent<LoginRateLimiterComponent>();
+            root.AddComponent<SharedLoginAdmissionComponent>();
             root.AddComponent<GracefulShutdownComponent>();
             root.AddComponent<ProcessInnerSender>();
             root.AddComponent<MessageSender>();

@@ -1,4 +1,4 @@
-param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,
+param([string]$EnvironmentRoot='D:\Program Files\ET\_Env',[switch]$Resume,[switch]$Outage,[switch]$SaveFailure,[switch]$Baseline,[switch]$Governance,[switch]$LeaseExpiry,[switch]$Credentials,[switch]$SelfCredentials,[switch]$SharedAdmission,
     [ValidateRange(1,3000)][int]$Clients=20,[ValidateRange(0,86400)][int]$DurationSeconds=0,[switch]$CapacityProfile,[switch]$BoundedLogs,[switch]$CrashJournal,[switch]$RecoverCrashJournal)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/GameplayEvidence.ps1"
@@ -7,7 +7,7 @@ if($CapacityProfile -and -not $Baseline){throw 'Capacity profile requires isolat
 if($CrashJournal -and (-not $Baseline -or $Clients -gt 100 -or $DurationSeconds -lt 60)){throw 'Crash journal requires Baseline, at most 100 clients and at least 60 sustained seconds'}
 if($RecoverCrashJournal -and -not $CrashJournal){throw 'Recovery requires this invocation to own and crash its test server'}
 if($RecoverCrashJournal -and $Clients -lt 20){throw 'Recovery isolation requires at least 20 original clients for same-account relogin'}
-if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
+if(@($Resume,$Outage,$SaveFailure,$Baseline,$Governance,$LeaseExpiry,$Credentials,$SelfCredentials,$SharedAdmission).Where({$_}).Count -gt 1){throw 'Select only one test mode'}
 if($SaveFailure -or $LeaseExpiry){$Outage=$true}
 . "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/../..")
@@ -23,6 +23,13 @@ foreach($port in @(20001,30002,30003,30004,30300,30301,30302,30303,30304)) {
 $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
 $info.WorkingDirectory="$repo/Bin"
 $info.Arguments='--Process=1 --StartConfig=StartConfig/Localhost --Develop=1 --PasswordLoginEnabled=1 --AccountAutoRegister=1 --Console=1 --ShutdownTimeoutSeconds=20'
+$sharedAdmissionKeyFile=$null
+if($SharedAdmission){
+    $sharedAdmissionKeyFile=Join-Path $env:ET_LOCAL_MONGO_ROOT ('shared-admission-'+[Guid]::NewGuid().ToString('N')+'.key')
+    [IO.File]::WriteAllText($sharedAdmissionKeyFile,[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)))
+    $info.Arguments+=' --SharedLoginAdmissionEnabled=1'
+    $info.Environment['ET_LOGIN_ADMISSION_HMAC_KEY_FILE']=$sharedAdmissionKeyFile
+}
 if($CapacityProfile){$info.Arguments+=" --LoginIpLimit=$Clients"}
 $info.UseShellExecute=$false;$info.CreateNoWindow=$true
 $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
@@ -56,7 +63,7 @@ try {
     $errors=$process.StandardError.ReadToEndAsync()
     Start-Sleep -Seconds 8
     if($process.HasExited){throw "Server exited before test: $($process.ExitCode)"}
-    $process.StandardInput.WriteLine($(if($SelfCredentials){'gameplay-check self-credentials'}elseif($Credentials){'gameplay-check credentials'}elseif($LeaseExpiry){'gameplay-check lease-expiry'}elseif($Governance){'gameplay-check governance'}elseif($Resume){'gameplay-check resume'}elseif($SaveFailure){'gameplay-check save-failure'}elseif($Outage){'gameplay-check outage'}elseif($Baseline){'gameplay-check baseline'}else{'gameplay-check'}))
+    $process.StandardInput.WriteLine($(if($SharedAdmission){'gameplay-check shared-admission'}elseif($SelfCredentials){'gameplay-check self-credentials'}elseif($Credentials){'gameplay-check credentials'}elseif($LeaseExpiry){'gameplay-check lease-expiry'}elseif($Governance){'gameplay-check governance'}elseif($Resume){'gameplay-check resume'}elseif($SaveFailure){'gameplay-check save-failure'}elseif($Outage){'gameplay-check outage'}elseif($Baseline){'gameplay-check baseline'}else{'gameplay-check'}))
     $deadline=[DateTime]::UtcNow.AddSeconds($(if($Baseline){240+$DurationSeconds+[Math]::Ceiling($Clients/20.0)*90}else{240}))
     $passed=$false
     $lastResourceCheck=[DateTime]::MinValue
@@ -300,7 +307,7 @@ try {
     $report.ShutdownObserved=$shutdownObserved;$report.ShutdownExitCode=$shutdownExitCode;$report.ShutdownElapsedMs=$shutdownElapsedMs
     $report.ProbeConcurrency=$(if($CapacityProfile){20}else{1})
     $report.LoginIpLimitOverride=$(if($CapacityProfile){$Clients}else{$null})
-    $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/$(if($SelfCredentials){'gameplay-self-credentials'}elseif($Credentials){'gameplay-credentials'}elseif($LeaseExpiry){'gameplay-lease-expiry'}elseif($Governance){'gameplay-governance'}elseif($Resume){'gameplay-restart'}elseif($SaveFailure){'gameplay-save-failure'}elseif($Outage){'gameplay-outage'}elseif($Baseline){'gameplay-baseline'}else{'gameplay'}).json"
+    $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/$(if($SharedAdmission){'gameplay-shared-admission'}elseif($SelfCredentials){'gameplay-self-credentials'}elseif($Credentials){'gameplay-credentials'}elseif($LeaseExpiry){'gameplay-lease-expiry'}elseif($Governance){'gameplay-governance'}elseif($Resume){'gameplay-restart'}elseif($SaveFailure){'gameplay-save-failure'}elseif($Outage){'gameplay-outage'}elseif($Baseline){'gameplay-baseline'}else{'gameplay'}).json"
     $report | ConvertTo-Json -Depth 4 | Set-Content "$env:ET_LOCAL_MONGO_ROOT/evidence/gameplay-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
 } catch {
     $failure=[ordered]@{Commit=(& git -C $repo rev-parse HEAD).Trim();WorktreeDirty=([bool](& git -C $repo status --porcelain));CompletedAtUtc=[DateTime]::UtcNow.ToString('O');Passed=$false;Clients=$Clients;DurationSeconds=$DurationSeconds;ProductionCapacityVerified=$false;Checks=@($lines|Where-Object{$_ -match 'GAMEPLAY_(PASS|PROGRESS|RESULT)'})}
@@ -326,8 +333,9 @@ try {
         } finally {Remove-Item Env:ET_SELF_TEST_USER,Env:ET_SELF_TEST_PASSWORD,Env:ET_SELF_TEST_CLEANUP -ErrorAction SilentlyContinue}
     }
     if($Outage){& "$PSScriptRoot/LocalMongo.ps1" -Action Start -EnvironmentRoot $EnvironmentRoot}
+    if($sharedAdmissionKeyFile -and (Test-Path -LiteralPath $sharedAdmissionKeyFile)){Remove-Item -LiteralPath $sharedAdmissionKeyFile -Force}
 }
-if(-not $Resume -and -not $Outage -and -not $Baseline -and -not $Governance -and -not $Credentials -and -not $SelfCredentials){
+if(-not $Resume -and -not $Outage -and -not $Baseline -and -not $Governance -and -not $Credentials -and -not $SelfCredentials -and -not $SharedAdmission){
     try { & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Resume -BoundedLogs:$BoundedLogs; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Outage -BoundedLogs:$BoundedLogs; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -SaveFailure -BoundedLogs:$BoundedLogs; & $PSCommandPath -EnvironmentRoot $EnvironmentRoot -Baseline -BoundedLogs:$BoundedLogs }
     finally { Remove-Item Env:ET_GAMEPLAY_PASSWORD,Env:ET_GAMEPLAY_ACCOUNT,Env:ET_GAMEPLAY_ROLEID -ErrorAction SilentlyContinue }
 }

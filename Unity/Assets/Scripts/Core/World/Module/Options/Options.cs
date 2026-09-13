@@ -65,6 +65,9 @@ namespace ET
         [Option("LoginRateWindowSeconds", Required = false, Default = 60, HelpText = "login rate limit fixed window in seconds")]
         public int LoginRateWindowSeconds { get; set; }
 
+        [Option("SharedLoginAdmissionEnabled", Required = false, Default = 0, HelpText = "use MongoDB atomic login admission across Realm instances, 0 off 1 on")]
+        public int SharedLoginAdmissionEnabled { get; set; }
+
         [Option("OuterMessageLimit", Required = false, Default = 100, HelpText = "max outer messages per session per second")]
         public int OuterMessageLimit { get; set; }
 

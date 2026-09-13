@@ -37,6 +37,8 @@ namespace ET.Server
                 throw new InvalidOperationException($"database migration target {TargetVersion} was not reached: {version}");
             }
 
+            await SharedLoginAdmissionStore.EnsureIndexes(database);
+
             Log.Info($"database schema ready: database={database.database.DatabaseNamespace.DatabaseName}, version={version}, " +
                      $"readable_min={MinimumReadableVersion}, readable_max={MaximumReadableVersion}");
         }

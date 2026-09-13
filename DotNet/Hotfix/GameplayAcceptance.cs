@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using ET.Client;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace ET.Server;
@@ -14,6 +15,7 @@ namespace ET.Server;
 [ConsoleHandler("gameplay-check")]
 [FriendOf(typeof(DBComponent))]
 [FriendOf(typeof(AccountSessionDrainComponent))]
+[FriendOf(typeof(SharedLoginAdmissionComponent))]
 public sealed class GameplayAcceptance : IConsoleHandler
 {
     public async ETTask Run(Fiber fiber, ModeContex context, string content)
@@ -29,6 +31,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 await Baseline(fiber.Root);
                 await MapMailboxObservation(fiber.Root, true);
             }
+            else if(content.EndsWith(" shared-admission",StringComparison.Ordinal)) await SharedAdmission(fiber.Root);
             else if(content.EndsWith(" self-credentials",StringComparison.Ordinal)) await SelfCredentials(fiber.Root);
             else if(content.EndsWith(" credentials",StringComparison.Ordinal)) await Credentials(fiber.Root);
             else if(content.EndsWith(" governance",StringComparison.Ordinal)) await Governance(fiber.Root);
@@ -41,6 +44,58 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Console.WriteLine($"GAMEPLAY_RESULT FAIL {exception.GetType().Name}: {exception.Message}");
         }
         finally { context.Parent.RemoveComponent<ModeContex>(); }
+    }
+
+    private static async ETTask SharedAdmission(Scene root)
+    {
+        long sceneId = IdGenerater.Instance.GenerateId();
+        using Scene scope = EntitySceneFactory.CreateScene(root, sceneId, IdGenerater.Instance.GenerateInstanceId(), SceneType.BenchmarkClient, "SharedAdmissionTest");
+        DBComponent database = scope.AddComponent<DBManagerComponent>().GetZoneDB(1);
+        SharedLoginAdmissionComponent component = scope.AddComponent<SharedLoginAdmissionComponent>();
+        Check(component is { Enabled: true } && component.HmacKey?.Length == 32, "Shared admission component is not initialized");
+        const int attempts = 12;
+        const int limit = 5;
+        int previousAccountLimit = Options.Instance.LoginAccountLimit;
+        int previousIpLimit = Options.Instance.LoginIpLimit;
+        string account = "shared_" + Guid.NewGuid().ToString("N")[..16];
+        int accepted = 0;
+        int rejected = 0;
+        int unavailable = 0;
+        try
+        {
+            Options.Instance.LoginAccountLimit = limit;
+            Options.Instance.LoginIpLimit = attempts + 1;
+            List<ETTask> tasks = new(attempts);
+            for (int index = 0; index < attempts; ++index)
+            {
+                int capture = index;
+                tasks.Add(Attempt(capture));
+            }
+            await ETTaskHelper.WaitAll(tasks);
+            Check(unavailable == 0, "Shared admission became unavailable");
+            Check(accepted == limit && rejected == attempts - limit, $"Atomic account limit mismatch: accepted={accepted} rejected={rejected}");
+
+            IMongoCollection<BsonDocument> collection = database.database.GetCollection<BsonDocument>(SharedLoginAdmissionStore.CollectionName);
+            List<BsonDocument> documents = await collection.Find(Builders<BsonDocument>.Filter.Eq("Kind", "account")).ToListAsync();
+            Check(documents.Count > 0, "Shared admission did not persist an account window");
+            Check(documents.All(document => !document.ToJson().Contains(account, StringComparison.Ordinal)), "Shared admission persisted a raw account identity");
+            List<BsonDocument> indexes = await (await collection.Indexes.ListAsync()).ToListAsync();
+            Check(indexes.Any(index => index.GetValue("name", "").AsString == "ttl_login_admission" && index.Contains("expireAfterSeconds")), "Shared admission TTL index is missing");
+            Console.WriteLine($"GAMEPLAY_PASS shared-login-admission attempts={attempts} accepted={accepted} rejected={rejected}");
+        }
+        finally
+        {
+            Options.Instance.LoginAccountLimit = previousAccountLimit;
+            Options.Instance.LoginIpLimit = previousIpLimit;
+        }
+
+        async ETTask Attempt(int index)
+        {
+            SharedLoginAdmissionResult result = await SharedLoginAdmissionStore.TryAcquire(database, 1, component, $"198.51.100.{index + 1}", account);
+            if (!result.IsAvailable) System.Threading.Interlocked.Increment(ref unavailable);
+            else if (result.IsAccepted) System.Threading.Interlocked.Increment(ref accepted);
+            else System.Threading.Interlocked.Increment(ref rejected);
+        }
     }
 
     private static async ETTask Execute(Scene parent,bool resume,bool outage,bool saveFailure,bool leaseExpiry)

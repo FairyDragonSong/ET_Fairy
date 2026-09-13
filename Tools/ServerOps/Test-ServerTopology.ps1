@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory)][string]$ConfigDirectory
+    [Parameter(Mandatory)][string]$ConfigDirectory,
+    [switch]$SharedLoginAdmissionEnabled
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,8 +77,8 @@ foreach ($zone in $gameplayZones) {
     $realms = @($zoneScenes | Where-Object SceneType -eq 'Realm')
     $gates = @($zoneScenes | Where-Object SceneType -eq 'Gate')
     $maps = @($zoneScenes | Where-Object SceneType -eq 'Map')
-    if ($realms.Count -ne 1) {
-        throw "Zone $zone must contain exactly one Realm until login admission is coordinated atomically (found $($realms.Count))"
+    if ($realms.Count -lt 1 -or ($realms.Count -gt 1 -and -not $SharedLoginAdmissionEnabled)) {
+        throw "Zone $zone must contain one Realm, or explicitly enable shared login admission before adding Realm instances (found $($realms.Count))"
     }
     if ($gates.Count -lt 1) { throw "Zone $zone has no Gate scene" }
     if ($maps.Count -lt 1) { throw "Zone $zone has no Map scene" }
@@ -97,6 +98,6 @@ foreach ($zone in $gameplayZones) {
     Gates = @($scenes | Where-Object SceneType -eq 'Gate').Count
     Maps = @($scenes | Where-Object SceneType -eq 'Map').Count
     Locations = $locations.Count
-    MultiRealmRejectedUntilSharedCoordination = $true
+    SharedLoginAdmissionEnabled = [bool]$SharedLoginAdmissionEnabled
     MultiLocationRejectedUntilSharedCoordination = $true
 } | ConvertTo-Json

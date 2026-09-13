@@ -17,6 +17,7 @@ internal static class Program
         ("Gate Key 使用密码学随机源", TestSecureGateKey),
         ("外网消息与字节限流", TestTrafficLimit),
         ("登录 IP 与账号爆破限流", TestLoginRateLimit),
+        ("跨 Realm 登录准入身份隔离", TestSharedLoginAdmissionIdentity),
         ("角色快照保留地图与坐标", TestRoleSnapshot),
         ("停机参与者成功与失败汇总", TestShutdownCoordinator),
         ("商业模式启动配置门禁", TestProductionStartupValidation),
@@ -170,6 +171,21 @@ internal static class Program
         Assert(!accountLimiter.TryAcquire("10.0.0.4", "shared_01", out _), "account limit across IPs not enforced");
     }
 
+    private static void TestSharedLoginAdmissionIdentity()
+    {
+        byte[] firstKey = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+        byte[] secondKey = Enumerable.Range(1, 32).Select(value => (byte)value).ToArray();
+        string account = SharedLoginAdmissionStore.CreateDocumentId(1, "account", "player_01", 120000, firstKey);
+        string same = SharedLoginAdmissionStore.CreateDocumentId(1, "account", "player_01", 120000, firstKey);
+        string ip = SharedLoginAdmissionStore.CreateDocumentId(1, "ip", "player_01", 120000, firstKey);
+        string nextWindow = SharedLoginAdmissionStore.CreateDocumentId(1, "account", "player_01", 180000, firstKey);
+        string rotated = SharedLoginAdmissionStore.CreateDocumentId(1, "account", "player_01", 120000, secondKey);
+        Assert(account == same, "shared admission identity is not deterministic");
+        Assert(account != ip && account != nextWindow && account != rotated, "shared admission identity scope is not isolated");
+        Assert(!account.Contains("player_01", StringComparison.Ordinal), "shared admission identity disclosed raw input");
+        AssertThrows(() => SharedLoginAdmissionStore.CreateDocumentId(1, "unknown", "player_01", 120000, firstKey), "unknown admission identity kind was accepted");
+    }
+
     private static void TestShutdownCoordinator()
     {
         ShutdownCoordinator shutdown = new();
@@ -232,6 +248,7 @@ internal static class Program
             "ET_ACCOUNT_ADMIN_TRUST_FILE", "ET_ACCOUNT_ADMIN_MONGO_URI", "ET_ACCOUNT_ADMIN_MONGO_URI_FILE",
             "ET_ACCOUNT_ADMIN_DATABASE", "ET_ACCOUNT_ADMIN_ZONE", "ET_ACCOUNT_ADMIN_DEPLOYMENT_ID",
             "ET_ACCOUNT_EXPORT_ROOT", "ET_ACCOUNT_EXPORT_RETENTION_DAYS",
+            "ET_LOGIN_ADMISSION_HMAC_KEY_FILE",
             "ET_LOG_PROFILE", "ET_LOG_ROOT",
         ];
         Dictionary<string, string> previous = variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
@@ -248,6 +265,7 @@ internal static class Program
         string previousMetricsToken = Path.Combine(root, "metrics-token-previous");
         string adminTrust = Path.Combine(root, "admin-trust.json");
         string adminUri = Path.Combine(root, "admin-mongo-uri");
+        string admissionKey = Path.Combine(root, "login-admission-hmac.key");
         using RSA passwordRsa = RSA.Create(4096);
         using RSA rotationRsa = RSA.Create(4096);
         using RSA operatorRsa = RSA.Create(3072);
@@ -259,6 +277,7 @@ internal static class Program
             File.WriteAllText(metricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
             File.WriteAllText(previousMetricsToken, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
             File.WriteAllText(adminUri, "mongodb://admin:secret@db1,db2/?tls=true&replicaSet=rs0");
+            File.WriteAllText(admissionKey, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
             File.WriteAllText(adminTrust, JsonSerializer.Serialize(new[]
             {
                 new
@@ -283,6 +302,14 @@ internal static class Program
             Options production = new() { Develop = 0, PasswordLoginEnabled = 1, PasswordLoginTransportSecure = 1 };
             ProductionSecretPolicy.Validate(production);
             ProductionSecretPolicy.ValidatePasswordLogin(production);
+            production.SharedLoginAdmissionEnabled = 1;
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "shared admission without a managed HMAC key was accepted");
+            Environment.SetEnvironmentVariable("ET_LOGIN_ADMISSION_HMAC_KEY_FILE", admissionKey);
+            ProductionSecretPolicy.Validate(production);
+            File.WriteAllText(admissionKey, "not-a-key");
+            AssertThrows(() => ProductionSecretPolicy.Validate(production), "invalid shared admission HMAC key was accepted");
+            File.WriteAllText(admissionKey, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+            production.SharedLoginAdmissionEnabled = 0;
             File.WriteAllText(adminTrust, JsonSerializer.Serialize(new[]
             {
                 new

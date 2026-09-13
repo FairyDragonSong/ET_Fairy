@@ -40,6 +40,11 @@ public static class ProductionSecretPolicy
             ValidatePasswordSources(true);
         }
 
+        if (options.SharedLoginAdmissionEnabled == 1)
+        {
+            _ = ReadSharedLoginAdmissionKey(true);
+        }
+
         if (metricsConfigured)
         {
             if (!int.TryParse(Environment.GetEnvironmentVariable("ET_METRICS_PORT"), out int port) || port < 1024 || port > 65535)
@@ -139,6 +144,16 @@ public static class ProductionSecretPolicy
             throw new InvalidOperationException("Production metrics credential is invalid");
         }
         return token;
+    }
+
+    public static byte[] ReadSharedLoginAdmissionKey(bool requireManagedRoot)
+    {
+        string value = ReadManagedEnvironmentFile("ET_LOGIN_ADMISSION_HMAC_KEY_FILE", 128, requireManagedRoot).Trim();
+        if (value.Length != 64 || value.Any(character => !Uri.IsHexDigit(character)))
+        {
+            throw new InvalidOperationException("Shared login admission HMAC key must be 32 random bytes encoded as hexadecimal");
+        }
+        return Convert.FromHexString(value);
     }
 
     public static bool IsSafeKeyId(string keyId) => !string.IsNullOrWhiteSpace(keyId) && keyId.Length is >= 3 and <= 64 &&

@@ -36,6 +36,8 @@ try {
     $bad += [ordered]@{ Id = 5; Process = 4; Zone = 1; SceneType = 'Realm'; Name = 'Realm2'; Port = 30004 }
     Write-Category 'StartSceneConfigCategory' $bad
     Expect-Rejection { & (Join-Path $PSScriptRoot 'Test-ServerTopology.ps1') -ConfigDirectory $fixture } 'Unsafe multi-Realm topology was accepted'
+    $coordinated = & (Join-Path $PSScriptRoot 'Test-ServerTopology.ps1') -ConfigDirectory $fixture -SharedLoginAdmissionEnabled | ConvertFrom-Json
+    if (-not $coordinated.Passed -or -not $coordinated.SharedLoginAdmissionEnabled) { throw 'Coordinated multi-Realm topology was rejected' }
 
     Write-Category 'StartSceneConfigCategory' $safeScenes
     $badProcesses = @(
@@ -59,7 +61,7 @@ try {
 
     $release = & (Join-Path $PSScriptRoot 'Test-ServerTopology.ps1') -ConfigDirectory (Join-Path $root 'Config/Json/s/StartConfig/Release') | ConvertFrom-Json
     if (-not $release.Passed) { throw 'Repository Release topology failed validation' }
-    [ordered]@{ Passed=$true; SafeTopologyVerified=$true; MultiRealmRejected=$true; DuplicateBindingRejected=$true; MissingLocationRejected=$true; ReleaseTopologyVerified=$true } | ConvertTo-Json
+    [ordered]@{ Passed=$true; SafeTopologyVerified=$true; MultiRealmRejected=$true; CoordinatedMultiRealmAccepted=$true; DuplicateBindingRejected=$true; MissingLocationRejected=$true; ReleaseTopologyVerified=$true } | ConvertTo-Json
 }
 finally {
     if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture -Recurse -Force }

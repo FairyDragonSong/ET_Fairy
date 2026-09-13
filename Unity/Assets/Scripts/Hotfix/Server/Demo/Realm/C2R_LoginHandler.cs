@@ -29,6 +29,30 @@ namespace ET.Server
 				return;
 			}
 
+			SharedLoginAdmissionResult sharedAdmission = await SharedLoginAdmissionStore.TryAcquire(
+				session.Root(),
+				session.Root().GetComponent<SharedLoginAdmissionComponent>(),
+				ipAddress,
+				request.Account);
+			if (!sharedAdmission.IsAvailable)
+			{
+				response.Error = ErrorCore.ERR_AccountStorageUnavailable;
+				response.Message = "账号服务暂时不可用";
+				OperationalMetrics.Instance.RecordLoginFailure(LoginFailureKind.ServiceError);
+				outcomeRecorded = true;
+				Log.Error($"event=login_rejected trace_id={traceId} reason=shared_rate_limit_unavailable");
+				return;
+			}
+			if (!sharedAdmission.IsAccepted)
+			{
+				response.Error = ErrorCore.ERR_LoginRateLimited;
+				response.Message = "登录请求过于频繁，请稍后重试";
+				OperationalMetrics.Instance.RecordLoginFailure(LoginFailureKind.Rejected);
+				outcomeRecorded = true;
+				Log.Warning($"event=login_rejected trace_id={traceId} reason=shared_rate_limited ip_key={ipAddress.GetLongHashCode()} retry_after_ms={sharedAdmission.RetryAfterMilliseconds}");
+				return;
+			}
+
 			AccountAuthenticationResult authenticationResult = await AccountAuthentication.Authenticate(
 				session.Root(),
 				AccountAuthenticationRequest.Password(request.Account, request.Password));
