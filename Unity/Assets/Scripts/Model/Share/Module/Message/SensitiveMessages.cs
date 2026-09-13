@@ -6,6 +6,8 @@ namespace ET
 
     public partial class C2G_ChangePassword: ISensitiveMessage { }
     public partial class G2C_ChangePassword: ISensitiveMessage { }
+    public partial class C2G_CloseAccount: ISensitiveMessage { }
+    public partial class G2C_CloseAccount: ISensitiveMessage { }
 
     public partial class Main2NetClient_Login: ISensitiveMessage
     {

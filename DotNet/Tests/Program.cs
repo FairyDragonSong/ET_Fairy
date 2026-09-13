@@ -31,6 +31,7 @@ internal static class Program
         ("账号生命周期状态机", TestAccountStatePolicy),
         ("密码加密信封", TestPasswordEnvelope),
         ("自助改密混合加密与有效期", TestSelfPasswordCipher),
+        ("自助软注销双重确认与加密隔离", TestSelfAccountClosureCipher),
         ("安全指标固定基数与并发计数", TestSecurityMetrics),
         ("处理耗时直方图边界与并发", TestHandlerLatency),
         ("客户端体验事件固定字段与文化无关", TestClientExperienceTelemetry),
@@ -832,6 +833,27 @@ internal static class Program
         Assert(decoded.Envelope==envelope&&decoded.RpcId==42,"Protocol roundtrip failed");
     }
 
+    private static void TestSelfAccountClosureCipher()
+    {
+        using var rsa=RSA.Create(4096);
+        string privateKey=rsa.ExportPkcs8PrivateKeyPem(),publicKey=rsa.ExportSubjectPublicKeyInfoPem();
+        var request=new SelfAccountClosure {LoginName="test_user",ConfirmLoginName="test_user",Password="test-password",OperationId=Guid.NewGuid().ToString("N"),ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240};
+        string envelope=SelfPasswordCipher.EncryptClosure(request,"password-2026-10",publicKey);
+        var copy=SelfPasswordCipher.DecryptClosure(envelope,privateKey);
+        Assert(copy.LoginName==request.LoginName&&copy.ConfirmLoginName==request.ConfirmLoginName&&copy.Password==request.Password,"Account closure roundtrip failed");
+        bool purposeRejected=false;
+        try {SelfPasswordCipher.Decrypt(envelope,privateKey);} catch(CryptographicException){purposeRejected=true;}
+        Assert(purposeRejected,"Account closure envelope was accepted as a password change");
+        request.ConfirmLoginName="another_user";
+        AssertThrows(()=>SelfPasswordCipher.DecryptClosure(SelfPasswordCipher.EncryptClosure(request,publicKey),privateKey),"Mismatched closure confirmation accepted");
+        request.ConfirmLoginName=request.LoginName;request.ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()-1;
+        AssertThrows(()=>SelfPasswordCipher.DecryptClosure(SelfPasswordCipher.EncryptClosure(request,publicKey),privateKey),"Expired account closure accepted");
+        using var message=new C2G_CloseAccount {Envelope=envelope,RpcId=43};
+        Assert(message is ISessionRequest&&new G2C_CloseAccount() is ISessionResponse,"Account closure must route to Gate session handler");
+        var decoded=MemoryPack.MemoryPackSerializer.Deserialize<C2G_CloseAccount>(MemoryPack.MemoryPackSerializer.Serialize(message));
+        Assert(decoded.Envelope==envelope&&decoded.RpcId==43,"Account closure protocol roundtrip failed");
+    }
+
     private static void TestSecurityMetrics()
     {
         var metrics=new OperationalMetrics();metrics.Awake();
@@ -852,8 +874,8 @@ internal static class Program
         Assert(text.Contains($"et_process_id {Environment.ProcessId}\n")&&text.Contains($"et_config_process_id {Options.Instance.Process}\n"),"Metric process identity incorrect");
         Assert(text.Contains("et_password_change_accepted_total 1001\n"),"Concurrent security increments lost");
         Assert(text.Contains("# TYPE et_session_journal_end_failures_total counter\n"),"Counter type metadata missing");
-        Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change|map_entry|room_reconnect)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
-        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+41,"Metric count changed unexpectedly");
+        Assert(text.Split('\n').Where(l=>l.Contains('{')).All(l=>System.Text.RegularExpressions.Regex.IsMatch(l,"^et_((realm_login|gate_login|password_change|account_close|map_entry|room_reconnect)_handler|role_save_(success|failure)|map_(ordered|unordered)_mailbox)_seconds_bucket\\{le=\"(\\+Inf|[0-9.]+)\"\\} [0-9]+$")),"Unexpected dynamic metric labels");
+        Assert(text.Split('\n').Count(l=>l.StartsWith("# TYPE "))==(int)SecurityMetric.Count+42,"Metric count changed unexpectedly");
         Assert(text.Contains("et_login_failures_total 2000\n")&&text.Contains("# TYPE et_login_rejections_total counter\n")&&
             text.Contains("et_login_rejections_total 1000\n")&&text.Contains("# TYPE et_login_service_errors_total counter\n")&&
             text.Contains("et_login_service_errors_total 1000\n"),"Login rejection and service-error counters are not isolated");
@@ -896,6 +918,7 @@ internal static class Program
         Parallel.For(0,1000,_=>metrics.RecordHandlerDuration(HandlerLatency.GateLogin,5));
         metrics.RecordHandlerDuration(HandlerLatency.RoleSaveSuccess,10);
         metrics.RecordHandlerDuration(HandlerLatency.RoleSaveFailure,6000);
+        metrics.RecordHandlerDuration(HandlerLatency.AccountClose,100);
         metrics.RecordHandlerDuration(HandlerLatency.MapEntry,75);
         metrics.RecordHandlerDuration(HandlerLatency.RoomReconnect,250);
         metrics.RecordHandlerDuration(HandlerLatency.MapOrderedMailbox,25);
@@ -909,6 +932,7 @@ internal static class Program
             text.Contains("et_realm_login_handler_seconds_bucket{le=\"+Inf\"} 4\n"),"Cumulative latency buckets incorrect");
         Assert(text.Contains("et_realm_login_handler_seconds_count 4\n")&&text.Contains("et_realm_login_handler_seconds_sum 6.003\n"),"Latency sum/count or invariant formatting incorrect");
         Assert(text.Contains("et_gate_login_handler_seconds_count 1000\n")&&text.Contains("et_gate_login_handler_seconds_sum 5\n"),"Concurrent latency observations lost");
+        Assert(text.Contains("et_account_close_handler_seconds_count 1\n")&&text.Contains("et_account_close_handler_seconds_sum 0.1\n"),"Account closure latency missing");
         Assert(text.Contains("et_map_ordered_mailbox_seconds_count 1\n") && text.Contains("et_map_ordered_mailbox_seconds_sum 0.025\n") &&
             text.Contains("et_map_unordered_mailbox_seconds_count 1\n") && text.Contains("et_map_unordered_mailbox_seconds_sum 0.05\n"), "Map mailbox samples mixed");
         Assert(text.Contains("et_role_save_success_seconds_count 1\n")&&text.Contains("et_role_save_failure_seconds_count 1\n")&&

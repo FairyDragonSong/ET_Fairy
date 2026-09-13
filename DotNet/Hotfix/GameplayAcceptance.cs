@@ -559,6 +559,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             await SessionJournalBurst(parent, db);
             await SessionJournalAdmissionDrain(parent);
             await SessionJournalRetries(db);
+            await SelfAccountClosure(parent,net,realm,db,rsa.ExportSubjectPublicKeyInfoPem(),oldPassword);
         }
         finally
         {
@@ -566,6 +567,94 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Environment.SetEnvironmentVariable("ET_ACCOUNT_PASSWORD_KEYRING_FILE",previousRing);
             if(File.Exists(keyPath))File.Delete(keyPath);
         }
+    }
+
+    private static async ETTask SelfAccountClosure(Scene parent,NetComponent net,IPEndPoint realm,DBComponent db,string publicKey,string password)
+    {
+        long acceptedBefore=Metric("et_account_close_accepted_total"),unconfirmedBefore=Metric("et_account_close_unconfirmed_total"),
+            limitedBefore=Metric("et_account_close_rate_limited_total"),latencyBefore=Metric("et_account_close_handler_seconds_count");
+        string name=Environment.GetEnvironmentVariable("ET_GAMEPLAY_ACCOUNT")+"close";
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        using R2C_Login initial=await RealmLogin(net,realm,name,password);
+        Check(initial.Error==0,"Self closure registration failed");
+        using Session current=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
+        using G2C_LoginGate gate=await GateLogin(current,initial);
+        Check(gate.Error==0,"Self closure Gate login failed");
+        using R2C_Login pending=await RealmLogin(net,realm,name,password);
+        Check(pending.Error==0,"Self closure pending ticket missing");
+        var before=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        await SelfAccountClosureTransactions(db,name,password,before.StateVersion);
+
+        string operation=Guid.NewGuid().ToString("N");
+        string Envelope(string login,string confirmation,string credential)=>SelfPasswordCipher.EncryptClosure(new SelfAccountClosure
+        {
+            LoginName=login,ConfirmLoginName=confirmation,Password=credential,OperationId=operation,
+            ExpiresAt=DateTimeOffset.UtcNow.ToUnixTimeSeconds()+240
+        },"self-current",publicKey);
+        string valid=Envelope(name,name,password);
+        using Session anonymous=net.Create(NetworkHelper.ToIPEndPoint(initial.Address));
+        Check(await CloseAccount(anonymous,valid)!=0,"Anonymous account closure accepted");
+        Check(await CloseAccount(current,Envelope(name,name,password+"wrong"))!=0,"Wrong password closed account");
+        Check(await CloseAccount(current,Envelope(name,name+"other",password))!=0,"Mismatched confirmation closed account");
+        Check(await CloseAccount(current,Envelope(name+"other",name+"other",password))!=0,"Cross-account closure accepted");
+        var corrupted=System.Text.Json.JsonSerializer.Deserialize<PasswordChangeCipher>(valid);
+        byte[] tag=Convert.FromBase64String(corrupted.Tag);tag[0]^=1;corrupted.Tag=Convert.ToBase64String(tag);
+        Check(await CloseAccount(current,System.Text.Json.JsonSerializer.Serialize(corrupted))!=0,"Tampered closure accepted");
+        var unchanged=await accounts.Find(a=>a.Id==before.Id).SingleAsync();
+        Check(unchanged.Status==AccountStatus.Active&&unchanged.StateVersion==before.StateVersion,"Rejected closure changed account");
+        Check(await CloseAccount(current,valid)==0,"Valid self closure failed");
+        for(int i=0;i<100&&!current.IsDisposed;i++)await parent.GetComponent<TimerComponent>().WaitAsync(100);
+        Check(current.IsDisposed,"Closed account retained its Gate session");
+        using Session stale=net.Create(NetworkHelper.ToIPEndPoint(pending.Address));
+        using G2C_LoginGate staleResult=await GateLogin(stale,pending);
+        Check(staleResult.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Closed account used a pending Gate ticket");
+        using R2C_Login rejected=await RealmLogin(net,realm,name,password);
+        Check(rejected.Error==ErrorCore.ERR_InvalidAccountOrPassword,"Closed account authenticated or auto-registered");
+        var closed=await accounts.Find(a=>a.Id==before.Id).SingleAsync();
+        Check(closed.Status==AccountStatus.Closed&&closed.StateVersion==before.StateVersion+1&&closed.ClosedAt>0&&closed.DefaultRoleId==before.DefaultRoleId,"Self closure lost data or terminal state");
+        var closure=SelfPasswordCipher.DecryptClosure(valid,ProductionSecretPolicy.ReadPasswordPrivateKey("self-current",false));
+        string digest=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(valid)));
+        Check(!await UserAccountClosureStore.Close(db,closure,before.StateVersion,digest),"Self closure retry applied twice");
+        var audit=await db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountStateStore.AuditCollection)
+            .Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",operation)).SingleAsync();
+        Check(audit["Action"].AsString=="user-close-account"&&!audit.Contains("Password")&&!audit.Contains("Envelope")&&!audit.Contains("LoginName"),"Unsafe self closure audit");
+        var journal=await db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection)
+            .Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("AccountId",before.Id)).ToListAsync();
+        Check(journal.Count==1&&journal[0]["State"].AsString=="ended","Self closure session journal not ended");
+        Check(Metric("et_account_close_accepted_total")==acceptedBefore+1&&Metric("et_account_close_unconfirmed_total")==unconfirmedBefore+5&&
+            Metric("et_account_close_rate_limited_total")==limitedBefore&&Metric("et_account_close_handler_seconds_count")==latencyBefore+6,
+            "Self closure outcome or latency metrics do not match requests");
+        Console.WriteLine("GAMEPLAY_PASS self-account-close-auth-confirmation-tamper-rollback-idempotency");
+        Console.WriteLine("GAMEPLAY_PASS self-account-close-session-ticket-login-revoked-role-preserved");
+    }
+
+    private static async ETTask SelfAccountClosureTransactions(DBComponent db,string name,string password,long version)
+    {
+        var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
+        var audits=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountStateStore.AuditCollection);
+        var request=new SelfAccountClosure {LoginName=name,ConfirmLoginName=name,Password=password,OperationId=Guid.NewGuid().ToString("N")};
+        bool injected=false;
+        try {await UserAccountClosureStore.Close(db,request,version,new string('C',64),()=>{injected=true;throw new InvalidOperationException("Injected closure audit failure");});}
+        catch(InvalidOperationException) when(injected) { }
+        Check(injected,"Closure rollback injection did not execute");
+        var unchanged=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        Check(unchanged.Status==AccountStatus.Active&&unchanged.StateVersion==version,"Aborted closure changed account");
+        Check(await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",request.OperationId))==0,"Aborted closure retained audit");
+        string limitedUri=Environment.GetEnvironmentVariable("ET_SELF_TEST_MONGO_URI");
+        long scopeId=IdGenerater.Instance.GenerateId();
+        using(var scope=EntitySceneFactory.CreateScene(db.Scene(),scopeId,scopeId,SceneType.Main,"SelfClosureAuditDenied"))
+        {
+            var restricted=scope.AddComponent<DBManagerComponent>().AddChildWithId<DBComponent,string,string>(1,limitedUri,"ET_LOCAL_GAMEPLAY");
+            bool updated=false,denied=false;
+            try {await UserAccountClosureStore.Close(restricted,request,version,new string('C',64),beforeAudit:()=>updated=true);}
+            catch(MongoCommandException exception) when(exception.Code==13){denied=true;}
+            catch(MongoWriteException exception) when(exception.WriteError?.Code==13){denied=true;}
+            Check(updated&&denied,"Closure audit insert denial was not reached");
+        }
+        unchanged=await accounts.Find(a=>a.LoginName==name).SingleAsync();
+        Check(unchanged.Status==AccountStatus.Active&&unchanged.StateVersion==version&&
+            await audits.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",request.OperationId))==0,"Denied closure audit did not roll back account");
+        Console.WriteLine("GAMEPLAY_PASS self-account-close-audit-failure-and-real-permission-denial-rollback");
     }
 
     private static async ETTask MapTransferFailureRecovery(Scene parent)
@@ -874,6 +963,13 @@ public sealed class GameplayAcceptance : IConsoleHandler
     {
         var request=C2G_ChangePassword.Create();request.Envelope=envelope;
         using var response=(G2C_ChangePassword)await session.Call(request,10000);
+        return response.Error;
+    }
+
+    private static async ETTask<int> CloseAccount(Session session,string envelope)
+    {
+        var request=C2G_CloseAccount.Create();request.Envelope=envelope;
+        using var response=(G2C_CloseAccount)await session.Call(request,10000);
         return response.Error;
     }
 

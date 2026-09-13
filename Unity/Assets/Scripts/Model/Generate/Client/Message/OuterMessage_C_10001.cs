@@ -1145,6 +1145,69 @@ namespace ET
         }
     }
 
+    [MemoryPackable]
+    [Message(OuterMessage.C2G_CloseAccount)]
+    [ResponseType(nameof(G2C_CloseAccount))]
+    public partial class C2G_CloseAccount : MessageObject, ISessionRequest
+    {
+        public static C2G_CloseAccount Create(bool isFromPool = false)
+        {
+            return ObjectPool.Instance.Fetch(typeof(C2G_CloseAccount), isFromPool) as C2G_CloseAccount;
+        }
+
+        [MemoryPackOrder(0)]
+        public int RpcId { get; set; }
+
+        [MemoryPackOrder(1)]
+        public string Envelope { get; set; }
+
+        public override void Dispose()
+        {
+            if (!this.IsFromPool)
+            {
+                return;
+            }
+
+            this.RpcId = default;
+            this.Envelope = default;
+
+            ObjectPool.Instance.Recycle(this);
+        }
+    }
+
+    [MemoryPackable]
+    [Message(OuterMessage.G2C_CloseAccount)]
+    public partial class G2C_CloseAccount : MessageObject, ISessionResponse
+    {
+        public static G2C_CloseAccount Create(bool isFromPool = false)
+        {
+            return ObjectPool.Instance.Fetch(typeof(G2C_CloseAccount), isFromPool) as G2C_CloseAccount;
+        }
+
+        [MemoryPackOrder(0)]
+        public int RpcId { get; set; }
+
+        [MemoryPackOrder(1)]
+        public int Error { get; set; }
+
+        [MemoryPackOrder(2)]
+        public string Message { get; set; }
+
+        public override void Dispose()
+        {
+            if (!this.IsFromPool)
+            {
+                return;
+            }
+
+            this.RpcId = default;
+            this.Error = default;
+            this.Message = default;
+
+            ObjectPool.Instance.Recycle(this);
+        }
+    }
+
     public static class OuterMessage
     {
         public const ushort HttpGetRouterResponse = 10002;
@@ -1183,5 +1246,7 @@ namespace ET
         public const ushort G2C_Benchmark = 10035;
         public const ushort C2G_ChangePassword = 10036;
         public const ushort G2C_ChangePassword = 10037;
+        public const ushort C2G_CloseAccount = 10038;
+        public const ushort G2C_CloseAccount = 10039;
     }
 }

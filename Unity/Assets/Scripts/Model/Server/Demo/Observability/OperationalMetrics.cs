@@ -5,11 +5,12 @@ using System.Threading;
 
 namespace ET.Server
 {
-    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, RoleSaveSuccess, RoleSaveFailure, MapEntry, RoomReconnect, MapOrderedMailbox, MapUnorderedMailbox, Count }
+    public enum HandlerLatency { RealmLogin, GateLogin, PasswordChange, AccountClose, RoleSaveSuccess, RoleSaveFailure, MapEntry, RoomReconnect, MapOrderedMailbox, MapUnorderedMailbox, Count }
     public enum LoginFailureKind { Rejected, ServiceError }
     public enum SecurityMetric
     {
         PasswordChangeAccepted, PasswordChangeUnconfirmed, PasswordChangeRateLimited,
+        AccountCloseAccepted, AccountCloseUnconfirmed, AccountCloseRateLimited,
         JournalAdmitted, JournalAdmissionFailures, JournalEnded, JournalEndFailures, JournalEndSkipped,
         SessionStateRevoked, SessionLeaseExpired, SessionCheckFailures, Count
     }
@@ -79,6 +80,7 @@ namespace ET.Server
                         HandlerLatency.RealmLogin=>"et_realm_login_handler_seconds",
                         HandlerLatency.GateLogin=>"et_gate_login_handler_seconds",
                         HandlerLatency.PasswordChange=>"et_password_change_handler_seconds",
+                        HandlerLatency.AccountClose=>"et_account_close_handler_seconds",
                         HandlerLatency.RoleSaveSuccess=>"et_role_save_success_seconds",
                         HandlerLatency.RoleSaveFailure=>"et_role_save_failure_seconds",
                         HandlerLatency.MapEntry=>"et_map_entry_handler_seconds",
@@ -128,6 +130,9 @@ namespace ET.Server
             SecurityMetric.PasswordChangeAccepted => "et_password_change_accepted_total",
             SecurityMetric.PasswordChangeUnconfirmed => "et_password_change_unconfirmed_total",
             SecurityMetric.PasswordChangeRateLimited => "et_password_change_rate_limited_total",
+            SecurityMetric.AccountCloseAccepted => "et_account_close_accepted_total",
+            SecurityMetric.AccountCloseUnconfirmed => "et_account_close_unconfirmed_total",
+            SecurityMetric.AccountCloseRateLimited => "et_account_close_rate_limited_total",
             SecurityMetric.JournalAdmitted => "et_session_journal_admitted_total",
             SecurityMetric.JournalAdmissionFailures => "et_session_journal_admission_failures_total",
             SecurityMetric.JournalEnded => "et_session_journal_ended_total",
