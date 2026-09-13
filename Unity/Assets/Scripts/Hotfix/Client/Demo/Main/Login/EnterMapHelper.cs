@@ -7,6 +7,8 @@ namespace ET.Client
     {
         public static async ETTask EnterMapAsync(Scene root)
         {
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            bool succeeded = false;
             try
             {
                 G2C_EnterMap g2CEnterMap = await root.GetComponent<ClientSenderComponent>().Call(C2G_EnterMap.Create()) as G2C_EnterMap;
@@ -15,11 +17,16 @@ namespace ET.Client
                 await root.GetComponent<ObjectWait>().Wait<Wait_SceneChangeFinish>();
                 
                 EventSystem.Instance.Publish(root, new EnterMapFinish());
+                succeeded = true;
             }
             catch (Exception e)
             {
                 Log.Error(e);
-            }	
+			}
+            finally
+            {
+                ClientExperienceTelemetry.RecordSince(ClientExperienceStage.EnterMap, started, succeeded);
+            }
         }
         
         public static async ETTask Match(Fiber fiber)

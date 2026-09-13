@@ -1,4 +1,5 @@
 using ET.Server;
+using ET.Client;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -32,6 +33,7 @@ internal static class Program
         ("自助改密混合加密与有效期", TestSelfPasswordCipher),
         ("安全指标固定基数与并发计数", TestSecurityMetrics),
         ("处理耗时直方图边界与并发", TestHandlerLatency),
+        ("客户端体验事件固定字段与文化无关", TestClientExperienceTelemetry),
         ("Fiber 投递队列积压快照", TestMessageQueueSnapshot),
         ("协程锁等待计数与终态去重", TestCoroutineLockMetrics),
         ("KService 更新期间销毁保护", TestKServiceDisposeDuringUpdate),
@@ -880,6 +882,43 @@ internal static class Program
             catch(ArgumentOutOfRangeException){rejected=true;}
             Assert(rejected,"Invalid latency sample accepted");
         }
+    }
+
+    private static void TestClientExperienceTelemetry()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        string success;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("fr-FR");
+            success = ClientExperienceTelemetry.Format(ClientExperienceStage.Login, true, 1234.5);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+        Assert(success == "CLIENT_EXPERIENCE stage=login outcome=success duration_ms=1234.500",
+            "Client experience event is dynamic or culture-dependent");
+        Assert(ClientExperienceTelemetry.Format(ClientExperienceStage.EnterMap, false, 0) ==
+            "CLIENT_EXPERIENCE stage=enter_map outcome=failure duration_ms=0.000",
+            "Client experience failure event is incorrectly classified");
+        foreach (double invalid in new[] { -1.0, double.NaN, double.PositiveInfinity })
+        {
+            bool rejected = false;
+            try { ClientExperienceTelemetry.Format(ClientExperienceStage.Login, true, invalid); }
+            catch (ArgumentOutOfRangeException) { rejected = true; }
+            Assert(rejected, "Invalid client duration accepted");
+        }
+        bool unknownRejected = false;
+        try { ClientExperienceTelemetry.Format((ClientExperienceStage)999, true, 1); }
+        catch (ArgumentOutOfRangeException) { unknownRejected = true; }
+        Assert(unknownRejected, "Unknown client experience stage accepted");
+        string root = FindRepositoryRoot();
+        string login = Read(root, "Unity/Assets/Scripts/Hotfix/Client/Demo/NetClient/LoginHelper.cs");
+        string enterMap = Read(root, "Unity/Assets/Scripts/Hotfix/Client/Demo/Main/Login/EnterMapHelper.cs");
+        Assert(login.Contains("ClientExperienceTelemetry.RecordSince(ClientExperienceStage.Login, started, succeeded)") &&
+            enterMap.Contains("ClientExperienceTelemetry.RecordSince(ClientExperienceStage.EnterMap, started, succeeded)"),
+            "Client journey entry point lost its experience event");
     }
 
     private static void TestBoundedLogging()

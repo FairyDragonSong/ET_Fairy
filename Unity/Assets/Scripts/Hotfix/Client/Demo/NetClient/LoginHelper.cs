@@ -4,15 +4,25 @@ namespace ET.Client
     {
         public static async ETTask Login(Scene root, string account, string password)
         {
-            root.RemoveComponent<ClientSenderComponent>();
-            
-            ClientSenderComponent clientSenderComponent = root.AddComponent<ClientSenderComponent>();
-            
-            long playerId = await clientSenderComponent.LoginAsync(account, password);
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            bool succeeded = false;
+            try
+            {
+                root.RemoveComponent<ClientSenderComponent>();
 
-            root.GetComponent<PlayerComponent>().MyId = playerId;
-            
-            await EventSystem.Instance.PublishAsync(root, new LoginFinish());
+                ClientSenderComponent clientSenderComponent = root.AddComponent<ClientSenderComponent>();
+
+                long playerId = await clientSenderComponent.LoginAsync(account, password);
+
+                root.GetComponent<PlayerComponent>().MyId = playerId;
+
+                await EventSystem.Instance.PublishAsync(root, new LoginFinish());
+                succeeded = true;
+            }
+            finally
+            {
+                ClientExperienceTelemetry.RecordSince(ClientExperienceStage.Login, started, succeeded);
+            }
         }
     }
 }
