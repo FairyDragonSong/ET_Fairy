@@ -1,14 +1,19 @@
 ﻿using System;
 using CommandLine;
+using System.Threading;
 using UnityEngine;
 
 namespace ET
 {
 	public class Init: MonoBehaviour
 	{
+		private SynchronizationContext unityContext;
+
 		private void Start()
 		{
-			this.StartAsync().Coroutine();
+			this.unityContext = SynchronizationContext.Current;
+			try { this.StartAsync().Coroutine(); }
+			finally { SynchronizationContext.SetSynchronizationContext(this.unityContext); }
 		}
 		
 		private async ETTask StartAsync()
@@ -43,18 +48,29 @@ namespace ET
 
 		private void Update()
 		{
-			TimeInfo.Instance.Update();
-			FiberManager.Instance.Update();
+			try
+			{
+				TimeInfo.Instance.Update();
+				FiberManager.Instance.Update();
+			}
+			finally
+			{
+				// ET uses its own context during fiber work; restore Unity's before
+				// editor tools and other engine callbacks resume.
+				SynchronizationContext.SetSynchronizationContext(this.unityContext);
+			}
 		}
 
 		private void LateUpdate()
 		{
-			FiberManager.Instance.LateUpdate();
+			try { FiberManager.Instance.LateUpdate(); }
+			finally { SynchronizationContext.SetSynchronizationContext(this.unityContext); }
 		}
 
 		private void OnApplicationQuit()
 		{
-			World.Instance.Dispose();
+			try { World.Instance.Dispose(); }
+			finally { SynchronizationContext.SetSynchronizationContext(this.unityContext); }
 		}
 	}
 	
