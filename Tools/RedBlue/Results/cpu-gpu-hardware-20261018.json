@@ -1,0 +1,126 @@
+{
+  "note": "Capped 60 FPS 50k battle; CPU includes the entire Unity Editor; GPU values include all applications. Profiler recording disabled.",
+  "logicalProcessors": 32,
+  "samples": [
+    {
+      "utc": "2026-10-18T15:59:37.8121400Z",
+      "editorCpuPercentAllLogical": 4.855801514777749,
+      "editorCpuCoreEquivalent": 1.5538564847288796,
+      "editorWorkingSetBytes": 2696441856,
+      "wholeGpuUtilPercent": "44",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "78",
+      "wholeGpuPowerW": "51.26",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:38.9165012Z",
+      "editorCpuPercentAllLogical": 4.111594740301245,
+      "editorCpuCoreEquivalent": 1.3157103168963986,
+      "editorWorkingSetBytes": 2696421376,
+      "wholeGpuUtilPercent": "46",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "52.32",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:40.0057095Z",
+      "editorCpuPercentAllLogical": 5.928654562372906,
+      "editorCpuCoreEquivalent": 1.89716945995933,
+      "editorWorkingSetBytes": 2696425472,
+      "wholeGpuUtilPercent": "46",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "53.99",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:41.0878478Z",
+      "editorCpuPercentAllLogical": 7.199159672615852,
+      "editorCpuCoreEquivalent": 2.3037310952370724,
+      "editorWorkingSetBytes": 2696425472,
+      "wholeGpuUtilPercent": "44",
+      "wholeGpuMemoryControllerUtilPercent": "18",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "54.34",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:42.1771505Z",
+      "editorCpuPercentAllLogical": 5.651882030352732,
+      "editorCpuCoreEquivalent": 1.8086022497128744,
+      "editorWorkingSetBytes": 2696429568,
+      "wholeGpuUtilPercent": "47",
+      "wholeGpuMemoryControllerUtilPercent": "20",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "53.77",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:43.2694847Z",
+      "editorCpuPercentAllLogical": 7.840288491305503,
+      "editorCpuCoreEquivalent": 2.508892317217761,
+      "editorWorkingSetBytes": 2696437760,
+      "wholeGpuUtilPercent": "45",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "53.37",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:44.3628045Z",
+      "editorCpuPercentAllLogical": 6.910063850231113,
+      "editorCpuCoreEquivalent": 2.211220432073956,
+      "editorWorkingSetBytes": 2696437760,
+      "wholeGpuUtilPercent": "44",
+      "wholeGpuMemoryControllerUtilPercent": "18",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "54.01",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:45.4589464Z",
+      "editorCpuPercentAllLogical": 6.696073488217311,
+      "editorCpuCoreEquivalent": 2.1427435162295394,
+      "editorWorkingSetBytes": 2696433664,
+      "wholeGpuUtilPercent": "45",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "53.96",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:46.5530258Z",
+      "editorCpuPercentAllLogical": 7.943074143134433,
+      "editorCpuCoreEquivalent": 2.5417837258030187,
+      "editorWorkingSetBytes": 2696364032,
+      "wholeGpuUtilPercent": "45",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "53.95",
+      "wholeGpuGraphicsClockMHz": "2625"
+    },
+    {
+      "utc": "2026-10-18T15:59:47.6413732Z",
+      "editorCpuPercentAllLogical": 6.3992933112362405,
+      "editorCpuCoreEquivalent": 2.0477738595955968,
+      "editorWorkingSetBytes": 2695888896,
+      "wholeGpuUtilPercent": "46",
+      "wholeGpuMemoryControllerUtilPercent": "19",
+      "wholeGpuMemoryUsedMiB": "1928",
+      "wholeGpuTemperatureC": "79",
+      "wholeGpuPowerW": "54.38",
+      "wholeGpuGraphicsClockMHz": "2625"
+    }
+  ]
+}

@@ -109,3 +109,52 @@ dotnet run --project Tools/RedBlue/RedBlue.Tests.csproj -c Release
 当前为完整 ET 工程的验证包：原始 Wasm 89,325,814 字节，压缩代码 16,261,215 字节，Unity.data 45,853,019 字节。尚未做首包裁剪或微信提审包体积验收；SDK CDN 仍是本地地址，手机运行前必须配置可访问的合法 CDN 并部署数据文件。本次未上传、未发布、未进行安卓/iPhone 或十分钟发热验收。索引与关键产物 SHA256 见 Tools/RedBlue/Results/wechat-export-20261018.json。构建产物和原始日志留在本地忽略目录，Git 保留源代码、生成的 HybridCLR 引用及验证报告；内置资源清单应每次构建重新生成，不能复用旧包。
 
 构建结束后已恢复 StandaloneWindows64 / Init 场景，重新编译桌面热更 DLL。首次恢复 Play 遇到消息类型映射不一致，退出并请求脚本域重载后 ET 正常启动；切目标后应等待 ET 编译和域刷新完成再进入 Play。最终画面为最大化 5 万人零伤害完整对抗，现场约 59 FPS、30Hz、7 次小兵提交，实际 Burst 标记为真，Console error 为 0。
+
+## 2026-10-18 夜间 CPU / GPU 运行时分析
+
+本轮使用实际 Unity Profiler CPU/GPU/Rendering 记录，关闭 Deep Profile、Profile Editor；固定 1920×1080、50,000 单位、种子 7241、零伤害、1 倍速、30Hz 模拟。各组预热 5 秒、采样 15 秒，采样期间不发送 MCP 查询。主线程与渲染线程全窗口数据来自 FrameTimingManager，GPU 游戏渲染范围来自 Profiler 层级 GPU 列 PlayerLoop，取各原始记录末尾 240 帧。包含采集开销，不可直接与上一轮未开启 Profiler、1549×871 的短测混比。
+
+| 场景 | FPS | CPU 主线程均值 / P95 | CPU 渲染线程均值 | GPU 游戏渲染范围均值 | 模拟 Hz |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 正面完整，60FPS / VSync | 59.99 | 4.31 / 7.65ms | 0.71ms | 0.435ms | 30.00 |
+| 正面完整，取消限帧 | 298.06 | 2.00 / 7.02ms | 0.66ms | 0.537ms | 30.00 |
+| 密集完整，取消限帧 | 304.22 | 1.87 / 5.80ms | 0.66ms | 0.508ms | 30.00 |
+| 只绘制，取消限帧 | 384.89 | 1.46 / 1.91ms | 0.61ms | 0.422ms | 关闭 |
+| 只计算密集，取消限帧 | 361.13 | 1.61 / 4.17ms | 0.58ms | 0.412ms | 30.00 |
+
+取消限帧不改变模拟频率：同样每秒 30 步被更多显示帧分摊，不能把主线程帧均值下降解释为模拟本身加速。只计算模式仍保留原场景相机、背景和控制 UI，因此 GPU 不为零。五组均保持 50,000 人，没有漏帧观测。密集组记录一次 267.64ms 最大帧，同时 Gen0 增量为 1；其他组为 0。这是 Editor 加采集器环境，尚未定位分配来源，也不能直接归因于模拟。
+
+GPU 计时口径需区分：FrameTimingManager 的 GPU 值在正面限帧时约 0.302ms、取消限帧时约 3.215ms；RawFrameDataView.frameGpuTimeMs 分别约 11.558ms、0.827ms。两者在 Editor 中明显不一致，不能任选其一当成 Shader 忙碌时间。本轮进一步读取 GPU hierarchy 的 PlayerLoop、相机和 Pass 列，表格只报告该游戏渲染范围，不把整帧剩余区间解释为 GPU 着色瓶颈，也不声称这是硬件 GPU busy 百分比。Unity 的帧时序定义和延迟说明：https://docs.unity3d.com/2022.3/Documentation/Manual/frame-timing-manager.html 。
+
+### 相机对照的明确收益
+
+发现原场景 MainCamera（Skybox）、YIUICamera（Depth）与深度 100 的 RedBlue Camera（SolidColor）全部在渲染。原 MainCamera 的背景随后被 Demo 覆盖；Demo 自己使用 Overlay 控制界面。取消限帧完整对抗中，原 MainCamera GPU 范围均值约 0.335ms，RedBlue Camera 约 0.157ms，YIUICamera 约 0.029ms。
+
+使用相同配置分别采样三相机与仅 Demo 相机，均 5 秒预热＋15 秒采样：
+
+| 指标 | 原三相机 | 临时只保留 Demo 相机 |
+| --- | ---: | ---: |
+| 完整对抗 FPS | 300.33 | 415.65 |
+| CPU 主线程均值 | 2.00ms | 1.13ms |
+| CPU 渲染管线 DoRenderLoop 均值 | 1.125ms | 0.473ms |
+| GPU 游戏渲染范围均值 | 0.537ms | 0.388ms |
+| 场景 draw calls（含 UI） | 12 | 10 |
+| 存活 / 模拟频率 | 50,000 / 30Hz | 50,000 / 30Hz |
+
+FPS 约提高 38%，CPU 渲染管线范围约下降 58%，GPU 游戏渲染范围约下降 28%。这是短时顺序 A/B，不是跨设备收益承诺；不同帧率下 CPU 模拟均值的分摊也会变化。两组没有 GC 回收。测完已恢复两台旧相机、60FPS、VSync、Profiler 区域开关；未修改生产脚本和场景资产，音频预览设置也恢复。
+
+### 后续优化顺序
+
+1. 优先在 Demo 生命周期内停用不需要的 MainCamera / YIUICamera，退出 Demo 恢复状态。A/B 已证明收益，需验证 UI、镜头切换及原登录模式不受影响。
+2. CPU 继续处理寻敌、网格和分离。限帧正面对抗每步网格（含共享 Flow 更新）0.63ms、分离 1.51ms、寻敌/决策 1.68ms、提交 0.15ms，合计约 3.97ms。优先评估按非空网格生成分离任务、减少九色阶段调度和同步；再把每单位决策与统一伤害归并拆开，避免直接并行写共享 damage / RNG 引入竞态。31 个 Job 工作线程的分离 marker 耗时合计约 8.89 core-ms/显示帧，这是各线程时间之和，不能与主线程墙钟时间相加。减少空任务有望改善总 CPU 工作量和手机功耗。
+3. 渲染 CPU 原路径平均约 0.63ms/显示帧，发生状态更新的帧约 1.3ms，仍包含状态打包、可见统计和纹理提交。应给 Pack、CountVisible、SetPixelData、Apply 分别补标记后再改；可评估 Burst 打包、共用遍历、仅处理存活块。RHI 的纹理上传范围在取消限帧时约 0.010ms/帧，目前没有证据表明它是桌面首要瓶颈。
+4. GPU 在本机有余量。手机端优先测试透明叠加、屏外/死亡块剔除、显示 LOD、相机附件和拷贝；状态纹理量化须验证坐标精度。先以真机 GPU Pass 数据验证，再决定是否换动画图集或渲染路径。当前证据不要求继续迁移完整 Entities / Compute 渲染。
+5. 单独定位 267ms 尖峰，使用独立 IL2CPP Player 和真机采集分配调用栈、最长帧与持续温升；不能仅按平均 FPS 验收上线。
+
+### 整机占用辅助采样与复现
+
+恢复 60FPS 并关闭 Profiler 后，约 10 秒采样：整个 Tuanjie Editor 进程 CPU 均值约 6.35%（32 逻辑处理器口径，范围 4.11%–7.94%，平均约 2.03 核），全显卡占用约 45.2%（44%–47%）、GPU 温度 78–79℃、整卡功率约 51–54W。CPU 包含 Editor / ET / MCP 等整个进程，GPU 是 nvidia-smi 的整卡数据，包含其他应用，不能当作本 Demo 独占使用率；总 CPU 百分比低也不代表关键主线程没有瓶颈。它们不替代上面的帧/Pass 计时。
+
+复现：Tools/RedBlue/CpuGpuProfile.csx 自动运行五组；调用前启用 CPU/GPU/Rendering Profiler 区域、关闭其他区域，测后恢复原值。相机 A/B 在脚本前设置 AppDomain.CurrentDomain.SetData("RedBlue.CpuGpuProfile.CameraComparison", true)。AnalyzeCpuGpuProfile.csx 离线读取各组记录；分析 A/B 同样在脚本前设置该标记。一次只运行一个采样任务，保持 Game 视图，不在采样期间查询或操作 Unity。
+
+完整本地原始记录：Temp/RedBlueProfile/*.data、Temp/RedBlueCameraAB/*.data，可从 Unity Profiler Load 打开。Git 保留采样脚本以及 Tools/RedBlue/Results/cpu-gpu-editor-20261018.json、cpu-gpu-passes-20261018.json、cpu-gpu-camera-ab-20261018.json、cpu-gpu-camera-passes-20261018.json、cpu-gpu-hardware-20261018.json。当前没有新增手机 GPU 测量。
