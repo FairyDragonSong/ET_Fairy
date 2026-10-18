@@ -32,7 +32,8 @@ namespace ET.RedBlue
         }
         private void Awake()
         {
-            Application.targetFrameRate = 60;
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
             viewCamera = new GameObject("RedBlue Camera").AddComponent<Camera>();
             viewCamera.transform.SetParent(transform); viewCamera.transform.position = new Vector3(900, 550, -10);
             viewCamera.orthographic = true; viewCamera.clearFlags = CameraClearFlags.SolidColor;
