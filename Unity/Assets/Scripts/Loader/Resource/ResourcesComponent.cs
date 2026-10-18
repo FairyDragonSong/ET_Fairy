@@ -66,6 +66,15 @@ namespace ET
 
             GlobalConfig globalConfig = Resources.Load<GlobalConfig>("GlobalConfig");
             EPlayMode ePlayMode = globalConfig.EPlayMode;
+            if (globalConfig.EnableRedBlueDemo)
+            {
+                // The local battle uses built-in assets and must not depend on a CDN.
+#if UNITY_EDITOR
+                ePlayMode = EPlayMode.EditorSimulateMode;
+#else
+                ePlayMode = EPlayMode.OfflinePlayMode;
+#endif
+            }
             InitializationOperation initializationOperation;
 
             // 编辑器下的模拟模式

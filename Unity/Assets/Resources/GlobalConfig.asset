@@ -16,6 +16,7 @@ MonoBehaviour:
   EnableDll: 1
   BuildType: 0
   AppType: 7
+  EnableRedBlueDemo: 1
   EPlayMode: 3
   ResourceHostServer: http://127.0.0.1:8080
   ResourceFallbackHostServer: 

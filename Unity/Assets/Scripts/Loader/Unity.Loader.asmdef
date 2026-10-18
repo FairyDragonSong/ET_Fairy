@@ -4,6 +4,7 @@
     "references": [
         "Unity.ThirdParty",
         "Unity.Core",
+        "UnityEngine.UI",
         "HybridCLR.Runtime",
         "MemoryPack",
         "YooAsset",

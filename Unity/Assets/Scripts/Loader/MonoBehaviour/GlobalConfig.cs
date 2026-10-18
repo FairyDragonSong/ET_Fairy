@@ -27,6 +27,9 @@ namespace ET
 
         public AppType AppType;
 
+        [Tooltip("启动本地红蓝群体对抗 Demo（无需登录服务器）。")]
+        public bool EnableRedBlueDemo;
+
         public EPlayMode EPlayMode;
 
         [Tooltip("YooAsset CDN 根地址。运行时会在其后追加 CDN/{Platform}/{ResourceAppVersion}。")]

@@ -21,6 +21,13 @@ namespace ET.Client
             SceneType sceneType = EnumHelper.FromString<SceneType>(globalComponent.GlobalConfig.AppType.ToString());
             root.SceneType = sceneType;
 
+            if (globalComponent.GlobalConfig.EnableRedBlueDemo)
+            {
+                // Enter through ET, without loading the login/lobby UI prefabs.
+                await EventSystem.Instance.PublishAsync(root, new AppStartInitFinish());
+                return;
+            }
+
             {   //YIUI初始化
                 YIUIBindHelper.InternalGameGetUIBindVoFunc = YIUICodeGenerated.YIUIBindProvider.Get;
                 await root.AddComponent<YIUIMgrComponent>().Initialize();
