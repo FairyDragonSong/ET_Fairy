@@ -14,6 +14,7 @@ var intervals = new System.Collections.Generic.List<double>(4000);
 var submits = new System.Collections.Generic.List<double>(4000);
 int phase = 0, lastFrame = -1, firstFrame = 0, tickBase = 0, lastTick = 0, tickSamples = 0, missed = 0, multiStep = 0, gcBase = 0;
 double stageStart = 0, sampleStart = 0, grid = 0, separate = 0, decide = 0, commit = 0;
+double gridBase = 0, separationBase = 0, decisionBase = 0, commitBase = 0;
 bool sampling = false;
 var modes = new int[] { 0, 0, 1, 2 };
 var formations = new int[] { 0, 3, 0, 3 };
@@ -52,6 +53,7 @@ callback = () =>
         lastFrame = frame;
         if (now - stageStart < 10) return;
         sampling = true; sampleStart = now; firstFrame = frame; tickBase = lastTick = sim.Tick;
+        gridBase = sim.TotalGridMs; separationBase = sim.TotalSeparationMs; decisionBase = sim.TotalDecisionMs; commitBase = sim.TotalCommitMs;
         gcBase = System.GC.CollectionCount(0);
         domain.SetData("RedBlue.Benchmark.Status", names[phase] + ": sampling 20s");
         return;
@@ -74,14 +76,17 @@ callback = () =>
     results.Add(new
     {
         name = names[phase], warmupSeconds = 10, sampleSeconds = seconds,
+        simulationBackend = sim.Backend, accelerationVerified = sim.AccelerationVerified, renderBackend = view.Backend,
         fps = (frame - firstFrame) / seconds, sampledFrames = intervals.Count, missedFrames = missed,
         frameMeanMs = sum / intervals.Count, frameP95Ms = intervals[p95], frameMaxMs = intervals[intervals.Count - 1],
         simulationHz = (sim.Tick - tickBase) / seconds, realtimeRatio = (sim.Tick - tickBase) / (seconds * 30),
         alive = sim.Alive[0] + sim.Alive[1], drawn = modes[phase] == 2 ? 0 : view.Drawn,
         submitCalls = modes[phase] == 2 ? 0 : view.DrawCalls,
         submitMeanMs = submitSum / submits.Count, submitP95Ms = submits[p95],
-        gridMs = grid / System.Math.Max(1, tickSamples), separationMs = separate / System.Math.Max(1, tickSamples),
-        decisionMs = decide / System.Math.Max(1, tickSamples), commitMs = commit / System.Math.Max(1, tickSamples),
+        gridMs = (sim.TotalGridMs - gridBase) / System.Math.Max(1, sim.Tick - tickBase),
+        separationMs = (sim.TotalSeparationMs - separationBase) / System.Math.Max(1, sim.Tick - tickBase),
+        decisionMs = (sim.TotalDecisionMs - decisionBase) / System.Math.Max(1, sim.Tick - tickBase),
+        commitMs = (sim.TotalCommitMs - commitBase) / System.Math.Max(1, sim.Tick - tickBase),
         sampledStepFrames = tickSamples, multiStepFrames = multiStep,
         gen0Collections = System.GC.CollectionCount(0) - gcBase,
         managedMemoryMB = System.GC.GetTotalMemory(false) / 1048576.0,
@@ -113,7 +118,7 @@ domain.SetData("RedBlue.Benchmark.Environment", Newtonsoft.Json.JsonConvert.Seri
     gpu = UnityEngine.SystemInfo.graphicsDeviceName, api = UnityEngine.SystemInfo.graphicsDeviceType.ToString(),
     unity = UnityEngine.Application.unityVersion, targetFPS = UnityEngine.Application.targetFrameRate,
     vsync = UnityEngine.QualitySettings.vSyncCount, zeroDamage = true, seed = 7241,
-    dateUTC = System.DateTime.UtcNow.ToString("o"), note = "Windows Editor, maximum Game view; 10s warmup + 20s sample per phase. CPU stages are sampled last-step values; Editor memory includes the editor."
+    dateUTC = System.DateTime.UtcNow.ToString("o"), note = "Windows Editor, maximum Game view; 10s warmup + 20s sample per phase. CPU stages include every simulation step via cumulative counters; Editor memory includes the editor."
 }));
 configure(0);
 UnityEditor.EditorApplication.update += callback;

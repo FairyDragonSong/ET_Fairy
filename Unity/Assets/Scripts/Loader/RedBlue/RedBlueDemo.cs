@@ -22,6 +22,8 @@ namespace ET.RedBlue
         private float accumulator, speed = 1, sampleTime, uiTime, drawMs, zoom = 1, finishedTime;
         private bool paused, zeroDamage, loop = true, suspended;
         private float previousPinch;
+        private static readonly string[] ModeNames = { "Full battle", "Render only", "Simulation only" };
+        private static readonly string[] FormationNames = { "Front", "Islands", "Pincer", "Dense stress" };
 
         public static void Open()
         {
@@ -40,6 +42,7 @@ namespace ET.RedBlue
         }
         private void Restart()
         {
+            simulation?.Dispose();
             simulation = new CrowdSimulation(count, formation) { ZeroDamage = zeroDamage };
             accumulator = sampleTime = uiTime = finishedTime = 0; sampleTick = frameCursor = frameCount = 0;
         }
@@ -90,8 +93,8 @@ namespace ET.RedBlue
                 $"Simulation {hz:F1} Hz / target {30 * speed:F0}   realtime {hz / (30 * speed):P0}\n" +
                 $"Grid {simulation.GridMs:F2} / Separate {simulation.SeparationMs:F2} / Decide {simulation.DecisionMs:F2} / Commit {simulation.CommitMs:F2} ms\n" +
                 $"Submit {drawMs:F2} ms   calls {(mode == 2 ? 0 : rendererView.DrawCalls)}   managed {GC.GetTotalMemory(false) / 1048576f:F1} MB\n" +
-                $"{new[] { "Full battle", "Render only", "Simulation only" }[mode]} | {new[] { "Front", "Islands", "Pincer", "Dense stress" }[formation]} | {speed}x | damage {(zeroDamage ? "OFF" : "ON")} | loop {(loop ? "ON" : "OFF")}\n" +
-                $"30 Hz fixed step | scroll / pinch / +/- to zoom | instancing {SystemInfo.supportsInstancing}";
+                $"{ModeNames[mode]} | {FormationNames[formation]} | {speed}x | damage {(zeroDamage ? "OFF" : "ON")} | loop {(loop ? "ON" : "OFF")}\n" +
+                $"{simulation.Backend} | {rendererView.Backend}";
             sampleTime = 0; sampleTick = simulation.Tick;
         }
         private void CreateUI()
@@ -106,9 +109,12 @@ namespace ET.RedBlue
             int column = 0, row = 0;
             Action<string, UnityEngine.Events.UnityAction> button = (title, action) =>
             {
-                int x = 16 + column * 156, y = 224 + row * 50;
+                int x = 16 + column * 156, y = 66 - row * 50;
                 GameObject obj = new GameObject(title, typeof(RectTransform), typeof(Image), typeof(Button)); obj.transform.SetParent(canvasObject.transform, false);
                 Place(obj.GetComponent<RectTransform>(), x, y, 148, 42);
+                RectTransform buttonRect = obj.GetComponent<RectTransform>();
+                buttonRect.anchorMin = buttonRect.anchorMax = buttonRect.pivot = Vector2.zero;
+                buttonRect.anchoredPosition = new Vector2(x, y);
                 obj.GetComponent<Image>().color = new Color(.14f, .20f, .29f, .95f);
                 obj.GetComponent<Button>().onClick.AddListener(action);
                 Text text = Label(title, 0, 0, 148, 42, 18, obj.transform); text.alignment = TextAnchor.MiddleCenter;
@@ -133,6 +139,6 @@ namespace ET.RedBlue
         { rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 1); rect.anchoredPosition = new Vector2(x, -y); rect.sizeDelta = new Vector2(width, height); }
         private void OnApplicationPause(bool value) { suspended = value; accumulator = sampleTime = 0; if (simulation != null) sampleTick = simulation.Tick; }
         private void OnApplicationFocus(bool value) { suspended = !value; accumulator = sampleTime = 0; if (simulation != null) sampleTick = simulation.Tick; }
-        private void OnDestroy() { rendererView?.Dispose(); }
+        private void OnDestroy() { simulation?.Dispose(); rendererView?.Dispose(); }
     }
 }

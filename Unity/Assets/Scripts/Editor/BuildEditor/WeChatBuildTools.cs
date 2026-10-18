@@ -143,7 +143,7 @@ namespace ET
                 throw new BuildFailedException("微信小游戏要求 GlobalConfig.CodeMode = Client。");
             }
 
-            if (globalConfig.EPlayMode != EPlayMode.WebPlayMode)
+            if (!globalConfig.EnableRedBlueDemo && globalConfig.EPlayMode != EPlayMode.WebPlayMode)
             {
                 throw new BuildFailedException("微信小游戏要求 GlobalConfig.EPlayMode = WebPlayMode。");
             }
@@ -160,9 +160,12 @@ namespace ET
 
             if (validateRemoteSettings)
             {
-                ValidateRemoteURL("GlobalConfig.ResourceHostServer", globalConfig.ResourceHostServer, globalConfig.BuildType);
-                ValidateRemoteURL("GlobalConfig.MiniGameRouterHttpUrl", globalConfig.MiniGameRouterHttpUrl, globalConfig.BuildType);
-                ValidateWebSocketURL(globalConfig.MiniGameRouterWebSocketUrl, globalConfig.BuildType);
+                if (!globalConfig.EnableRedBlueDemo)
+                {
+                    ValidateRemoteURL("GlobalConfig.ResourceHostServer", globalConfig.ResourceHostServer, globalConfig.BuildType);
+                    ValidateRemoteURL("GlobalConfig.MiniGameRouterHttpUrl", globalConfig.MiniGameRouterHttpUrl, globalConfig.BuildType);
+                    ValidateWebSocketURL(globalConfig.MiniGameRouterWebSocketUrl, globalConfig.BuildType);
+                }
                 ValidateMiniGameSDKCDN(globalConfig.BuildType);
             }
         }

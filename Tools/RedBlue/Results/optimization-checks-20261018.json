@@ -1,0 +1,125 @@
+{
+  "success": true,
+  "reports": [
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Managed reference",
+      "formation": 0,
+      "alive": 1999
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Managed reference",
+      "formation": 1,
+      "alive": 1665
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Managed reference",
+      "formation": 2,
+      "alive": 1924
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Managed reference",
+      "formation": 3,
+      "alive": 529
+    },
+    {
+      "test": "simultaneous-death/pair-conservation/disposal",
+      "execution": "ManagedReference"
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst single thread",
+      "formation": 0,
+      "alive": 1999
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst single thread",
+      "formation": 1,
+      "alive": 1665
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst single thread",
+      "formation": 2,
+      "alive": 1924
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst single thread",
+      "formation": 3,
+      "alive": 524
+    },
+    {
+      "test": "simultaneous-death/pair-conservation/disposal",
+      "execution": "BurstSingleThread"
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst + colored Jobs",
+      "formation": 0,
+      "alive": 1999
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst + colored Jobs",
+      "formation": 1,
+      "alive": 1665
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst + colored Jobs",
+      "formation": 2,
+      "alive": 1924
+    },
+    {
+      "test": "formation/replay/bounds/targets/counts",
+      "backend": "Burst + colored Jobs",
+      "formation": 3,
+      "alive": 512
+    },
+    {
+      "test": "simultaneous-death/pair-conservation/disposal",
+      "execution": "BurstParallel"
+    },
+    {
+      "test": "managed/Burst first-step parity",
+      "formation": 0,
+      "maxPositionError": 0.0001220703125
+    },
+    {
+      "test": "managed/Burst first-step parity",
+      "formation": 1,
+      "maxPositionError": 0.00006103515625
+    },
+    {
+      "test": "managed/Burst first-step parity",
+      "formation": 2,
+      "maxPositionError": 0
+    },
+    {
+      "test": "managed/Burst first-step parity",
+      "formation": 3,
+      "maxPositionError": 0.00006103515625
+    },
+    {
+      "test": "50k sustained population and parallel replay",
+      "backend": "Burst single thread",
+      "gridMs": 0.7358,
+      "separationMs": 4.8772,
+      "decisionMs": 0.6719,
+      "commitMs": 0.0923
+    },
+    {
+      "test": "50k sustained population and parallel replay",
+      "backend": "Burst + colored Jobs",
+      "gridMs": 0.8351,
+      "separationMs": 0.9774,
+      "decisionMs": 0.7221,
+      "commitMs": 0.1168
+    }
+  ]
+}

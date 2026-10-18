@@ -29,7 +29,7 @@ namespace ET
                 AssetDatabase.CreateAsset(material, materialPath);
                 AssetDatabase.SaveAssets();
             }
-            var simulation = new CrowdSimulation(50000, 3) { ZeroDamage = true };
+            using var simulation = new CrowdSimulation(50000, 3) { ZeroDamage = true };
             for (int i = 0; i < 60; i++) simulation.Step();
             if (simulation.Alive[0] + simulation.Alive[1] != 50000) throw new InvalidOperationException("RedBlue sustained population check failed");
             Debug.Log("REDBLUE_VALIDATION_OK: shader imported; 50,000 independent units, 60 fixed steps; zero damage preserved population.");

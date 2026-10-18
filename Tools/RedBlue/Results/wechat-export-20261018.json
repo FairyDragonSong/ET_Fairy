@@ -1,0 +1,51 @@
+{
+  "dateUTC": "2026-10-18T05:13:07.917Z",
+  "result": "SUCCEED",
+  "target": "MiniGame",
+  "unity": "2022.3.62t11",
+  "pipeline": [
+    "ET/Compile",
+    "HybridCLR/Generate/All",
+    "HybridCLR/CopyAotDlls",
+    "ET/WeChat/Build YooAsset Package",
+    "WeChatWASM.WXConvertCore.DoExport"
+  ],
+  "packageVersion": "2026-10-18-1305",
+  "builtInFiles": 35,
+  "output": "Unity/BuildArtifacts/RedBlue-WeChat",
+  "developmentBuild": false,
+  "autoProfile": false,
+  "il2cpp": "OptimizeSpeed",
+  "renderThread": false,
+  "simulationWorkers": false,
+  "shaderTargetCompiled": true,
+  "consoleErrorsAfterExport": 0,
+  "artifacts": [
+    {
+      "path": "minigame/wasmcode/1c4bc8f22368aedb.webgl.wasm.code.unityweb.wasm.br",
+      "bytes": 16261215,
+      "sha256": "6f3e360cf93e3d4699d1662a2383687eea1f2085503085abd5900fbcd9f23155"
+    },
+    {
+      "path": "webgl/Build/webgl.data",
+      "bytes": 45853019,
+      "sha256": "b3fd604b15531e35b41c4f915694208e1e154b8d6b240da5c0486d9d6ab996e6"
+    },
+    {
+      "path": "minigame/game.js",
+      "bytes": 8206,
+      "sha256": "18b8116fa537745c2ba998f739a5ce6b717f46de1b46442b07991343d9288979"
+    },
+    {
+      "path": "minigame/game.json",
+      "bytes": 655,
+      "sha256": "b78481d3a22980f410254bbd90bc3fa4df751aa67fbc1ce87e589e3b03d0a673"
+    }
+  ],
+  "limitations": [
+    "Local build/export only; no device run or upload.",
+    "SDK CDN is still localhost; configure phone-accessible valid CDN before device testing.",
+    "Code and data size are unoptimized full ET project output, not a shipping package-size acceptance.",
+    "SDK and Player code generation settings restored after export."
+  ]
+}

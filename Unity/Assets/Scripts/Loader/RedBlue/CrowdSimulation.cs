@@ -3,8 +3,9 @@ using System.Diagnostics;
 
 namespace ET.RedBlue
 {
+    public enum CrowdExecution { Auto, ManagedReference, BurstSingleThread, BurstParallel }
     // Pure C#: one slot per soldier, no Unity objects or allocations in Step.
-    public sealed class CrowdSimulation
+    public sealed class CrowdSimulation : IDisposable
     {
         public const float Width = 1800, Height = 1100, StepSeconds = 1f / 30;
         public readonly int Count;
@@ -15,17 +16,31 @@ namespace ET.RedBlue
         public int Tick { get; private set; }
         public bool ZeroDamage;
         public double GridMs, SeparationMs, DecisionMs, CommitMs;
+        public double TotalGridMs { get; private set; }
+        public double TotalSeparationMs { get; private set; }
+        public double TotalDecisionMs { get; private set; }
+        public double TotalCommitMs { get; private set; }
         public float Time => Tick * StepSeconds;
         public bool Finished => Alive[0] == 0 || Alive[1] == 0;
-        private readonly float[] forceX, forceY, damage, cooldown;
-        private readonly byte[] budget;
-        private readonly int[] heads, next, counts, offsets, cursors, ids;
-        private readonly int cols, rows, sepCols, sepRows;
-        private readonly float cell, diameter;
-        private readonly FlowField flow = new FlowField();
+        internal readonly float[] forceX, forceY, damage, cooldown;
+        internal readonly byte[] budget;
+        internal readonly int[] heads, next, counts, offsets, cursors, ids;
+        internal readonly int cols, rows, sepCols, sepRows;
+        internal readonly float cell, diameter;
+        internal readonly FlowField flow = new FlowField();
         private uint random;
+        private bool disposed;
+        public static CrowdExecution DefaultExecution = CrowdExecution.BurstParallel;
+#if UNITY_5_3_OR_NEWER
+        private readonly BurstCrowdKernel kernel;
+        public string Backend => kernel != null ? kernel.Backend : "Managed reference";
+        public bool AccelerationVerified => kernel != null && kernel.IsBurstCompiled;
+#else
+        public string Backend => "Managed reference";
+        public bool AccelerationVerified => false;
+#endif
 
-        public CrowdSimulation(int count = 2000, int formation = 0, uint seed = 7241)
+        public CrowdSimulation(int count = 2000, int formation = 0, uint seed = 7241, CrowdExecution execution = CrowdExecution.Auto)
         {
             Count = Math.Max(2, Math.Min(50000, count)); random = seed == 0 ? 1u : seed;
             Radius = Clamp((float)Math.Sqrt(20000f / Count) * 2.5f, 1.65f, 3.4f);
@@ -69,6 +84,28 @@ namespace ET.RedBlue
                 Angle[i] = t == 0 ? 0 : (float)Math.PI; cooldown[i] = Random() * .8f;
             }
             flow.Update(this);
+#if UNITY_5_3_OR_NEWER
+            if (execution == CrowdExecution.Auto) execution = Count >= 10000 ? DefaultExecution : CrowdExecution.BurstSingleThread;
+            if (execution != CrowdExecution.ManagedReference && BurstCrowdKernel.Available)
+            {
+                // Worker-thread capability must be verified independently on MiniGame.
+                // Its baseline uses synchronous Burst jobs; desktop can use colored jobs.
+                UnityEngine.RuntimePlatform platform = UnityEngine.Application.platform;
+                bool desktop = platform == UnityEngine.RuntimePlatform.WindowsEditor || platform == UnityEngine.RuntimePlatform.WindowsPlayer
+                    || platform == UnityEngine.RuntimePlatform.OSXEditor || platform == UnityEngine.RuntimePlatform.OSXPlayer
+                    || platform == UnityEngine.RuntimePlatform.LinuxEditor || platform == UnityEngine.RuntimePlatform.LinuxPlayer;
+                kernel = new BurstCrowdKernel(this, random, execution == CrowdExecution.BurstParallel && desktop);
+            }
+#endif
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+#if UNITY_5_3_OR_NEWER
+            kernel?.Dispose();
+#endif
         }
 
         private float Random() { random ^= random << 13; random ^= random >> 17; random ^= random << 5; return (random >> 8) / 16777216f; }
@@ -77,7 +114,18 @@ namespace ET.RedBlue
 
         public void Step()
         {
+            if (disposed) throw new ObjectDisposedException(nameof(CrowdSimulation));
             if (Finished) return;
+#if UNITY_5_3_OR_NEWER
+            if (kernel != null)
+            {
+                long flowStamp = Stopwatch.GetTimestamp(); Tick++;
+                if (Tick % 6 == 0) flow.Update(this);
+                double flowCost = Ms(flowStamp);
+                kernel.Step(this, Tick, ZeroDamage); GridMs += flowCost; RecordProfile();
+                return;
+            }
+#endif
             long stamp = Stopwatch.GetTimestamp(); Tick++;
             if (Tick % 6 == 0) flow.Update(this);
             Array.Clear(counts, 0, counts.Length); Array.Clear(forceX, 0, Count); Array.Clear(forceY, 0, Count);
@@ -154,6 +202,13 @@ namespace ET.RedBlue
                 if (Hp[i] <= 0) { Alive[Team[i]]--; Death[i] = 1; }
             }
             CommitMs = Ms(stamp);
+            RecordProfile();
+        }
+
+        private void RecordProfile()
+        {
+            TotalGridMs += GridMs; TotalSeparationMs += SeparationMs;
+            TotalDecisionMs += DecisionMs; TotalCommitMs += CommitMs;
         }
 
         private void Separate(int a, int b)

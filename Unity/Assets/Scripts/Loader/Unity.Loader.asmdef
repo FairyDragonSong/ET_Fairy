@@ -5,6 +5,8 @@
         "Unity.ThirdParty",
         "Unity.Core",
         "UnityEngine.UI",
+        "Unity.Burst",
+        "Unity.Mathematics",
         "HybridCLR.Runtime",
         "MemoryPack",
         "YooAsset",

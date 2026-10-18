@@ -71,6 +71,8 @@ namespace ET
                 // The local battle uses built-in assets and must not depend on a CDN.
 #if UNITY_EDITOR
                 ePlayMode = EPlayMode.EditorSimulateMode;
+#elif UNITY_WEBGL
+                ePlayMode = EPlayMode.WebPlayMode;
 #else
                 ePlayMode = EPlayMode.OfflinePlayMode;
 #endif
@@ -125,7 +127,7 @@ namespace ET
 
             Log.Info($"YooAsset package initialized: package={packageName}, playMode={ePlayMode}, version={initializationOperation.PackageVersion}");
 
-            if (ePlayMode == EPlayMode.HostPlayMode || ePlayMode == EPlayMode.WebPlayMode)
+            if (!globalConfig.EnableRedBlueDemo && (ePlayMode == EPlayMode.HostPlayMode || ePlayMode == EPlayMode.WebPlayMode))
             {
                 // 初始化只加载内置清单；热更代码加载前需切换到远端最新清单。
                 UpdatePackageVersionOperation versionOperation = package.UpdatePackageVersionAsync();

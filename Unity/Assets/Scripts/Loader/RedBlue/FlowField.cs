@@ -7,6 +7,8 @@ namespace ET.RedBlue
         private const int Size = 48, Cols = 38, Rows = 23, Cells = Cols * Rows;
         private readonly int[] counts = new int[Cells * 2], sources = new int[Cells], queue = new int[Cells];
         private readonly float[] x = new float[Cells * 2], y = new float[Cells * 2], guideX = new float[Cells * 2], guideY = new float[Cells * 2];
+        internal float[] GuideX => guideX;
+        internal float[] GuideY => guideY;
         public void Update(CrowdSimulation s)
         {
             Array.Clear(counts, 0, counts.Length); Array.Clear(x, 0, x.Length); Array.Clear(y, 0, y.Length);
