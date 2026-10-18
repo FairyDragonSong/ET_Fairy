@@ -28,6 +28,7 @@ public static class SelfPasswordChangeLimits
 {
     [StaticField] private static readonly AccountAdminRateLimiter global=new(30,60000);
     [StaticField] private static readonly Dictionary<string,(AccountAdminRateLimiter Limiter,long Seen)> accounts=new();
+    // 尝试获取当前操作额度，并返回是否允许继续。
     public static bool TryAcquire(string account,long now)
     {
         if(!global.TryAcquire(now))return false;

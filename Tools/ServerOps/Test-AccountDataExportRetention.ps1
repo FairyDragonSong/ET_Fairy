@@ -1,6 +1,7 @@
 $ErrorActionPreference='Stop'
 $fixture=Join-Path ([IO.Path]::GetTempPath()) ('et-account-export-retention-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture|Out-Null
+# 构造并写入账号导出测试数据。
 function Write-Export([string]$operation,[int]$ageDays,[switch]$Invalid){
     $path=Join-Path $fixture "$operation.json"
     $document=[ordered]@{SchemaVersion=$(if($Invalid){2}else{1});OperationId=$operation;AccountId=123;GeneratedAtUtc=[DateTime]::UtcNow.AddDays(-$ageDays).ToString('O');Account=@{};Roles=@();Sessions=@();StateAudits=@()}

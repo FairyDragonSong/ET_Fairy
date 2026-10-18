@@ -6,6 +6,7 @@ $script:RequiredServerChangeItems=@(
     'oncall-approved','open-high-risk-findings'
 )
 
+# 校验变更记录、审批窗口与目标环境。
 function Assert-ServerChangeRecord($Record,[DateTimeOffset]$Now,[bool]$AllowTestRecord,[bool]$RequireActiveWindow){
     if([int]$Record.SchemaVersion-ne1-or$Record.Product-cne'ET.Server'-or$Record.ArtifactType-cne'ServerChangeRecord'){
         throw 'Server change record schema is invalid'

@@ -2,10 +2,12 @@ $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ("et-topology-" + [Guid]::NewGuid().ToString('N'))
 
+# 按稳定顺序写入一类配置。
 function Write-Category([string]$Name, [object[]]$Value) {
     $Value | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $fixture "$Name.json") -Encoding utf8NoBOM
 }
 
+# 确认负向测试触发预期拒绝。
 function Expect-Rejection([scriptblock]$Action, [string]$Message) {
     $rejected = $false
     try { & $Action | Out-Null } catch { $rejected = $true }

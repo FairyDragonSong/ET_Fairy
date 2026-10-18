@@ -9,15 +9,19 @@ namespace ET.Server;
 public static class SelfPasswordCipher
 {
     private const string Purpose="ET.PasswordChange.v1";
+    // 加密自助改密请求，避免密码明文传输。
     public static string Encrypt(SelfPasswordChange request,string trustedPublicKeyPem)
         => Encrypt(request,null,trustedPublicKeyPem);
 
+    // 加密自助改密请求，避免密码明文传输。
     public static string Encrypt(SelfPasswordChange request,string keyId,string trustedPublicKeyPem)
         => EncryptPayload(request,keyId,trustedPublicKeyPem,Purpose);
 
+    // 加密自助注销请求并绑定请求用途。
     public static string EncryptClosure(SelfAccountClosure request,string trustedPublicKeyPem)
         => EncryptClosure(request,null,trustedPublicKeyPem);
 
+    // 加密自助注销请求并绑定请求用途。
     public static string EncryptClosure(SelfAccountClosure request,string keyId,string trustedPublicKeyPem)
         => EncryptPayload(request,keyId,trustedPublicKeyPem,"ET.AccountClosure.v1");
 
@@ -37,6 +41,7 @@ public static class SelfPasswordCipher
         finally {CryptographicOperations.ZeroMemory(key);CryptographicOperations.ZeroMemory(plaintext);}
     }
 
+    // 从加密信封中读取密钥标识。
     public static string GetKeyId(string envelope)
     {
         if(string.IsNullOrEmpty(envelope)||envelope.Length>16384)throw new InvalidOperationException("Invalid password envelope");
@@ -46,6 +51,7 @@ public static class SelfPasswordCipher
         return keyId;
     }
 
+    // 解密并校验自助改密信封。
     public static SelfPasswordChange Decrypt(string envelope,string privateKeyPem)
     {
         var request=DecryptPayload<SelfPasswordChange>(envelope,privateKeyPem,Purpose);
@@ -56,6 +62,7 @@ public static class SelfPasswordCipher
         return request;
     }
 
+    // 解密并校验自助注销信封。
     public static SelfAccountClosure DecryptClosure(string envelope,string privateKeyPem)
     {
         var request=DecryptPayload<SelfAccountClosure>(envelope,privateKeyPem,"ET.AccountClosure.v1");
@@ -86,5 +93,6 @@ public static class SelfPasswordCipher
         finally {CryptographicOperations.ZeroMemory(key);CryptographicOperations.ZeroMemory(plaintext);}
     }
 
+    // 构造绑定请求用途与密钥版本的附加认证数据。
     private static byte[] AssociatedData(string purpose,string keyId) => Encoding.UTF8.GetBytes(keyId==null?purpose:purpose+"|"+keyId);
 }

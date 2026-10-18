@@ -11,10 +11,19 @@ namespace ET
     {
         [StaticField]
         private static readonly JsonWriterSettings defaultSettings = new() { OutputMode = JsonOutputMode.RelaxedExtendedJson };
+
+        // 团结当前运行时不支持 ArgumentNullException.ThrowIfNull。
+        private static void EnsureNotNull(object value, string paramName)
+        {
+            if (value == null)
+            {
+                throw new ArgumentNullException(paramName);
+            }
+        }
         
         public static string ToJson(object obj)
         {
-            ArgumentNullException.ThrowIfNull(obj);
+            EnsureNotNull(obj, nameof(obj));
             if (obj is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
@@ -24,7 +33,7 @@ namespace ET
 
         public static string ToJson(object obj, JsonWriterSettings settings)
         {
-            ArgumentNullException.ThrowIfNull(obj);
+            EnsureNotNull(obj, nameof(obj));
             if (obj is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
@@ -51,7 +60,7 @@ namespace ET
 
         public static byte[] Serialize(object obj)
         {
-            ArgumentNullException.ThrowIfNull(obj);
+            EnsureNotNull(obj, nameof(obj));
             if (obj is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();
@@ -65,7 +74,7 @@ namespace ET
 
         public static void Serialize(object message, MemoryStream stream)
         {
-            ArgumentNullException.ThrowIfNull(message);
+            EnsureNotNull(message, nameof(message));
             if (message is ISupportInitialize supportInitialize)
             {
                 supportInitialize.BeginInit();

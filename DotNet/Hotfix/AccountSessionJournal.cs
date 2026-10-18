@@ -12,6 +12,7 @@ public static class AccountSessionJournal
 {
     public const string Collection="ET.Server.AccountSessionJournal";
 
+    // 初始化当前组件依赖的数据与索引。
     public static async ETTask Initialize(Scene root)
     {
         root.AddComponent<AccountSessionDrainComponent>();
@@ -76,17 +77,20 @@ public static class AccountSessionJournal
         }
     }
 
+    // 结束指定会话记录。
     internal static async ETTask End(IMongoCollection<BsonDocument> records,string recordId,int error)
     {
         await EndCore(records,recordId,error);
     }
 
+    // 结束记录并同步更新停机排空计数。
     internal static async ETTask EndTracked(Scene root,IMongoCollection<BsonDocument> records,string recordId,int error)
     {
         var state=root.GetComponent<AccountSessionDrainComponent>().State;
         await EndQueued(state,records,recordId,error);
     }
 
+    // 在排空队列中结束记录并释放等待者。
     internal static async ETTask EndQueued(AccountSessionDrainState state,IMongoCollection<BsonDocument> records,string recordId,int error)
     {
         // Cap retained work as well as active writes. Overflow is observable and fails drain.
@@ -112,6 +116,7 @@ public static class AccountSessionJournal
         }
     }
 
+    // 等待所有在途会话日志写入完成。
     public static async ETTask<bool> Drain(Scene root)
     {
         var component=root.GetComponent<AccountSessionDrainComponent>();
@@ -125,6 +130,7 @@ public static class AccountSessionJournal
         return success;
     }
 
+    // 以幂等方式写入会话终态。
     private static async ETTask<bool> EndCore(IMongoCollection<BsonDocument> records,string recordId,int error)
     {
         return await EndWithRetry(records,recordId,error,null);
@@ -189,9 +195,11 @@ public static class AccountSessionJournal
 public static partial class AccountSessionRecordComponentSystem
 {
     [EntitySystem]
+    // 初始化当前组件的运行状态。
     private static void Awake(this AccountSessionRecordComponent self) { }
 
     [EntitySystem]
+    // 释放当前组件持有的状态与未完成工作。
     private static void Destroy(this AccountSessionRecordComponent self)
     {
         if(string.IsNullOrEmpty(self.RecordId))return;
@@ -209,6 +217,7 @@ public static partial class AccountSessionRecordComponentSystem
 public static partial class AccountSessionDrainComponentSystem
 {
     [EntitySystem]
+    // 初始化当前组件的运行状态。
     private static void Awake(this AccountSessionDrainComponent self)
     {
         self.State=new AccountSessionDrainState();

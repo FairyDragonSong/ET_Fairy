@@ -14,6 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/BackupRestore.Common.ps1"
 
+# 解析路径并确认其满足目录、存在性与类型约束。
 function Resolve-SafePath([string]$Path,[string]$Name,[switch]$MustExist,[switch]$File) {
     $resolved = Assert-BackupPathOutsideRepository $Path $Name
     if ($MustExist -and -not (Test-Path -LiteralPath $resolved -PathType $(if($File){'Leaf'}else{'Container'}))) { throw "$Name does not exist" }
@@ -26,6 +27,7 @@ function Resolve-SafePath([string]$Path,[string]$Name,[switch]$MustExist,[switch
     }
     return $resolved
 }
+# 把 Windows 路径转换为采集器配置使用的格式。
 function Convert-CollectorPath([string]$Path) { return $Path.Replace('\','/') }
 
 $input = Resolve-SafePath $InputRoot 'InputRoot' -MustExist

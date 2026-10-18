@@ -118,6 +118,13 @@ namespace ET
         /// </summary>
         static string AddCopyAfterBuild(string content)
         {
+            // 小游戏目标由 F6 生成热更 DLL，IDE 编译不能覆盖它。
+            if (EditorUserBuildSettings.activeBuildTarget.ToString() == "MiniGame")
+            {
+                return Regex.Replace(content, "<Target Name=\"PostBuild\"[^>]*>.*?</Target>",
+                    string.Empty, RegexOptions.Singleline);
+            }
+
             return content.Replace("<Target Name=\"AfterBuild\" />",
                 "<Target Name=\"PostBuild\" AfterTargets=\"PostBuildEvent\">\n" +
                 $"    <Copy SourceFiles=\"$(TargetDir)/$(TargetName).dll\" DestinationFiles=\"$(ProjectDir)/{Define.CodeDir}/$(TargetName).dll.bytes\" ContinueOnError=\"false\" />\n" +

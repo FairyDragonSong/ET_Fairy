@@ -196,6 +196,7 @@ namespace ET
     }
 
     [ComponentOf(typeof(Session))]
+    // 保存单个 Session 在当前固定窗口内的流量计数。
     public sealed class SessionTrafficLimitComponent: Entity, IAwake
     {
         public long WindowStartTime;

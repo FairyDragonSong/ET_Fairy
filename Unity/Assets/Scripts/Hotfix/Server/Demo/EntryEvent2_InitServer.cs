@@ -46,6 +46,7 @@ namespace ET.Server
             }
         }
 
+        // 创建必需 Fiber；失败时阻止服务进入就绪态。
         private static async ETTask CreateRequiredFiber(int fiberId, int zone, SceneType sceneType, string name)
         {
             try

@@ -40,14 +40,17 @@ namespace ET.Client
         {
             self.fiberId = await FiberManager.Instance.Create(SchedulerType.ThreadPool, 0, SceneType.NetClient, "");
             self.netClientActorId = new ActorId(self.Fiber().Process, self.fiberId);
+            Log.Warning("client login: network fiber ready");
 
             Main2NetClient_Login main2NetClientLogin = Main2NetClient_Login.Create();
             main2NetClientLogin.OwnerFiberId = self.Fiber().Id;
             main2NetClientLogin.Account = account;
             main2NetClientLogin.Password = password;
+            Log.Warning("client login: dispatching network request");
             NetClient2Main_Login response = await self.Root().GetComponent<ProcessInnerSender>().Call(self.netClientActorId, main2NetClientLogin) as NetClient2Main_Login;
             if (response.Error != 0)
             {
+                // 将网络线程返回的认证错误交给上层统一处理。
                 throw new RpcException(response.Error, response.Message);
             }
             return response.PlayerId;

@@ -5,6 +5,7 @@ namespace ET.Server
 {
     public static partial class HttpHelper
     {
+        // 写入 JSON HTTP 响应并设置状态码。
         public static void Response(HttpListenerContext context, object response, bool setSuccessStatus = true)
         {
             if (setSuccessStatus)
@@ -14,6 +15,7 @@ namespace ET.Server
             TextResponse(context, MongoHelper.ToJson(response), "application/json; charset=utf-8");
         }
 
+        // 写入指定内容类型的文本响应。
         public static void TextResponse(HttpListenerContext context, string response, string contentType)
         {
             byte[] bytes = response.ToUtf8();

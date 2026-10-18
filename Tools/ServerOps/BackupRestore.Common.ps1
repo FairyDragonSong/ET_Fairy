@@ -1,5 +1,6 @@
 $script:BackupRestoreUtf8=[Text.UTF8Encoding]::new($false)
 
+# 确认备份路径位于仓库之外，避免源码与备份互相污染。
 function Assert-BackupPathOutsideRepository([string]$Path,[string]$Name){
     $resolved=[IO.Path]::GetFullPath($Path).TrimEnd('\','/')
     if($resolved -eq [IO.Path]::GetPathRoot($resolved).TrimEnd('\','/')){throw "$Name cannot be a drive root"}
@@ -10,6 +11,7 @@ function Assert-BackupPathOutsideRepository([string]$Path,[string]$Name){
     return $resolved
 }
 
+# 解析仓库外部的备份签名密钥路径。
 function Resolve-BackupExternalKey([string]$Path,[string]$Name,[bool]$RequirePrivate){
     $resolved=[IO.Path]::GetFullPath($Path)
     if(-not(Test-Path -LiteralPath $resolved -PathType Leaf)){throw "$Name key does not exist"}
@@ -23,6 +25,7 @@ function Resolve-BackupExternalKey([string]$Path,[string]$Name,[bool]$RequirePri
     return $resolved
 }
 
+# 计算备份签名密钥的公钥指纹。
 function Get-BackupKeyFingerprint([string]$Path,[string]$Name,[bool]$RequirePrivate){
     $resolved=Resolve-BackupExternalKey $Path $Name $RequirePrivate
     $rsa=[Security.Cryptography.RSA]::Create()
@@ -35,6 +38,7 @@ function Get-BackupKeyFingerprint([string]$Path,[string]$Name,[bool]$RequirePriv
     finally{$rsa.Dispose()}
 }
 
+# 验证备份数据及其签名是否匹配。
 function Test-BackupSignature([byte[]]$Bytes,[byte[]]$Signature,[string]$PublicKeyFile,[string]$Name){
     $path=Resolve-BackupExternalKey $PublicKeyFile $Name $false
     $rsa=[Security.Cryptography.RSA]::Create()
@@ -47,6 +51,7 @@ function Test-BackupSignature([byte[]]$Bytes,[byte[]]$Signature,[string]$PublicK
     finally{$rsa.Dispose()}
 }
 
+# 使用外部私钥为备份数据生成签名。
 function New-BackupSignature([byte[]]$Bytes,[string]$PrivateKeyFile,[string]$Name){
     $path=Resolve-BackupExternalKey $PrivateKeyFile $Name $true
     $rsa=[Security.Cryptography.RSA]::Create()
@@ -59,6 +64,7 @@ function New-BackupSignature([byte[]]$Bytes,[string]$PrivateKeyFile,[string]$Nam
     finally{$rsa.Dispose()}
 }
 
+# 原子占用一次性恢复授权，防止重复使用。
 function Start-RestoreAuthorizationConsumption([string]$LedgerDirectory,[string]$OperationId,[string]$AuthorizationFile){
     $root=Assert-BackupPathOutsideRepository $LedgerDirectory 'OperationLedgerDirectory'
     New-Item -ItemType Directory -Path $root -Force|Out-Null
@@ -76,6 +82,7 @@ function Start-RestoreAuthorizationConsumption([string]$LedgerDirectory,[string]
     return $ledger
 }
 
+# 记录恢复授权的最终消费结果。
 function Complete-RestoreAuthorizationConsumption([string]$LedgerFile,[bool]$Succeeded){
     $entry=Get-Content -LiteralPath $LedgerFile -Raw|ConvertFrom-Json -DateKind String
     $entry.Status=$(if($Succeeded){'Completed'}else{'Failed'})

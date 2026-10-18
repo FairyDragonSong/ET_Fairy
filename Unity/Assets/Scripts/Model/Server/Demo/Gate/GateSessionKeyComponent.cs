@@ -13,6 +13,7 @@ namespace ET.Server
     {
         public string Account { get; }
         public long StateVersion { get; }
+        // 将一次性 Gate 票据绑定到账号及其认证时的状态版本。
         public GateLoginTicket(string account, long stateVersion)
         {
             if (string.IsNullOrEmpty(account) || stateVersion < 0) throw new System.ArgumentException("Invalid Gate ticket");

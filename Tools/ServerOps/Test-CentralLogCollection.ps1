@@ -40,6 +40,7 @@ $stdout = ''
 $stderr = ''
 $offsetReplayPrevented = $false
 $unsafePathRejections = 0
+# 读取脚本共享配置文本。
 function Read-SharedText([string]$Path) {
     $stream = [IO.FileStream]::new($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
     try {
@@ -48,6 +49,7 @@ function Read-SharedText([string]$Path) {
     }
     finally { $stream.Dispose() }
 }
+# 确认指定操作按预期被拒绝。
 function Assert-Rejected([scriptblock]$Action, [string]$Name, [string]$ExpectedMessage) {
     try { & $Action; throw "Unsafe central log configuration was accepted: $Name" }
     catch {

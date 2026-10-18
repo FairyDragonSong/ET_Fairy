@@ -12,11 +12,13 @@ const restored = db.getSiblingDB(restoredDatabaseName);
 const collections = ["ET.Server.Account", "ET.Server.Role", "ET.Server.DatabaseSchema"];
 const counts = {};
 const crypto = require('crypto');
+// 递归规范化对象字段顺序，便于稳定计算摘要。
 function canonical(value) {
     if (Array.isArray(value)) return value.map(canonical);
     if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));
     return value;
 }
+// 计算集合的规范化摘要。
 function digest(collection) {
     const hash = crypto.createHash('sha256');
     for (const document of collection.find({}).sort({_id:1})) {

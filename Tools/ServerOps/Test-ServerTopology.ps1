@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 读取并规范化配置数组。
 function Read-ConfigArray([string]$Name) {
     $path = Join-Path $ConfigDirectory "$Name.json"
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -14,6 +15,7 @@ function Read-ConfigArray([string]$Name) {
     return @($value)
 }
 
+# 确认配置项按指定键保持唯一。
 function Assert-Unique([object[]]$Items, [scriptblock]$Key, [string]$Description) {
     $seen = @{}
     foreach ($item in $Items) {

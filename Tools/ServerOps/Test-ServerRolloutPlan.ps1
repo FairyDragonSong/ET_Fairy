@@ -31,6 +31,7 @@ $planBytes=[IO.File]::ReadAllBytes($resolvedPlan)
 try{$plan=[Text.Encoding]::UTF8.GetString($planBytes)|ConvertFrom-Json -Depth 15 -DateKind String}
 catch{throw 'Rollout plan is not valid JSON'}
 
+# 验证指定文件的外部签名。
 function Test-Signature([string]$PublicKeyFile,[string]$SignatureFile,[string]$Name){
     $path=[IO.Path]::GetFullPath($PublicKeyFile)
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw "$Name public key does not exist"}
@@ -51,6 +52,7 @@ function Test-Signature([string]$PublicKeyFile,[string]$SignatureFile,[string]$N
 $requesterFingerprint=Test-Signature $RequesterPublicKeyFile $requesterSignature 'Requester'
 $approverFingerprint=Test-Signature $ApproverPublicKeyFile $approverSignature 'Approver'
 if($requesterFingerprint -eq $approverFingerprint){throw 'Requester and approver public keys are identical'}
+# 读取受信公钥并计算指纹。
 function Get-TrustFingerprint([string]$PublicKeyFile,[string]$Name){
     $pem=[IO.File]::ReadAllText([IO.Path]::GetFullPath($PublicKeyFile))
     if($pem -match 'PRIVATE KEY'){throw "$Name trust input must be a public key"}

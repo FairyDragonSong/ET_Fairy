@@ -7,6 +7,7 @@ namespace ET.Server;
 [MessageSessionHandler(SceneType.Gate)]
 public sealed class C2G_ChangePasswordHandler : MessageSessionHandler<C2G_ChangePassword,G2C_ChangePassword>
 {
+    // 执行当前处理器的主流程。
     protected override async ETTask Run(Session session,C2G_ChangePassword request,G2C_ChangePassword response)
     {
         long started=System.Diagnostics.Stopwatch.GetTimestamp();

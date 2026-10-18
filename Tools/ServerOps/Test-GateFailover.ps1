@@ -13,6 +13,7 @@ $udp=@((Get-NetUDPEndpoint).LocalPort);$tcp=@((Get-NetTCPConnection -State Liste
 foreach($port in $ports){if($port -in $udp -or $port -in $tcp){throw "Port already occupied: $port"}}
 
 $processes=@{}
+# 启动隔离的测试服务进程。
 function Start-TestProcess([int]$number){
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
     $info.WorkingDirectory="$repo/Bin"

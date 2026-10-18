@@ -10,6 +10,7 @@ namespace ET.Server
             return Create(scene, id, unitType, new float3(-10, 0, -10));
         }
 
+        // 创建。
         public static Unit Create(Scene scene, long id, UnitType unitType, float3 position)
         {
             UnitComponent unitComponent = scene.GetComponent<UnitComponent>();

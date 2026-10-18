@@ -30,7 +30,12 @@ namespace ET.Client
         [EntitySystem]
         private static async ETTask YIUIEvent(this TipsPanelComponent self, EventPutTipsView message)
         {
-            var result = await self.PutTips(message.View, message.Tween);
+            await self.RecycleTipsView(message.View, message.Tween);
+        }
+
+        public static async ETTask RecycleTipsView(this TipsPanelComponent self, Entity view, bool tween = true)
+        {
+            var result = await self.PutTips(view, tween);
             if (result)
             {
                 self.CheckRefCount();

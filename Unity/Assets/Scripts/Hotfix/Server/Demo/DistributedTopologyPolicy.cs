@@ -6,6 +6,7 @@ namespace ET.Server
 {
     public static class DistributedTopologyPolicy
     {
+        // 拒绝尚无一致性保障的多 Location 或未共享准入的多 Realm 拓扑。
         public static void Validate(Options options, IReadOnlyCollection<StartSceneConfig> scenes)
         {
             if (options == null || scenes == null) throw new InvalidOperationException("Server topology is unavailable");

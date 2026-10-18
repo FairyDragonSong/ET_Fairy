@@ -11,6 +11,7 @@ namespace ET.Server
         [Invoke(TimerInvokeType.RolePeriodicSave)]
         public class RolePeriodicSaveTimer: ATimer<RoleSaveComponent>
         {
+            // 执行当前处理器的主流程。
             protected override void Run(RoleSaveComponent self)
             {
                 self.SaveNow().Coroutine();
@@ -18,6 +19,7 @@ namespace ET.Server
         }
 
         [EntitySystem]
+        // 初始化当前组件的运行状态。
         private static void Awake(this RoleSaveComponent self)
         {
             self.Timer = self.Root().GetComponent<TimerComponent>().NewRepeatedTimer(
@@ -27,11 +29,13 @@ namespace ET.Server
         }
 
         [EntitySystem]
+        // 释放当前组件持有的状态与未完成工作。
         private static void Destroy(this RoleSaveComponent self)
         {
             self.Root().GetComponent<TimerComponent>()?.Remove(ref self.Timer);
         }
 
+        // 立即保存当前角色状态，并报告是否成功。
         public static async ETTask<bool> SaveNow(this RoleSaveComponent self)
         {
             if (self.Saving || self.IsDisposed)

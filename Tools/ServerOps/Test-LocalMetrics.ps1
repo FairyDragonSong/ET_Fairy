@@ -45,6 +45,7 @@ $client=[Net.Http.HttpClient]::new($handler)
 $client.Timeout=[TimeSpan]::FromSeconds(3)
 $checks=[Collections.Generic.List[string]]::new()
 $queryEvidence=[Collections.Generic.List[object]]::new()
+# 启动隔离的测试服务进程。
 function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]$ProcessNumber=8,[string]$PreviousCredentialFile=''){
     $info=[Diagnostics.ProcessStartInfo]::new("$repo/Bin/App.exe")
     $info.WorkingDirectory="$repo/Bin"
@@ -64,6 +65,7 @@ function Start-TestProcess([string]$ConfiguredPort,[string]$CredentialFile,[int]
     $script:stderr=$child.StandardError.ReadToEndAsync()
     return $child
 }
+# 向本地指标端点发送带认证的请求。
 function Request([string]$Path,[string]$Authorization,[string]$Method='GET',[int]$TargetPort=$Port){
     $request=[Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::new($Method),"http://127.0.0.1:$TargetPort$Path")
     try {
@@ -71,14 +73,17 @@ function Request([string]$Path,[string]$Authorization,[string]$Method='GET',[int
         return $client.SendAsync($request).GetAwaiter().GetResult()
     } finally {$request.Dispose()}
 }
+# 从 Prometheus 文本中读取指定计数器。
 function Counter([string]$Body,[string]$Name){
     if($Body -notmatch "(?m)^$Name (\d+)\r?$"){throw 'Expected process counter missing'}
     return [long]$Matches[1]
 }
+# 向 Prometheus 查询表达式并返回结果。
 function PromQuery([string]$Expression){
     $url='http://127.0.0.1:30909/api/v1/query?query='+[Uri]::EscapeDataString($Expression)
     return ($client.GetStringAsync($url).GetAwaiter().GetResult()|ConvertFrom-Json).data.result
 }
+# 等待 Prometheus 查询达到预期值。
 function Wait-Prom([string]$Expression,[string]$Expected){
     for($attempt=0;$attempt -lt 40;$attempt++){
         if($collector.HasExited){throw 'Collector exited during acceptance'}
@@ -93,6 +98,7 @@ function Wait-Prom([string]$Expression,[string]$Expected){
     }
     throw 'Collector query did not reach expected state'
 }
+# 等待匹配状态与指纹的告警通知。
 function Wait-Notification([string]$Status){
     for($attempt=0;$attempt -lt 80;$attempt++){
         if($receiver.HasExited -or $manager.HasExited){throw 'Local notification process exited'}

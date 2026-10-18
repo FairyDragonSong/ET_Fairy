@@ -134,13 +134,19 @@ namespace ET
             try
             {
                 Directory.CreateDirectory(Define.BuildOutputDir);
+                // 清掉 IDE 编译复制的编辑器 DLL，避免被误当成小游戏热更代码。
+                FileHelper.CleanDirectory(Define.BuildOutputDir);
                 BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
                 BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(target);
+                // 小游戏热更 DLL 必须使用小游戏网络分支，即使编译由编辑器发起。
+                string[] scriptingDefines = target.ToString() == "MiniGame"
+                        ? new[] { "UNITY_COMPILE", "ET_MINIGAME_HOTFIX" }
+                        : new[] { "UNITY_COMPILE" };
                 ScriptCompilationSettings scriptCompilationSettings = new()
                 {
                     group = group,
                     target = target,
-                    extraScriptingDefines = new[] { "UNITY_COMPILE" },
+                    extraScriptingDefines = scriptingDefines,
                     options = EditorUserBuildSettings.development ? ScriptCompilationOptions.DevelopmentBuild : ScriptCompilationOptions.None
                 };
                 ScriptCompilationResult result = PlayerBuildInterface.CompilePlayerScripts(scriptCompilationSettings, Define.BuildOutputDir);

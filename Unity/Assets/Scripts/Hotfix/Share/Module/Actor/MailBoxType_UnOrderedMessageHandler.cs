@@ -8,6 +8,7 @@
             HandleAsync(args).Coroutine();
         }
         
+        // 处理无需返回值的异步 Actor 消息。
         internal static async ETTask HandleAsync(MailBoxInvoker args)
         {
             MailBoxComponent mailBoxComponent = args.MailBoxComponent;

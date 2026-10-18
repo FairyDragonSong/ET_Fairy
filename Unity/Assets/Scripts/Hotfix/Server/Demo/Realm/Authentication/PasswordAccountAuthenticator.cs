@@ -8,8 +8,10 @@ namespace ET.Server
     [FriendOf(typeof(DBComponent))]
     public sealed class PasswordAccountAuthenticator: IAccountAuthenticator
     {
+        // 账号密码途径验证
         public async ETTask<AccountAuthenticationResult> Authenticate(Scene root, AccountAuthenticationRequest request)
         {
+            // 密码登录必须由服务端显式开启，默认关闭。
             if (Options.Instance.PasswordLoginEnabled != 1)
             {
                 return AccountAuthenticationResult.Failure(
@@ -23,6 +25,7 @@ namespace ET.Server
                 return AccountAuthenticationResult.Failure(ErrorCore.ERR_AccountInputInvalid, "账号或密码格式错误");
             }
 
+            // 同一账号的查询、注册和登录更新时间必须串行执行。
             long accountLockKey = loginName.GetLongHashCode();
             using (await root.GetComponent<CoroutineLockComponent>().Wait(CoroutineLockType.Account, accountLockKey))
             {
@@ -42,10 +45,12 @@ namespace ET.Server
                     {
                         if (Options.Instance.AccountAutoRegister != 1)
                         {
+                            // 即使账号不存在也执行一次哈希，降低账号枚举风险。
                             PasswordHasher.SimulateVerification(request.Credential);
                             return InvalidCredentials();
                         }
 
+                        // 开启自动注册时，首次登录即创建密码账号。
                         return await Register(root, database, loginName, request.Subject.Trim(), request.Credential);
                     }
 
@@ -67,11 +72,19 @@ namespace ET.Server
                         return InvalidCredentials();
                     }
 
+                    // 同时校验账号版本及凭据快照，避免并发变更后仍签发登录凭证。
                     FilterDefinition<Account> versionFilter = Builders<Account>.Filter.Eq(stored => stored.StateVersion, account.StateVersion);
-                    if (account.StateVersion == 0) versionFilter |= Builders<Account>.Filter.Exists(nameof(Account.StateVersion), false);
-                    var identityFilter = Builders<Account>.Filter.Where(stored => stored.Id == account.Id && stored.Status == AccountStatus.Active &&
-                            stored.PasswordHash == account.PasswordHash && stored.PasswordSalt == account.PasswordSalt &&
-                            stored.PasswordIterations == account.PasswordIterations && stored.PasswordScheme == account.PasswordScheme);
+                    if (account.StateVersion == 0)
+                        // 匹配没有 StateVersion 字段
+                        versionFilter |= Builders<Account>.Filter.Exists(nameof(Account.StateVersion), false);
+                    var identityFilter = Builders<Account>.Filter.Where(stored =>
+                                    stored.Id == account.Id &&
+                                    stored.Status == AccountStatus.Active &&
+                                    stored.PasswordHash == account.PasswordHash &&
+                                    stored.PasswordSalt == account.PasswordSalt &&
+                                    stored.PasswordIterations == account.PasswordIterations &&
+                                    stored.PasswordScheme == account.PasswordScheme);
+                    // 更新它的最后登录时间。
                     UpdateResult updated = await database.database.GetCollection<Account>(typeof(Account).FullName)
                         .UpdateOneAsync(identityFilter & versionFilter,
                             Builders<Account>.Update.Max(stored => stored.LastLoginTime, TimeInfo.Instance.ServerNow()));

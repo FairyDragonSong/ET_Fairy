@@ -1,3 +1,4 @@
+# 把验收事件转换为稳定的证据行格式。
 function ConvertTo-GameplayEvidenceLine {
     param([AllowEmptyString()][string]$Line)
 
@@ -5,6 +6,7 @@ function ConvertTo-GameplayEvidenceLine {
     return $Line
 }
 
+# 校验验收证据行的结构和必填字段。
 function Test-GameplayEvidenceLine {
     param(
         [Parameter(Mandatory)][string]$Line,

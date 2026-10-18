@@ -171,6 +171,12 @@ namespace ET.Client
 
         internal void ResetRoot()
         {
+            // 初始化中断时 UI 根节点可能尚未创建。
+            if (UILayerRoot == null)
+            {
+                return;
+            }
+
             for (int i = UILayerRoot.transform.childCount - 1; i >= 0; i--)
             {
                 UnityEngine.Object.Destroy(UILayerRoot.transform.GetChild(i).gameObject);

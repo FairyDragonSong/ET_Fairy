@@ -11,6 +11,7 @@ namespace ET.Client
 
     public static class ClientExperienceTelemetry
     {
+        // 记录客户端阶段从开始到结束的耗时。
         public static void RecordSince(ClientExperienceStage stage, long started, bool succeeded)
         {
             double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 /
@@ -18,6 +19,7 @@ namespace ET.Client
             Log.Info(Format(stage, succeeded, milliseconds));
         }
 
+        // 把客户端体验指标格式化为统一日志字段。
         public static string Format(ClientExperienceStage stage, bool succeeded, double milliseconds)
         {
             if (double.IsNaN(milliseconds) || double.IsInfinity(milliseconds) || milliseconds < 0)

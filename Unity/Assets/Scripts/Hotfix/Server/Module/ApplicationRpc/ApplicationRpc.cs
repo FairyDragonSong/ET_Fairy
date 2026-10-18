@@ -76,6 +76,7 @@ namespace ET.Server
             bool settled = false;
             long started = TimeInfo.Instance.ServerNow();
 
+            // 独立执行 RPC，确保成功、异常与超时只竞争完成一次。
             async ETTask Invoke()
             {
                 RpcCallResult<TResponse> result = await root.CallService<TResponse>(target, request);
@@ -88,6 +89,7 @@ namespace ET.Server
                 completion.SetResult(result);
             }
 
+            // 到期后尝试设置超时结果；若 RPC 已完成则不再覆盖。
             async ETTask Timeout()
             {
                 await root.GetComponent<TimerComponent>().WaitAsync(timeoutMilliseconds);

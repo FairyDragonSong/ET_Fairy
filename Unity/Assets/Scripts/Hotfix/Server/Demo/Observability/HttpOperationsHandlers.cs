@@ -6,6 +6,7 @@ namespace ET.Server
     [HttpHandler(SceneType.RouterManager, "/health/live")]
     public class HttpLivenessHandler: IHttpHandler
     {
+        // 返回进程存活状态；该检查不依赖下游服务。
         public async ETTask Handle(Scene scene, HttpListenerContext context)
         {
             string response = $"{{\"status\":\"live\",\"utc\":\"{DateTime.UtcNow:O}\",\"process\":{Options.Instance.Process}}}";
@@ -17,6 +18,7 @@ namespace ET.Server
     [HttpHandler(SceneType.RouterManager, "/health/ready")]
     public class HttpReadinessHandler: IHttpHandler
     {
+        // 仅在启动完成、未停机且核心拓扑存在时报告就绪。
         public async ETTask Handle(Scene scene, HttpListenerContext context)
         {
             bool ready = StartupCoordinator.Instance.IsReady &&
@@ -35,6 +37,7 @@ namespace ET.Server
     [HttpHandler(SceneType.RouterManager, "/metrics")]
     public class HttpMetricsHandler: IHttpHandler
     {
+        // 只向回环地址暴露 Prometheus 指标，避免公网监听器泄露运行数据。
         public async ETTask Handle(Scene scene, HttpListenerContext context)
         {
             // RouterManager also serves public routing endpoints; never expose metrics through that wildcard listener.

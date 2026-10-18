@@ -43,6 +43,7 @@ namespace ET
             return await coroutineLockQueueType.Wait(key, time);
         }
 
+        // 只唤醒仍属于当前队列实例的等待者，隔离过期通知。
         private static void Notify(this CoroutineLockComponent self, int coroutineLockType, long key, int level, long queueInstanceId)
         {
             CoroutineLockQueueType coroutineLockQueueType = self.GetChild<CoroutineLockQueueType>(coroutineLockType);

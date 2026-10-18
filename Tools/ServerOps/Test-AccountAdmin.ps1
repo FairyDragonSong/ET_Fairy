@@ -13,11 +13,13 @@ $passwordPrivate=Join-Path $fixture 'password-private.pem'
 $passwordKeyRing=Join-Path $fixture 'password-keyring.json'
 $roleCreated=$false
 $rootUri=$env:ET_MONGO_URI
+# 读取当前测试目标地址与认证信息。
 function Read-Target {
     $json=& mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/Get-LocalAdminTarget.js"
     if($LASTEXITCODE -ne 0){throw 'Cannot inspect isolated admin target'}
     return ($json|ConvertFrom-Json)
 }
+# 发送管理命令并校验预期结果。
 function Send-Command([string]$path,[string]$expected,[switch]$Quiet) {
     $process.StandardInput.WriteLine("account-admin $path")
     $deadline=[DateTime]::UtcNow.AddSeconds(45)

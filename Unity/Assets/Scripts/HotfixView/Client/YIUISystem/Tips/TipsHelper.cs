@@ -68,7 +68,12 @@ namespace ET.Client
         //关闭某个Tips通用方法
         public static async ETTask CloseTipsView(Entity view, bool tween = true)
         {
-            await view.Fiber().UIEvent(new EventPutTipsView() { View = view, Tween = tween });
+            // 直接回收提示，避免小游戏热更环境缺失泛型 UIEvent 实例。
+            TipsPanelComponent panel = YIUIMgrComponent.Inst.GetPanel<TipsPanelComponent>();
+            if (panel != null)
+            {
+                await panel.RecycleTipsView(view, tween);
+            }
         }
 
         //同步方法 只是为了少写个Coroutine好看

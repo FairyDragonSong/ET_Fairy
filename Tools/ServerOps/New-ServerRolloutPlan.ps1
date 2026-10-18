@@ -33,6 +33,7 @@ if($RequestedBy -eq $ApprovedBy -or $RequesterKeyId -eq $ApproverKeyId){
     throw 'Requester and approver must be distinct identities and keys'
 }
 $repositoryRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+# 解析仓库外部的签名私钥。
 function Resolve-ExternalPrivateKey([string]$Path,[string]$Name){
     $resolved=[IO.Path]::GetFullPath($Path)
     if(-not(Test-Path -LiteralPath $resolved -PathType Leaf)){throw "$Name private key does not exist"}
@@ -43,6 +44,7 @@ function Resolve-ExternalPrivateKey([string]$Path,[string]$Name){
 $requesterKey=Resolve-ExternalPrivateKey $RequesterPrivateKeyFile 'Requester'
 $approverKey=Resolve-ExternalPrivateKey $ApproverPrivateKeyFile 'Approver'
 if($requesterKey -eq $approverKey){throw 'Requester and approver must not share a private key file'}
+# 从私钥导出公钥并计算指纹。
 function Get-PrivatePublicFingerprint([string]$Path,[string]$Name){
     $rsa=[Security.Cryptography.RSA]::Create()
     try{
@@ -53,6 +55,7 @@ function Get-PrivatePublicFingerprint([string]$Path,[string]$Name){
     }
     finally{$rsa.Dispose()}
 }
+# 读取公钥并计算稳定指纹。
 function Get-PublicFingerprint([string]$Path,[string]$Name){
     $resolved=[IO.Path]::GetFullPath($Path)
     if(-not(Test-Path -LiteralPath $resolved -PathType Leaf)){throw "$Name public key does not exist"}
@@ -144,6 +147,7 @@ $plan=[ordered]@{
 }
 $utf8=[Text.UTF8Encoding]::new($false)
 $planBytes=$utf8.GetBytes(($plan|ConvertTo-Json -Depth 10))
+# 为发布计划生成不可篡改签名。
 function Sign-Plan([string]$PrivateKeyPath){
     $rsa=[Security.Cryptography.RSA]::Create()
     try{

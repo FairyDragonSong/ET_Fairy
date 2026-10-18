@@ -36,10 +36,12 @@ public sealed class EmergencyStopTrustEntry
     public long NotAfter { get; set; }
 }
 
+// 只向运行时暴露已验证停服指令所需的最小字段。
 public sealed record EmergencyStopSignal(string OperationId, string ReasonCode);
 
 public static class EmergencyStopPolicy
 {
+    // 校验紧急停服信任配置及有效期。
     public static void ValidateTrust(string trustJson, string expectedDeployment, long now)
     {
         try
@@ -52,6 +54,7 @@ public static class EmergencyStopPolicy
         }
     }
 
+    // 验证签名信封并返回可信的停服指令。
     public static EmergencyStopSignal Verify(string envelopeJson, string trustJson, string expectedDeployment, long now)
     {
         try
@@ -91,6 +94,7 @@ public static class EmergencyStopPolicy
         }
     }
 
+    // 解析并筛选当前可用的信任密钥。
     private static EmergencyStopTrustEntry[] ReadTrust(string trustJson, string expectedDeployment, long now)
     {
         if (!IsSafeIdentifier(expectedDeployment, 3, 80)) throw new InvalidOperationException();
@@ -115,6 +119,7 @@ public static class EmergencyStopPolicy
         return trust;
     }
 
+    // 判断标识符是否满足长度和字符约束。
     private static bool IsSafeIdentifier(string value, int minimum, int maximum) =>
         !string.IsNullOrWhiteSpace(value) && value.Length >= minimum && value.Length <= maximum &&
         value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
@@ -128,6 +133,7 @@ public sealed class EmergencyStopMonitor
     private readonly bool requireManagedRoot;
     private long nextCheckTicks;
 
+    // 保存停服指令、信任文件与部署标识，供后续增量检查复用。
     private EmergencyStopMonitor(string commandFile, string trustFile, string deploymentId, bool requireManagedRoot)
     {
         this.commandFile = commandFile;
@@ -136,6 +142,7 @@ public sealed class EmergencyStopMonitor
         this.requireManagedRoot = requireManagedRoot;
     }
 
+    // 从环境变量读取受控配置并创建实例。
     public static EmergencyStopMonitor FromEnvironment(Options options)
     {
         string command = Environment.GetEnvironmentVariable("ET_EMERGENCY_STOP_FILE");
@@ -167,6 +174,7 @@ public sealed class EmergencyStopMonitor
         return new EmergencyStopMonitor(fullCommand, Path.GetFullPath(trust), deployment, production);
     }
 
+    // 检查停服指令文件是否发生有效变化。
     public EmergencyStopSignal Check(bool force = false)
     {
         if (this.commandFile == null) return null;

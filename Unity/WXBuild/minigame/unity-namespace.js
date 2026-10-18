@@ -18,7 +18,7 @@ const unityNamespace = {
     unityVersion: '2022.3.62t11',
     // Color Space: Gamma、Linear、Uninitialized(未初始化的颜色空间)
     unityColorSpace: 'Linear',
-    convertPluginVersion: '202606220647',
+    convertPluginVersion: '202609161205',
     // 拼在StreamingAssets前面的path，DATA_CDN + streamingUrlPrefixPath + StreamingAssets
     streamingUrlPrefixPath: '',
     // DATA_CDN + dataFileSubPrefix + datafilename
@@ -50,7 +50,7 @@ const unityNamespace = {
     // 是否用了多线程brotli压缩
     useBrotliMT: true,
     // Boot config配置，包含例如wait-for-native-debugger、player-connection-ip等信息
-    bootConfig: 'player-connection-ip=192.168.1.7',
+    bootConfig: 'player-connection-ip=192.168.1.8',
     // 是否以Development Build构建
     isDevelopmentBuild: false,
     // 是否以Profiling Build导出

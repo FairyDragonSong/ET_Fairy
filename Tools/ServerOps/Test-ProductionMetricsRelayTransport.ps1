@@ -41,6 +41,7 @@ $prometheus=[IO.Path]::GetFullPath($PrometheusPath);$promtool=[IO.Path]::GetFull
 foreach($entry in @(@($prometheus,'Pinned Prometheus'),@($promtool,'Pinned promtool'))){if(-not(Test-Path -LiteralPath $entry[0] -PathType Leaf)){throw "$($entry[1]) is not installed"}}
 $address=[Net.Dns]::GetHostAddresses([Net.Dns]::GetHostName())|Where-Object{$_.AddressFamily-eq[Net.Sockets.AddressFamily]::InterNetwork-and-not[Net.IPAddress]::IsLoopback($_)}|Select-Object -First 1
 if($null-eq$address){throw 'A non-loopback IPv4 address is required for the transport drill'}
+# 申请一个当前可用的本地端口。
 function Get-FreePort([Net.IPAddress]$Address){$probe=[Net.Sockets.TcpListener]::new($Address,0);$probe.Start();try{return([Net.IPEndPoint]$probe.LocalEndpoint).Port}finally{$probe.Stop()}}
 $sourcePort=Get-FreePort ([Net.IPAddress]::Loopback);$webPort=Get-FreePort ([Net.IPAddress]::Loopback);$remotePort=Get-FreePort $address
 $fixture=Join-Path ([IO.Path]::GetTempPath()) ('et-metrics-transport-'+[guid]::NewGuid().ToString('N'))

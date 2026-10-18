@@ -12,6 +12,7 @@ $cert=$req.CreateSelfSigned([DateTimeOffset]::Now.AddDays(-1),[DateTimeOffset]::
 $env:ET_UNTRUSTED_CA_FILE="$env:ET_LOCAL_MONGO_ROOT/untrusted-test-ca.pem"
 $cert.ExportCertificatePem() | Set-Content $env:ET_UNTRUSTED_CA_FILE -Encoding ascii
 $cert.Dispose();$key.Dispose()
+# 运行单项门禁检查并统一处理失败。
 function Invoke-Check([string]$File) {
     $output = & mongosh --nodb --quiet --file "$PSScriptRoot/Connect-Mongo.js" --file "$PSScriptRoot/$File"
     if($LASTEXITCODE -ne 0){throw "$File failed"}

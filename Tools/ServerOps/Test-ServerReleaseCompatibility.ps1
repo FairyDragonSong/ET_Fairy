@@ -25,6 +25,7 @@ if(-not $AllowUnsignedTestArtifacts -and ([string]::IsNullOrWhiteSpace($Expected
     throw 'Production compatibility verification requires trusted SBOM identity'
 }
 
+# 验证单个发布目录的清单、哈希与签名。
 function Test-OneRelease([string]$Directory,[string]$PublicKey,[string]$KeyId){
     $parameters=@{ReleaseDirectory=$Directory}
     if($AllowUnsignedTestArtifacts){$parameters.AllowUnsignedTestArtifact=$true}

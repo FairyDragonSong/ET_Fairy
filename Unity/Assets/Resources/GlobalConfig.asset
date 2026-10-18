@@ -17,9 +17,9 @@ MonoBehaviour:
   BuildType: 0
   AppType: 7
   EPlayMode: 3
-  ResourceHostServer: http://192.168.1.7:8080
+  ResourceHostServer: http://127.0.0.1:8080
   ResourceFallbackHostServer: 
   ResourceAppVersion: v1.0
-  MiniGameRouterHttpUrl: http://192.168.1.7:30300/get_router
+  MiniGameRouterHttpUrl: http://127.0.0.1:30300/get_router
   MiniGameRouterWebSocketUrl: ws://{0}:{2}/et/
   MiniGameRouterWebSocketPortOffset: 1000

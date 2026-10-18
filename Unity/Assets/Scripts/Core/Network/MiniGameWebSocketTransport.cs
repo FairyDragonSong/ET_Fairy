@@ -1,4 +1,4 @@
-#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+#if UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -22,12 +22,13 @@ namespace ET
         private delegate void ErrorCallback(int socketId, IntPtr message);
         private delegate void CloseCallback(int socketId, int code, IntPtr reason);
 
-        private static readonly Dictionary<int, Callbacks> Sockets = new();
-        private static readonly OpenCallback OpenDelegate = OnOpen;
-        private static readonly MessageCallback MessageDelegate = OnMessage;
-        private static readonly ErrorCallback ErrorDelegate = OnError;
-        private static readonly CloseCallback CloseDelegate = OnClose;
-        private static bool initialized;
+        // 保持回调引用，避免原生层调用时被 GC 回收。
+        [StaticField] private static readonly Dictionary<int, Callbacks> Sockets = new();
+        [StaticField] private static readonly OpenCallback OpenDelegate = OnOpen;
+        [StaticField] private static readonly MessageCallback MessageDelegate = OnMessage;
+        [StaticField] private static readonly ErrorCallback ErrorDelegate = OnError;
+        [StaticField] private static readonly CloseCallback CloseDelegate = OnClose;
+        [StaticField] private static bool initialized;
 
         [DllImport("__Internal")]
         private static extern void ETMiniGameWebSocketSetCallbacks(

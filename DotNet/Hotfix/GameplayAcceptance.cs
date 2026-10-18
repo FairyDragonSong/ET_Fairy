@@ -18,6 +18,7 @@ namespace ET.Server;
 [FriendOf(typeof(SharedLoginAdmissionComponent))]
 public sealed class GameplayAcceptance : IConsoleHandler
 {
+    // 根据命令参数选择并执行对应的游戏链路验收场景。
     public async ETTask Run(Fiber fiber, ModeContex context, string content)
     {
         try
@@ -47,6 +48,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         finally { context.Parent.RemoveComponent<ModeContex>(); }
     }
 
+    // 验证 Gate 不可用时能够按候选顺序故障转移。
     private static async ETTask GateFailover(Scene parent)
     {
         string marker = Environment.GetEnvironmentVariable("ET_GATE_FAILOVER_MARKER");
@@ -80,6 +82,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine($"GAMEPLAY_PASS gate-process-failover killed_gate={target.Id} fallback_gate={login.GateId}");
     }
 
+    // 验证多个 Realm 共享同一登录准入额度。
     private static async ETTask SharedAdmission(Scene root)
     {
         long sceneId = IdGenerater.Instance.GenerateId();
@@ -123,6 +126,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             Options.Instance.LoginIpLimit = previousIpLimit;
         }
 
+        // 并发执行一次共享准入申请，用于验证跨 Realm 的总额度。
         async ETTask Attempt(int index)
         {
             SharedLoginAdmissionResult result = await SharedLoginAdmissionStore.TryAcquire(database, 1, component, $"198.51.100.{index + 1}", account);
@@ -132,6 +136,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         }
     }
 
+    // 执行当前端到端验收场景。
     private static async ETTask Execute(Scene parent,bool resume,bool outage,bool saveFailure,bool leaseExpiry)
     {
         long id = IdGenerater.Instance.GenerateId();
@@ -302,6 +307,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS message-flood-disconnected");
     }
 
+    // 向 Realm 发起登录并取得 Gate 凭据。
     private static async ETTask<R2C_Login> RealmLogin(NetComponent net, IPEndPoint address, string account, string password)
     {
         using Session session = net.Create(address);
@@ -309,12 +315,14 @@ public sealed class GameplayAcceptance : IConsoleHandler
         return (R2C_Login)await session.Call(request,10000);
     }
 
+    // 使用一次性凭据登录 Gate。
     private static async ETTask<G2C_LoginGate> GateLogin(Session session, R2C_Login key)
     {
         C2G_LoginGate request=C2G_LoginGate.Create();request.Key=key.Key;request.GateId=key.GateId;
         return (G2C_LoginGate)await session.Call(request,10000);
     }
 
+    // 发送回显请求以确认会话仍可用。
     private static async ETTask Echo(Session session,int number)
     {
         C2M_TestRobotCase request=C2M_TestRobotCase.Create();request.N=number;
@@ -322,6 +330,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(response.Error==0 && response.N==number,$"Map echo failed: {response.Error}");
     }
 
+    // 验证房间连接断开后的恢复流程。
     private static async ETTask RoomReconnect(Scene client,NetComponent net,IPEndPoint realm,string account,string password)
     {
         List<Session> members = new();
@@ -360,6 +369,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         finally {foreach(Session member in members)member.Dispose();}
     }
 
+    // 验证经 Router 建立连接的完整链路。
     private static async ETTask RouterPath(Scene parent,Scene client,NetComponent net,IPEndPoint realm,string account,string password)
     {
         RouterAddressComponent addresses=parent.AddComponent<RouterAddressComponent,string,int>(ConstValue.RouterHttpHost,ConstValue.RouterHttpPort);
@@ -382,7 +392,9 @@ public sealed class GameplayAcceptance : IConsoleHandler
         finally {parent.RemoveComponent<RouterAddressComponent>();}
     }
 
+    // 检查前置条件，不满足时立即终止验收。
     private static void Check(bool value,string message) {if(!value)throw new InvalidOperationException(message);}
+    // 读取指定运行指标的当前值。
     private static long Metric(string name)
     {
         foreach(string line in OperationalMetrics.Instance.ExportPrometheus().Split('\n'))
@@ -390,6 +402,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         throw new InvalidOperationException("Metric missing");
     }
 
+    // 等待异步流程写出完成标记。
     private static async ETTask WaitForMarker(Scene scene,string path)
     {
         for(int i=0;i<60;i++)
@@ -400,6 +413,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         throw new TimeoutException("Database fault coordinator did not respond");
     }
 
+    // 执行基础登录、存档与重连验收场景。
     private static async ETTask Baseline(Scene parent)
     {
         long mapOrderedBefore = Metric("et_map_ordered_mailbox_seconds_count");
@@ -480,6 +494,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         }
         finally{foreach(Session session in sessions)session.Dispose();}
 
+        // 建立一条完整客户端链路并执行回显探测。
         async ETTask Probe()
         {
             if (capacity)
@@ -494,6 +509,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             else foreach (Session session in sessions) await ProbeOne(session);
         }
 
+        // 在指定会话上发送一次回显并统计成功结果。
         async ETTask ProbeOne(Session session)
         {
                 Check(!session.IsDisposed,"Concurrent connection dropped");
@@ -504,6 +520,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 if(requests%100==0)Console.WriteLine($"GAMEPLAY_PROGRESS rpc_count={requests} rpc_max_ms={maxRpcMs}");
         }
 
+        // 为负载验收创建并登记一个独立客户端连接。
         async ETTask Connect(int index)
         {
             Stopwatch clock=Stopwatch.StartNew();
@@ -521,6 +538,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         }
     }
 
+    // 读取负载参数并限制在安全范围内。
     private static int ReadLoadSetting(string name,int fallback,int minimum,int maximum)
     {
         string value=Environment.GetEnvironmentVariable(name);
@@ -530,6 +548,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         return parsed;
     }
 
+    // 验证用户自助修改凭据的完整流程。
     private static async ETTask SelfCredentials(Scene parent)
     {
         await CoroutineLockLifecycle(parent);
@@ -658,6 +677,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         }
     }
 
+    // 验证用户自助注销及会话撤销流程。
     private static async ETTask SelfAccountClosure(Scene parent,NetComponent net,IPEndPoint realm,DBComponent db,string publicKey,string password)
     {
         long acceptedBefore=Metric("et_account_close_accepted_total"),unconfirmedBefore=Metric("et_account_close_unconfirmed_total"),
@@ -717,6 +737,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS self-account-close-session-ticket-login-revoked-role-preserved");
     }
 
+    // 验证账号注销事务的提交与回滚边界。
     private static async ETTask SelfAccountClosureTransactions(DBComponent db,string name,string password,long version)
     {
         var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
@@ -746,6 +767,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS self-account-close-audit-failure-and-real-permission-denial-rollback");
     }
 
+    // 验证地图转移失败后的状态恢复。
     private static async ETTask MapTransferFailureRecovery(Scene parent)
     {
         long id=IdGenerater.Instance.GenerateId();
@@ -770,6 +792,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         player.MapEntered=true;
         GateMapComponent retryComponent=player.AddComponent<GateMapComponent>();
         OperationalMetrics.Instance.StartMapTransfer();
+        // 作为故障注入后的成功回调，确认重试最终可以完成。
         async ETTask CompleteRetry() {await ETTask.CompletedTask;}
         await C2G_EnterMapHandler.TransferAndCleanup(player,retryComponent,null,default,string.Empty,CompleteRetry);
         Check(player.MapEntered&&player.GetComponent<GateMapComponent>()==null&&Metric("et_map_transfers_inflight")==0&&
@@ -778,6 +801,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS map-transfer-failure-state-reset-and-retry-success");
     }
 
+    // 验证高并发会话日志写入与排空。
     private static async ETTask SessionJournalBurst(Scene parent, DBComponent db)
     {
         long id=IdGenerater.Instance.GenerateId();
@@ -836,6 +860,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS session-journal-overflow-fails-drain");
     }
 
+    // 验证会话日志遇到瞬时故障时的有限重试。
     private static async ETTask SessionJournalRetries(DBComponent db)
     {
         var records=db.database.GetCollection<MongoDB.Bson.BsonDocument>(AccountSessionJournal.Collection).WithWriteConcern(WriteConcern.WMajority);
@@ -843,6 +868,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         await records.InsertOneAsync(new MongoDB.Bson.BsonDocument {{"_id",recordId},{"State","admitted"},{"OpenedAtUtc",DateTime.UtcNow}});
         int attempts=0;
         long failures=Metric("et_session_journal_end_failures_total"),ends=Metric("et_session_journal_ended_total");
+        // 首次写入前注入瞬时故障，验证有限重试能够恢复。
         async ETTask TransientBeforeWrite(int attempt,bool before)
         {
             if(before){++attempts;if(attempt==0)throw new OperationCanceledException("Injected transient before write");}
@@ -855,6 +881,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         MongoDB.Bson.BsonDocument evidence=null;
         var uncertainFilter=Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id",uncertainId);
         attempts=0;
+        // 写入后模拟响应丢失，验证幂等重试不会重复产生终态。
         async ETTask LostConfirmation(int attempt,bool before)
         {
             if(before)++attempts;
@@ -869,6 +896,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(Metric("et_session_journal_ended_total")==ends+1&&Metric("et_session_journal_end_failures_total")==failures,
             "Uncertain retry fabricated a new mutation count or failure");
         attempts=0;
+        // 持续注入故障，验证达到上限后明确失败而非无限重试。
         async ETTask PersistentFailure(int attempt,bool before)
         {
             if(before){++attempts;throw new OperationCanceledException("Injected persistent transient");}
@@ -880,6 +908,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS session-journal-transient-recovery-lost-confirmation-and-retry-exhaustion");
     }
 
+    // 验证停机时在途准入会被完整排空。
     private static async ETTask SessionJournalAdmissionDrain(Scene parent)
     {
         long id=IdGenerater.Instance.GenerateId();
@@ -893,6 +922,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         var entered=ETTask.Create();
         var release=ETTask.Create();
         bool released=false;
+        // 暂停在记录插入后，构造停机排空仍有在途写入的场景。
         async ETTask HoldAfterInsert() {entered.SetResult();await release;}
         var admission=AccountSessionJournal.BeginCore(first,scope,id,0,HoldAfterInsert);
         try
@@ -919,6 +949,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
             scope.RemoveComponent<AccountSessionDrainComponent>();
             var replacement=scope.AddComponent<AccountSessionDrainComponent>().State;
             Check(replacement.GateInstanceId!=state.GateInstanceId,"Reinitialized Gate reused startup identity");
+            // 在替换会话关闭前标记状态，验证旧会话不会误删新绑定。
             async ETTask CloseReplacement() {replacement.Closing=1;await ETTask.CompletedTask;}
             Check(!await AccountSessionJournal.BeginCore(late,scope,id+1,0,CloseReplacement),"Closing replacement unexpectedly bound session");
             Check(await AccountSessionJournal.Drain(scope),"Replacement drain failed");
@@ -932,6 +963,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         finally {if(!released)release.SetResult();}
     }
 
+    // 验证协程锁等待、取消与指标生命周期。
     private static async ETTask CoroutineLockLifecycle(Scene parent)
     {
         long id = IdGenerater.Instance.GenerateId();
@@ -988,6 +1020,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS coroutine-lock-destroy-timeout-replacement-and-component-disposal");
     }
 
+    // 验证地图邮箱积压和异常指标采集。
     private static async ETTask MapMailboxObservation(Scene parent, bool collectorHandshake = false)
     {
         long id = IdGenerater.Instance.GenerateId();
@@ -1032,6 +1065,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         }
     }
 
+    // 确认缺少处理器时返回预期异常。
     private static async ETTask ExpectMissingHandler(ETTask task)
     {
         bool caught = false;
@@ -1040,6 +1074,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(caught, "Expected dispatcher failure did not propagate");
     }
 
+    // 确认已释放的等待任务不会继续成功。
     private static async ETTask ExpectDisposed(ETTask<CoroutineLock> task)
     {
         bool caught = false;
@@ -1048,6 +1083,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Check(caught, "Disposed lock owner did not reject wait");
     }
 
+    // 发送自助改密请求并返回结果码。
     private static async ETTask<int> ChangePassword(Session session,string envelope)
     {
         var request=C2G_ChangePassword.Create();request.Envelope=envelope;
@@ -1055,6 +1091,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         return response.Error;
     }
 
+    // 发送自助注销请求并返回结果码。
     private static async ETTask<int> CloseAccount(Session session,string envelope)
     {
         var request=C2G_CloseAccount.Create();request.Envelope=envelope;
@@ -1062,6 +1099,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         return response.Error;
     }
 
+    // 验证自助改密事务在竞争与故障下保持一致。
     private static async ETTask SelfPasswordTransactions(DBComponent db,string name,string password,long version)
     {
         var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
@@ -1128,12 +1166,14 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS self-password-transaction-rollback-same-version-competition-digest-collision");
     }
 
+    // 尝试一次自助改密，用于构造并发竞争。
     private static async System.Threading.Tasks.Task<bool> AttemptSelfChange(DBComponent db,SelfPasswordChange request,Func<System.Threading.Tasks.Task> beforeUpdate)
     {
         try {await UserPasswordStore.Change(db,request,0,new string('A',64),beforeUpdate:beforeUpdate);return true;}
         catch(AccountStateConflictException){return false;}
     }
 
+    // 执行密码认证与轮换验收场景。
     private static async ETTask Credentials(Scene parent)
     {
         long id=IdGenerater.Instance.GenerateId();
@@ -1188,6 +1228,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS encrypted-password-reset-rollback-idempotency-old-credentials-revoked");
     }
 
+    // 执行账号治理与权限边界验收场景。
     private static async ETTask Governance(Scene parent)
     {
         long id=IdGenerater.Instance.GenerateId();
@@ -1302,6 +1343,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
         Console.WriteLine("GAMEPLAY_PASS explicit-revoke-and-soft-close-login-denial-rollback-idempotency");
     }
 
+    // 验证账号状态与审计记录保持事务一致。
     private static async ETTask AuditTransactions(DBComponent db,Account account)
     {
         var accounts=db.database.GetCollection<Account>(typeof(Account).FullName);
@@ -1354,6 +1396,7 @@ public sealed class GameplayAcceptance : IConsoleHandler
                 await AccountStateStore.Change(db,account.Id,current.StateVersion,AccountStatus.Active,"local-test","test-enable",Guid.NewGuid().ToString("N"));
         }
 
+        // 并发提交同一版本的改密请求，验证只有一个事务获胜。
         async ETTask Compete()
         {
             try

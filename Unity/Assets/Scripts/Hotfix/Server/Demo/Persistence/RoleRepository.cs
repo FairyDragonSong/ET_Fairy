@@ -12,6 +12,7 @@ namespace ET.Server
         public string MapName { get; }
         public float3 Position { get; }
 
+        // 创建登录链路使用的不可变角色快照。
         public RoleSnapshot(long id, string name, string mapName, float3 position)
         {
             this.Id = id;
@@ -28,6 +29,7 @@ namespace ET.Server
         public string Message { get; }
         public RoleSnapshot Role { get; }
 
+        // 将成功快照或失败信息收敛到同一种返回结构。
         private RoleLoadResult(bool isSuccess, int error, string message, RoleSnapshot role)
         {
             this.IsSuccess = isSuccess;
@@ -36,8 +38,10 @@ namespace ET.Server
             this.Role = role;
         }
 
+        // 构造成功结果。
         public static RoleLoadResult Success(RoleSnapshot role) => new(true, 0, string.Empty, role);
 
+        // 构造失败结果。
         public static RoleLoadResult Failure(string message) =>
             new(false, ErrorCore.ERR_RoleStorageUnavailable, message, default);
     }
@@ -45,6 +49,7 @@ namespace ET.Server
     [FriendOf(typeof(DBComponent))]
     public static class RoleRepository
     {
+        // 加载账号角色；首次登录时创建默认角色。
         public static async ETTask<RoleLoadResult> LoadOrCreate(Scene root, string loginName)
         {
             long accountLockKey = loginName.GetLongHashCode();
@@ -86,6 +91,7 @@ namespace ET.Server
             }
         }
 
+        // 按角色版本保存地图与位置进度。
         public static async ETTask<bool> SaveProgress(Scene root, long roleId, string mapName, float3 position)
         {
             long started=System.Diagnostics.Stopwatch.GetTimestamp();
@@ -121,6 +127,7 @@ namespace ET.Server
             }
         }
 
+        // 以幂等方式创建账号的默认角色。
         private static async ETTask<RoleLoadResult> CreateDefaultRole(
             Scene root,
             DBComponent database,
@@ -158,6 +165,7 @@ namespace ET.Server
             }
         }
 
+        // 在事务中同时保存角色和账号绑定。
         private static async ETTask SaveRoleAndAccountTransaction(DBComponent database, Role role, Account account)
         {
             using IClientSessionHandle session = await database.mongoClient.StartSessionAsync();
@@ -191,6 +199,7 @@ namespace ET.Server
                 transactionOptions);
         }
 
+        // 无事务环境下保存两份数据，并在失败时补偿。
         private static async ETTask SaveRoleAndAccountWithCompensation(
             DBComponent database,
             long accountLockKey,
@@ -224,6 +233,7 @@ namespace ET.Server
             }
         }
 
+        // 把持久化角色转换为登录链路使用的只读快照。
         private static RoleSnapshot ToSnapshot(Role role)
         {
             return new RoleSnapshot(

@@ -1,5 +1,6 @@
 const fs=require('fs'), vm=require('vm'), assert=require('assert');
 const source=fs.readFileSync(require('path').join(__dirname,'Verify-GameplayJournal.js'),'utf8');
+// 执行一个变更场景并校验结果是否符合预期。
 function run(change, shouldPass) {
     const fixture={accounts:[{_id:'1',LoginName:'e2e_0123456789abcdefp0',StateVersion:0}],
         records:[{AccountId:'1',AccountStateVersion:0,GateInstanceId:'0123456789abcdef0123456789abcdef',State:'ended',OpenedAtUtc:new Date(0),EndedAtUtc:new Date(1),DisconnectError:0}]};

@@ -5,6 +5,7 @@ namespace ET.Server
     [MessageSessionHandler(SceneType.Gate)]
     public class C2G_EnterMapHandler : MessageSessionHandler<C2G_EnterMap, G2C_EnterMap>
     {
+        // 校验会话归属，创建临时 GateMap，并异步启动地图转移。
         protected override async ETTask Run(Session session, C2G_EnterMap request, G2C_EnterMap response)
         {
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -74,6 +75,7 @@ namespace ET.Server
             }
         }
 
+        // 完成地图转移，并在失败时统一回收临时状态。
         internal static async ETTask TransferAndCleanup(
             Player player,
             GateMapComponent gateMapComponent,
@@ -104,6 +106,7 @@ namespace ET.Server
             }
         }
 
+        // 恢复地图转移失败前的玩家绑定状态。
         private static void ResetFailedTransfer(Player player, GateMapComponent gateMapComponent)
         {
             if (player == null || player.IsDisposed) return;

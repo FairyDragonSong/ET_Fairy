@@ -29,10 +29,13 @@ namespace ET
     {
     }
 
+    // 客户端不生成该内部消息，允许安全标记的 partial 独立存在。
+    [EnableClass]
     public partial class R2G_GetLoginKey: ISensitiveMessage
     {
     }
 
+    [EnableClass]
     public partial class G2R_GetLoginKey: ISensitiveMessage
     {
     }

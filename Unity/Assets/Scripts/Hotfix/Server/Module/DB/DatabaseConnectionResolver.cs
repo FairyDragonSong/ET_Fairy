@@ -8,6 +8,7 @@ namespace ET.Server
         public string DatabaseName { get; }
         public bool ConnectionFromEnvironment { get; }
 
+        // 保存解析后的数据库地址及其配置来源，供生产门禁判定。
         public DatabaseConnectionSettings(string connectionString, string databaseName, bool connectionFromEnvironment)
         {
             this.ConnectionString = connectionString;
@@ -18,6 +19,7 @@ namespace ET.Server
 
     public static class DatabaseConnectionResolver
     {
+        // 解析并返回当前环境对应的配置。
         public static DatabaseConnectionSettings Resolve(int zone)
         {
             StartZoneConfig config = StartZoneConfigCategory.Instance.Get(zone);

@@ -1,5 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),crypto=require('crypto');
 const source=fs.readFileSync(require('path').join(__dirname,'Snapshot-GameplayJournal.js'),'utf8');
+// 执行一个变更场景并校验结果是否符合预期。
 function run(change,pass){
     const fixture={accounts:[{_id:'1'}],rows:[{_id:'record',AccountId:'1',State:'admitted',GateInstanceId:'0123456789abcdef0123456789abcdef'}]};
     change(fixture);let output,exit=0;

@@ -4,23 +4,28 @@ param(
     [Parameter(Mandatory)][string]$ServiceIdentity,[Parameter(Mandatory)][string[]]$PrivateKeyFiles
 )
 $ErrorActionPreference='Stop';. "$PSScriptRoot/BackupRestore.Common.ps1"
+# 把账号或服务身份解析为 SID。
 function Resolve-Sid([string]$Identity){
     try{if($Identity-match'^S-1-'){return [Security.Principal.SecurityIdentifier]::new($Identity)}
         return ([Security.Principal.NTAccount]::new($Identity)).Translate([Security.Principal.SecurityIdentifier])}
     catch{throw "Windows identity cannot be resolved: $Identity"}
 }
+# 汇总指定主体在路径上的有效权限。
 function Get-PrincipalRights([string]$Path,[Security.Principal.SecurityIdentifier]$Sid){
     $allow=[Security.AccessControl.FileSystemRights]0;$deny=[Security.AccessControl.FileSystemRights]0;$acl=Get-Acl -LiteralPath $Path
     foreach($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])){
         if($rule.IdentityReference.Value-ceq$Sid.Value){if($rule.AccessControlType-eq[Security.AccessControl.AccessControlType]::Allow){$allow=$allow-bor$rule.FileSystemRights}else{$deny=$deny-bor$rule.FileSystemRights}}
     };return @{Allow=$allow;Deny=$deny}
 }
+# 确认主体不拥有被禁止的文件权限。
 function Assert-NoRights([string]$Path,[Security.Principal.SecurityIdentifier[]]$Sids,[Security.AccessControl.FileSystemRights]$Mask,[string]$Reason){
     foreach($sid in $Sids){$rights=Get-PrincipalRights $Path $sid;if(($rights.Allow-band$Mask)-ne0){throw "$Reason ($($sid.Value))"}}
 }
+# 确认主体拥有运行所需的最小权限。
 function Assert-HasRights([string]$Path,[Security.Principal.SecurityIdentifier]$Sid,[Security.AccessControl.FileSystemRights]$Mask,[string]$Reason){
     $rights=Get-PrincipalRights $Path $Sid;if(($rights.Allow-band$Mask)-ne$Mask-or($rights.Deny-band$Mask)-ne0){throw $Reason};return $rights.Allow
 }
+# 确认路径及其子项不包含重解析点。
 function Assert-NoReparse([string]$Path,[bool]$Recursive){
     $item=Get-Item -LiteralPath $Path -Force;if(($item.Attributes-band[IO.FileAttributes]::ReparsePoint)-ne0){throw "Reparse point is forbidden in protected path: $Path"}
     if($Recursive){foreach($child in Get-ChildItem -LiteralPath $Path -Force -Recurse){if(($child.Attributes-band[IO.FileAttributes]::ReparsePoint)-ne0){throw "Reparse point is forbidden in protected tree: $($child.FullName)"}}}

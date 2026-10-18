@@ -70,6 +70,64 @@ namespace ET
                 $"buildinFiles={buildinFileCount}, output={result.OutputPackageDirectory}");
         }
 
+        [MenuItem("ET/WeChat/Publish YooAsset to Local CDN", false, ETMenuItemPriority.BuildTool + 22)]
+        public static void PublishYooAssetToLocalCDN()
+        {
+            EnsureMiniGameTarget();
+            string sourceDir = ValidateMiniGameResourceOutput();
+            string versionFileName = $"PackageManifest_{PackageName}.version";
+            string packageVersion = File.ReadAllText(Path.Combine(sourceDir, versionFileName)).Trim();
+
+            GlobalConfig globalConfig = AssetDatabase.LoadAssetAtPath<GlobalConfig>(GlobalConfigPath);
+            if (globalConfig == null)
+            {
+                throw new BuildFailedException($"GlobalConfig not found: {GlobalConfigPath}");
+            }
+
+            string appVersion = globalConfig.ResourceAppVersion;
+            ValidateDirectoryName(appVersion, "GlobalConfig.ResourceAppVersion");
+
+            UnityEngine.Object config = AssetDatabase.LoadMainAssetAtPath(MiniGameConfigPath);
+            SerializedProperty projectConf = config == null ? null : new SerializedObject(config).FindProperty("ProjectConf");
+            string relativeOutput = projectConf?.FindPropertyRelative("relativeDST")?.stringValue;
+            if (string.IsNullOrWhiteSpace(relativeOutput) || Path.IsPathRooted(relativeOutput))
+            {
+                throw new BuildFailedException("微信转换配置的 relativeDST 必须是项目内的相对目录。");
+            }
+
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string exportRoot = Path.GetFullPath(Path.Combine(projectRoot, relativeOutput));
+            if (!exportRoot.StartsWith(projectRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BuildFailedException($"微信转换输出目录不在 Unity 工程内：{exportRoot}");
+            }
+
+            string targetDir = Path.Combine(exportRoot, "webgl", "CDN", "MiniGame", appVersion);
+            string[] sourceFiles = Directory.GetFiles(sourceDir, "*", SearchOption.TopDirectoryOnly);
+            if (!File.Exists(Path.Combine(sourceDir, $"PackageManifest_{PackageName}_{packageVersion}.bytes")) ||
+                !sourceFiles.Any(file => file.EndsWith(".bundle", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new BuildFailedException($"YooAsset 构建产物不完整：{sourceDir}");
+            }
+
+            Directory.CreateDirectory(targetDir);
+            int copied = 0;
+            // 先复制资源和清单，最后切换版本入口。
+            foreach (string sourceFile in sourceFiles)
+            {
+                if (Path.GetFileName(sourceFile) == versionFileName)
+                {
+                    continue;
+                }
+
+                File.Copy(sourceFile, Path.Combine(targetDir, Path.GetFileName(sourceFile)), true);
+                ++copied;
+            }
+
+            File.Copy(Path.Combine(sourceDir, versionFileName), Path.Combine(targetDir, versionFileName), true);
+            Debug.Log($"微信 YooAsset 已发布到本地 CDN: packageVersion={packageVersion}, appVersion={appVersion}, files={copied + 1}, target={targetDir}");
+        }
+
         internal static void ValidateBuild(bool validateRemoteSettings)
         {
             EnsureMiniGameTarget();
@@ -118,7 +176,7 @@ namespace ET
             }
         }
 
-        private static void ValidateMiniGameResourceOutput()
+        private static string ValidateMiniGameResourceOutput()
         {
             string outputRoot = Path.GetFullPath(
                 Path.Combine(Application.dataPath, "..", "Bundles", "MiniGame", PackageName));
@@ -139,6 +197,7 @@ namespace ET
             }
 
             string builtVersion = File.ReadAllText(streamingVersionPath).Trim();
+            ValidateDirectoryName(builtVersion, "YooAsset package version");
             string expectedManifestPath = Path.Combine(
                 outputRoot,
                 builtVersion,
@@ -147,6 +206,17 @@ namespace ET
             {
                 throw new BuildFailedException(
                     $"StreamingAssets 版本 {builtVersion} 不是当前 MiniGame 构建产物，请重新构建 YooAsset。");
+            }
+
+            return Path.GetDirectoryName(expectedManifestPath);
+        }
+
+        private static void ValidateDirectoryName(string value, string settingName)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == "." || value == ".." ||
+                value != Path.GetFileName(value) || value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                throw new BuildFailedException($"{settingName} 必须是单个有效目录名：{value}");
             }
         }
 

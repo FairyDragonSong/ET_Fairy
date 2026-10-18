@@ -42,11 +42,13 @@ namespace ET.Server
         private readonly long[] mapMailboxInflight = new long[2];
         private readonly long[] mapMailboxExceptions = new long[2];
 
+        // 登记一条开始处理的地图邮箱消息。
         public void StartMapMailbox(bool ordered)
         {
             Interlocked.Increment(ref this.mapMailboxInflight[ordered ? 0 : 1]);
         }
 
+        // 结束地图邮箱消息并记录耗时与异常。
         public void FinishMapMailbox(bool ordered, bool exception)
         {
             int index = ordered ? 0 : 1;
@@ -57,6 +59,7 @@ namespace ET.Server
         private readonly long[,] handlerLatencyBuckets=new long[(int)HandlerLatency.Count,12];
         private readonly long[] handlerLatencyMicroseconds=new long[(int)HandlerLatency.Count];
 
+        // 记录指定处理器的执行耗时分布。
         public void RecordHandlerDuration(HandlerLatency operation,double milliseconds)
         {
             if((uint)operation>=(uint)HandlerLatency.Count||double.IsNaN(milliseconds)||double.IsInfinity(milliseconds)||milliseconds<0||milliseconds>TimeSpan.MaxValue.TotalMilliseconds)
@@ -69,6 +72,7 @@ namespace ET.Server
             }
         }
 
+        // 输出各类处理器耗时直方图。
         private void AppendHandlerLatency(StringBuilder text)
         {
             lock(this.handlerLatencyBuckets)
@@ -104,6 +108,7 @@ namespace ET.Server
         private long gateSessionBindings;
         private long gateSessionUnbindings;
 
+        // 更新 Gate 在线会话数量及生命周期计数。
         public void RecordGateSession(bool bound)
         {
             if(bound)
@@ -119,12 +124,14 @@ namespace ET.Server
         }
         private readonly long[] securityCounters = new long[(int)SecurityMetric.Count];
 
+        // 累加指定安全事件指标。
         public void RecordSecurity(SecurityMetric metric)
         {
             if ((uint)metric >= (uint)SecurityMetric.Count) throw new ArgumentOutOfRangeException(nameof(metric));
             Interlocked.Increment(ref this.securityCounters[(int)metric]);
         }
 
+        // 把安全事件类型映射为稳定的指标名称。
         private static string SecurityName(SecurityMetric metric) => metric switch
         {
             SecurityMetric.PasswordChangeAccepted => "et_password_change_accepted_total",
@@ -144,11 +151,13 @@ namespace ET.Server
             _ => throw new ArgumentOutOfRangeException(nameof(metric))
         };
 
+        // 初始化当前组件的运行状态。
         public void Awake()
         {
             this.startedAtUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         }
 
+        // 记录 HTTP 请求及错误数量。
         public void RecordHttp(bool error)
         {
             Interlocked.Increment(ref this.httpRequests);
@@ -158,8 +167,11 @@ namespace ET.Server
             }
         }
 
+        // 记录 Realm 登录尝试。
         public void RecordLoginAttempt() => Interlocked.Increment(ref this.loginAttempts);
+        // 记录 Realm 登录成功。
         public void RecordLoginSuccess() => Interlocked.Increment(ref this.loginSuccesses);
+        // 按失败类型记录 Realm 登录失败。
         public void RecordLoginFailure(LoginFailureKind kind)
         {
             switch (kind)
@@ -175,8 +187,11 @@ namespace ET.Server
             }
         }
 
+        // 记录 Gate 登录尝试。
         public void RecordGateLoginAttempt() => Interlocked.Increment(ref this.gateLoginAttempts);
+        // 记录 Gate 登录成功。
         public void RecordGateLoginSuccess() => Interlocked.Increment(ref this.gateLoginSuccesses);
+        // 按失败类型记录 Gate 登录失败。
         public void RecordGateLoginFailure(LoginFailureKind kind)
         {
             switch (kind)
@@ -192,10 +207,14 @@ namespace ET.Server
             }
         }
 
+        // 记录进入地图尝试。
         public void RecordMapEntryAttempt() => Interlocked.Increment(ref this.mapEntryAttempts);
+        // 记录被业务规则拒绝的进图请求。
         public void RecordMapEntryRejected() => Interlocked.Increment(ref this.mapEntryRejections);
+        // 记录因服务异常失败的进图请求。
         public void RecordMapEntryServiceError() => Interlocked.Increment(ref this.mapEntryServiceErrors);
 
+        // 登记一次开始中的地图转移。
         public void StartMapTransfer()
         {
             lock (this.mapTransferSync)
@@ -205,6 +224,7 @@ namespace ET.Server
             }
         }
 
+        // 结束地图转移并记录成功或失败。
         public void FinishMapTransfer(bool success)
         {
             lock (this.mapTransferSync)
@@ -216,6 +236,7 @@ namespace ET.Server
             }
         }
 
+        // 记录角色保存结果与耗时。
         public void RecordRoleSave(bool success)
         {
             if (success)
@@ -228,6 +249,7 @@ namespace ET.Server
             }
         }
 
+        // 导出当前进程的 Prometheus 文本指标。
         public string ExportPrometheus()
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -329,6 +351,7 @@ namespace ET.Server
             return text.ToString();
         }
 
+        // 追加一条不可缺失的审计记录。
         private static void Append(StringBuilder text, string name, long value)
         {
             text.Append(name).Append(' ').Append(value).Append('\n');

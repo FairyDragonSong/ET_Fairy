@@ -28,6 +28,7 @@ $windowsStarted=$false;$mongoStarted=$false;$prometheusStarted=$false
 $queries=[Collections.Generic.List[object]]::new()
 $diagnostics=[Collections.Generic.List[object]]::new()
 $mongoMetricAllowlist='^(mongodb_up|mongodb_rs_members_(health|state|optimeDate)|mongodb_ss_(connections|opcounters|wt_cache_(bytes_currently_in_the_cache|maximum_bytes_configured)))$'
+# 启动并跟踪由当前测试负责回收的进程。
 function Start-OwnedProcess([string]$File,[string[]]$Arguments,[hashtable]$Environment){
     $info=[Diagnostics.ProcessStartInfo]::new($File)
     $info.UseShellExecute=$false;$info.CreateNoWindow=$true
@@ -38,6 +39,7 @@ function Start-OwnedProcess([string]$File,[string[]]$Arguments,[hashtable]$Envir
     if(-not $child.Start()){throw "Process start failed: $File"}
     [pscustomobject]@{Process=$child;Output=$child.StandardOutput.ReadToEndAsync();Error=$child.StandardError.ReadToEndAsync()}
 }
+# 轮询查询，直到结果满足预期或超时。
 function Wait-Query([string]$Expression,[scriptblock]$Accept){
     for($attempt=0;$attempt -lt 40;$attempt++){
         foreach($child in @($windows,$mongo,$prometheus)){if($child -and $child.Process.HasExited){throw "Metrics child exited: $($child.Process.StartInfo.FileName): stdout=$($child.Output.Result) stderr=$($child.Error.Result)"}}

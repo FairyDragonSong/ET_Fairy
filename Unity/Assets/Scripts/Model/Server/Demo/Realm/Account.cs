@@ -15,6 +15,7 @@ namespace ET.Server
     [ChildOf(typeof(Scene))]
     public sealed class Account: Entity, IAwake
     {
+        // 规范化后的唯一登录名；DisplayName 保留用户输入的展示形式。
         public string LoginName { get; set; }
 
         public string DisplayName { get; set; }
@@ -24,6 +25,7 @@ namespace ET.Server
         public long StateVersion { get; set; }
         public long ClosedAt { get; set; }
 
+        // 密码算法、盐、哈希和迭代次数共同组成可升级的密码凭据。
         public PasswordHashScheme PasswordScheme { get; set; }
 
         public string PasswordSalt { get; set; }

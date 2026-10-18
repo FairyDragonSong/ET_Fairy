@@ -1,3 +1,4 @@
+# 校验备份库存、保留策略和介质状态。
 function Assert-BackupStorageInventory($Inventory,$Policy,$Backup,[DateTimeOffset]$Now){
     $generated=[DateTimeOffset]::MinValue
     if($Inventory.SchemaVersion-ne1-or$Inventory.Product-ne'ET.Server'-or$Inventory.ArtifactType-ne'BackupStorageInventory'-or

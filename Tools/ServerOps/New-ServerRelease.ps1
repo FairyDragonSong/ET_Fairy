@@ -45,6 +45,7 @@ if($signed){
 }
 
 $migrationSource=Get-Content -LiteralPath (Join-Path $repositoryRoot 'Unity/Assets/Scripts/Hotfix/Server/Demo/Persistence/DatabaseMigration.cs') -Raw
+# 从迁移源码读取协议常量，避免脚本重复硬编码。
 function Read-MigrationConstant([string]$Name){
     $match=[regex]::Match($migrationSource,"public\s+const\s+int\s+$Name\s*=\s*(?<value>[0-9]+)\s*;")
     if(-not $match.Success){throw "Database migration compatibility constant is missing: $Name"}

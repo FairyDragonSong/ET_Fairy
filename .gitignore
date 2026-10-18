@@ -15,6 +15,7 @@ _ReSharper.CSharp/
 #Unity相关目录
 Unity/.gradle
 Unity/Bundles
+Unity/BuildArtifacts/
 Unity/Library
 Unity/Logs
 Unity/UserSettings

@@ -17,6 +17,7 @@ namespace ET
         private readonly Dictionary<string, long> endpointChannels = new();
         private readonly Queue<(IPEndPoint EndPoint, MemoryBuffer Buffer)> received = new();
 
+        // 创建 Router WebSocket 传输层，并显式绑定主机、路径和连接上限。
         public WebSocketRouterTransport(int port, string path = "et", string bindHost = "+", int maxConnections = 4096)
         {
             string normalizedPath = string.IsNullOrWhiteSpace(path) ? "et" : path.Trim('/');

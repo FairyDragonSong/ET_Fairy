@@ -15,6 +15,7 @@ internal sealed class LocalMetricsExporter : IDisposable
     private readonly bool acceptPreviousToken;
     private readonly Task worker;
 
+    // 从环境变量读取受控配置并创建实例。
     internal static LocalMetricsExporter FromEnvironment()
     {
         string portText=Environment.GetEnvironmentVariable("ET_METRICS_PORT");
@@ -30,6 +31,7 @@ internal sealed class LocalMetricsExporter : IDisposable
         return new LocalMetricsExporter(port,production,previous!=null);
     }
 
+    // 固化监听端口与令牌轮换策略，实例创建后不再读取可变环境配置。
     private LocalMetricsExporter(int port,bool requireManagedRoot,bool acceptPreviousToken)
     {
         this.requireManagedRoot=requireManagedRoot;
@@ -40,6 +42,7 @@ internal sealed class LocalMetricsExporter : IDisposable
         this.worker=Task.Run(this.Serve);
     }
 
+    // 持续接收并处理本地指标请求。
     private async Task Serve()
     {
         while(this.listener.IsListening)
@@ -89,6 +92,7 @@ internal sealed class LocalMetricsExporter : IDisposable
         }
     }
 
+    // 使用固定时间比较校验请求凭据。
     private bool IsAuthorized(string authorization)
     {
         try
@@ -109,6 +113,7 @@ internal sealed class LocalMetricsExporter : IDisposable
         }
     }
 
+    // 释放当前实例占用的资源。
     public void Dispose()
     {
         this.listener.Close();

@@ -7,6 +7,7 @@ namespace ET.Server;
 [FriendOf(typeof(DBComponent))]
 internal static class UserAccountClosureStore
 {
+    // 在版本匹配时软注销账号并写入审计。
     internal static async ETTask<bool> Close(DBComponent db,SelfAccountClosure request,long expectedVersion,string digest,
         Action beforeAudit=null,Func<System.Threading.Tasks.Task> beforeUpdate=null)
     {

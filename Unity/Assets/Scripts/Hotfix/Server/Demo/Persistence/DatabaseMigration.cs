@@ -13,6 +13,7 @@ namespace ET.Server
         private const string MigrationCollection = "ET.Server.DatabaseSchema";
         private const string SchemaId = "server-schema";
 
+        // 按版本顺序应用数据库迁移。
         public static async ETTask Apply(Scene root)
         {
             DBComponent database = root.GetComponent<DBManagerComponent>().GetZoneDB(root.Zone());
@@ -25,6 +26,11 @@ namespace ET.Server
                     $"database schema {version} is outside readable range {MinimumReadableVersion}-{MaximumReadableVersion}");
             }
 
+            // 版本 1：建立账号与角色持久化所需的基础索引和唯一约束。
+            // - Account.LoginName 唯一，防止并发注册产生重复账号；
+            // - Account.DefaultRoleId 使用稀疏索引，支持账号与默认角色的关联查询；
+            // - Role.AccountId 唯一，保证当前阶段一个账号只有一个角色；
+            // - Role.LastSaveTime 建立索引，支持角色保存审计与恢复检查。
             if (version < 1)
             {
                 await ApplyVersion1(database);
@@ -43,6 +49,7 @@ namespace ET.Server
                      $"readable_min={MinimumReadableVersion}, readable_max={MaximumReadableVersion}");
         }
 
+        // 应用版本 1 的数据库结构调整：创建账号和角色持久化所需的索引与唯一约束。
         private static async ETTask ApplyVersion1(DBComponent database)
         {
             IMongoCollection<Account> accounts = database.database.GetCollection<Account>(typeof(Account).FullName);
@@ -68,6 +75,7 @@ namespace ET.Server
             });
         }
 
+        // 持久化已完成的数据库迁移版本。
         private static async ETTask SaveVersion(IMongoCollection<BsonDocument> migrations, int version)
         {
             BsonDocument document = new()

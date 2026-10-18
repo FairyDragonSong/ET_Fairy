@@ -16,6 +16,7 @@
             HandleInner(args).Coroutine();
         }
 
+        // 处理有返回值的内部 Actor 消息。
         internal static async ETTask HandleInner(MailBoxInvoker args)
         {
             MailBoxComponent mailBoxComponent = args.MailBoxComponent;

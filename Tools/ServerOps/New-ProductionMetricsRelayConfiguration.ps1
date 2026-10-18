@@ -16,6 +16,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/BackupRestore.Common.ps1"
 
+# 拒绝路径链上的重解析点，防止符号链接逃逸。
 function Assert-NoReparsePath([string]$Path,[string]$Name) {
     $cursor = if (Test-Path -LiteralPath $Path) { Get-Item -LiteralPath $Path -Force } else { Get-Item -LiteralPath (Split-Path -Parent $Path) -Force }
     while ($null -ne $cursor) {
@@ -24,6 +25,7 @@ function Assert-NoReparsePath([string]$Path,[string]$Name) {
     }
 }
 
+# 解析并校验指标采集凭据文件。
 function Resolve-CredentialFile([string]$Path,[string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Path)) { throw "$Name is required" }
     $resolved = Assert-BackupPathOutsideRepository $Path $Name

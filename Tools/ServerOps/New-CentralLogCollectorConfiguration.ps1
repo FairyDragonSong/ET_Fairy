@@ -12,6 +12,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if (-not $LocalEvidenceSink) { throw 'This generator only supports an explicit local evidence sink' }
+# 解析路径并确认其满足目录、存在性与类型约束。
 function Resolve-SafePath([string]$Path, [string]$Name) {
     if (-not [IO.Path]::IsPathRooted($Path)) { throw "$Name must be an absolute path" }
     $full = [IO.Path]::GetFullPath($Path)
@@ -23,6 +24,7 @@ function Resolve-SafePath([string]$Path, [string]$Name) {
     }
     return $full
 }
+# 把 Windows 路径转换为采集器配置使用的格式。
 function Convert-CollectorPath([string]$Path) { return $Path.Replace('\', '/') }
 
 $resolvedInput = Resolve-SafePath $InputRoot 'InputRoot'

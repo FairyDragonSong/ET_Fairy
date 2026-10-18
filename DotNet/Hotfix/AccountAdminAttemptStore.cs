@@ -7,6 +7,7 @@ namespace ET.Server;
 [FriendOf(typeof(DBComponent))]
 internal static class AccountAdminAttemptStore
 {
+    // 追加一条不可缺失的审计记录。
     internal static async ETTask Append(DBComponent database,string requestId,string outcome,string stage,AccountAdminCommand command)
     {
         var record=new BsonDocument

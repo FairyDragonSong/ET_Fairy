@@ -43,6 +43,7 @@ internal static class Program
         ("有界日志分级与真实轮转", TestBoundedLogging),
     ];
 
+    // 运行回归测试入口，并汇总失败结果。
     private static int Main()
     {
         World.Instance.AddSingleton(new Options
@@ -78,6 +79,7 @@ internal static class Program
         return failures == 0 ? 0 : 1;
     }
 
+    // 验证账号输入相关行为与边界。
     private static void TestAccountInput()
     {
         Assert(AccountInputValidator.TryNormalizeLoginName("  Player_01 ", out string normalized), "valid account rejected");
@@ -88,6 +90,7 @@ internal static class Program
         Assert(!AccountInputValidator.IsPasswordValid("1234567"), "short password accepted");
     }
 
+    // 验证具体消息日志相关行为与边界。
     private static void TestConcreteMessageLogging()
     {
         G2C_LoginGate message = G2C_LoginGate.Create(false);
@@ -98,6 +101,7 @@ internal static class Program
         Assert(bytes.Length > 5, "concrete entity BSON serialization failed");
     }
 
+    // 验证密码哈希相关行为与边界。
     private static void TestPasswordHashing()
     {
         PasswordHashData first = PasswordHasher.Hash("correct horse battery staple");
@@ -109,6 +113,7 @@ internal static class Program
         Assert(!PasswordHasher.Verify("correct horse battery staple", first.Scheme, "not-base64", first.Hash, first.Iterations), "invalid salt accepted");
     }
 
+    // 验证一次性TimeGate密钥相关行为与边界。
     private static void TestOneTimeGateKey()
     {
         GateSessionKeyComponent keys = new();
@@ -128,6 +133,7 @@ internal static class Program
         Assert(reused.AccountStateVersion == 0 && reused.Account == null, "pooled authentication data was retained");
     }
 
+    // 验证流量限额相关行为与边界。
     private static void TestTrafficLimit()
     {
         SessionTrafficLimitComponent traffic = new() { WindowStartTime = TimeInfo.Instance.ClientNow() };
@@ -140,6 +146,7 @@ internal static class Program
         Assert(!traffic.TryConsume(11), "byte limit not enforced");
     }
 
+    // 验证安全Gate密钥相关行为与边界。
     private static void TestSecureGateKey()
     {
         HashSet<long> keys = [];
@@ -151,6 +158,7 @@ internal static class Program
         }
     }
 
+    // 验证 Gate 候选排序稳定且故障转移不会重复选择节点。
     private static void TestGateCandidateFallback()
     {
         int first = RealmGateAddressHelper.GetCandidateIndex(3, "player_01", 0);
@@ -165,6 +173,7 @@ internal static class Program
         AssertThrows(() => RealmGateAddressHelper.GetCandidateIndex(2, "player_01", 2), "Unbounded Gate retry attempt was accepted");
     }
 
+    // 验证角色快照相关行为与边界。
     private static void TestRoleSnapshot()
     {
         RoleSnapshot role = new(1001, "角色", "Map2", new float3(1.25f, 2.5f, -3.75f));
@@ -172,6 +181,7 @@ internal static class Program
         Assert(role.Position.Equals(new float3(1.25f, 2.5f, -3.75f)), "role position changed");
     }
 
+    // 验证登录限流限额相关行为与边界。
     private static void TestLoginRateLimit()
     {
         LoginRateLimiterComponent limiter = new() { NextCleanupTime = long.MaxValue };
@@ -186,6 +196,7 @@ internal static class Program
         Assert(!accountLimiter.TryAcquire("10.0.0.4", "shared_01", out _), "account limit across IPs not enforced");
     }
 
+    // 验证共享登录准入标识相关行为与边界。
     private static void TestSharedLoginAdmissionIdentity()
     {
         byte[] firstKey = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
@@ -201,6 +212,7 @@ internal static class Program
         AssertThrows(() => SharedLoginAdmissionStore.CreateDocumentId(1, "unknown", "player_01", 120000, firstKey), "unknown admission identity kind was accepted");
     }
 
+    // 验证停机协调器相关行为与边界。
     private static void TestShutdownCoordinator()
     {
         ShutdownCoordinator shutdown = new();
@@ -215,6 +227,7 @@ internal static class Program
         Assert(shutdown.IsCompleted && !shutdown.IsSuccessful, "shutdown failure was hidden");
     }
 
+    // 验证生产环境启动Validation相关行为与边界。
     private static void TestProductionStartupValidation()
     {
         DatabaseConnectionSettings secureDatabase = new(
@@ -254,6 +267,7 @@ internal static class Program
             new DatabaseConnectionSettings("mongodb://127.0.0.1", "ET_DEV", false));
     }
 
+    // 验证生产环境密钥策略相关行为与边界。
     private static void TestProductionSecretPolicy()
     {
         string[] variables =
@@ -430,6 +444,7 @@ internal static class Program
         }
     }
 
+    // 验证密钥租约策略相关行为与边界。
     private static void TestSecretLeasePolicy()
     {
         string[] variables =
@@ -505,6 +520,7 @@ internal static class Program
         }
     }
 
+    // 验证网络暴露边界策略相关行为与边界。
     private static void TestNetworkExposurePolicy()
     {
         string[] variables = ["ET_ROUTER_MANAGER_BIND_IP", "ET_ROUTER_WEBSOCKET_BIND_IP", "ET_ROUTER_PUBLIC_EXPOSURE_ACK"];
@@ -548,6 +564,7 @@ internal static class Program
         }
     }
 
+    // 验证敏感消息相关行为与边界。
     private static void TestSensitiveMessages()
     {
         object[] messages =
@@ -565,6 +582,7 @@ internal static class Program
         Assert(messages.All(message => message is ISensitiveMessage), "an authentication message is not marked sensitive");
     }
 
+    // 验证紧急停服策略相关行为与边界。
     private static void TestEmergencyStopPolicy()
     {
         using RSA rsa = RSA.Create(3072);
@@ -607,6 +625,7 @@ internal static class Program
         Assert(shutdown.Reason == ShutdownReason.EmergencyStop, "normal shutdown downgraded emergency reason");
     }
 
+    // 验证源码约束相关行为与边界。
     private static void TestSourceGuards()
     {
         string root = FindRepositoryRoot();
@@ -745,6 +764,7 @@ internal static class Program
                "installed slot signature or per-file verification removed");
     }
 
+    // 向上查找仓库根目录，供源码门禁读取固定文件。
     private static string FindRepositoryRoot()
     {
         DirectoryInfo directory = new(Directory.GetCurrentDirectory());
@@ -759,6 +779,7 @@ internal static class Program
         throw new InvalidOperationException("repository root not found");
     }
 
+    // 验证管理授权相关行为与边界。
     private static void TestAdminAuthorization()
     {
         var limiter=new AccountAdminRateLimiter(2,60000);
@@ -811,6 +832,7 @@ internal static class Program
         AssertThrows(()=>AccountAdminAuthorization.Verify(valid,"[]",now),"removed operator accepted");
     }
 
+    // 验证账号状态策略相关行为与边界。
     private static void TestAccountStatePolicy()
     {
         Assert(AccountStatePolicy.Target(AccountStatus.Active,"revoke")==AccountStatus.Active,"revoke disabled account");
@@ -824,6 +846,7 @@ internal static class Program
         AssertThrows(()=>AccountStatePolicy.Target(AccountStatus.Closed,"reset-password"),"reset reopened closed account");
     }
 
+    // 验证密码信封相关行为与边界。
     private static void TestPasswordEnvelope()
     {
         using var rsa=System.Security.Cryptography.RSA.Create(4096);
@@ -841,6 +864,7 @@ internal static class Program
         Assert(rejected,"tampered ciphertext decrypted");
     }
 
+    // 验证自助改密信封的加解密、用途绑定和篡改拒绝。
     private static void TestSelfPasswordCipher()
     {
         using var rsa=System.Security.Cryptography.RSA.Create(4096);
@@ -875,6 +899,7 @@ internal static class Program
         Assert(decoded.Envelope==envelope&&decoded.RpcId==42,"Protocol roundtrip failed");
     }
 
+    // 验证自助注销信封的加解密、用途绑定和篡改拒绝。
     private static void TestSelfAccountClosureCipher()
     {
         using var rsa=RSA.Create(4096);
@@ -896,6 +921,7 @@ internal static class Program
         Assert(decoded.Envelope==envelope&&decoded.RpcId==43,"Account closure protocol roundtrip failed");
     }
 
+    // 验证安全指标相关行为与边界。
     private static void TestSecurityMetrics()
     {
         var metrics=new OperationalMetrics();metrics.Awake();
@@ -946,6 +972,7 @@ internal static class Program
         AssertThrows(()=>metrics.FinishMapTransfer(false),"Map transfer completion without an in-flight transfer was accepted");
     }
 
+    // 验证处理器耗时相关行为与边界。
     private static void TestHandlerLatency()
     {
         var metrics=new OperationalMetrics();metrics.Awake();
@@ -994,6 +1021,7 @@ internal static class Program
         }
     }
 
+    // 验证客户端体验Telemetry相关行为与边界。
     private static void TestClientExperienceTelemetry()
     {
         var culture = System.Globalization.CultureInfo.CurrentCulture;
@@ -1031,6 +1059,7 @@ internal static class Program
             "Client journey entry point lost its experience event");
     }
 
+    // 验证有界日志相关行为与边界。
     private static void TestBoundedLogging()
     {
         string directory = Path.Combine(Path.GetTempPath(), "et-log-rotation-" + Guid.NewGuid().ToString("N"));
@@ -1070,6 +1099,7 @@ internal static class Program
         Console.WriteLine("LOG_ROTATION_EVIDENCE " + directory);
     }
 
+    // 验证 KService 在 Update 回调中释放传输层时不会再次访问它。
     private static void TestKServiceDisposeDuringUpdate()
     {
         var transport = new DisposalProbeTransport();
@@ -1088,14 +1118,21 @@ internal static class Program
         public Action OnAvailable;
         public int Updates;
         public bool Disposed;
+        // 暴露可读状态，并允许测试在查询时触发释放。
         public int Available() { OnAvailable?.Invoke(); return 0; }
+        // 此测试传输层不接收数据，意外调用即视为失败。
         public int Recv(byte[] buffer, ref System.Net.EndPoint endPoint) => throw new InvalidOperationException();
+        // 发送。
         public void Send(byte[] bytes, int index, int length, System.Net.EndPoint endPoint, ChannelType channelType) => throw new InvalidOperationException();
+        // 记录更新次数，并确保释放后不会继续更新。
         public void Update() { Assert(!Disposed, "Disposed transport touched"); ++Updates; }
+        // 测试替身无需处理底层错误回调。
         public void OnError(long id, int error) { }
+        // 释放当前实例占用的资源。
         public void Dispose() { Disposed = true; }
     }
 
+    // 验证协程锁指标相关行为与边界。
     private static void TestCoroutineLockMetrics()
     {
         var before = CoroutineLockMetrics.GetSnapshot();
@@ -1133,6 +1170,7 @@ internal static class Program
                "lock terminal counts incorrect");
     }
 
+    // 验证消息队列快照相关行为与边界。
     private static void TestMessageQueueSnapshot()
     {
         var queue=new MessageQueue();queue.Awake();
@@ -1154,9 +1192,11 @@ internal static class Program
         Assert(queue.GetSnapshot().Queues==0,"Empty registry retained queues");
     }
 
+    // 读取并校验。
     private static string Read(string root, string relativePath) =>
         File.ReadAllText(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
 
+    // 确认满足约束，否则中止流程。
     private static void Assert(bool condition, string message)
     {
         if (!condition)
@@ -1165,6 +1205,7 @@ internal static class Program
         }
     }
 
+    // 确认Throws满足约束，否则中止流程。
     private static void AssertThrows(Action action, string message)
     {
         try

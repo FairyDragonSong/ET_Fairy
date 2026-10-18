@@ -8,6 +8,7 @@ namespace ET.Server;
 
 public static class AccountAdminAuthorization
 {
+    // 验证签名信封并返回可信的停服指令。
     public static AccountAdminCommand Verify(string envelopeJson,string trustJson,long now)
     {
         if(string.IsNullOrEmpty(envelopeJson)||envelopeJson.Length>32768||string.IsNullOrEmpty(trustJson)||trustJson.Length>131072)

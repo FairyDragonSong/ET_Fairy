@@ -183,6 +183,7 @@ namespace ET.Server
             }
         }
 
+        // 把持久化角色快照应用到在线玩家。
         private static void ApplyRoleSnapshot(Player player, RoleSnapshot role)
         {
             player.MapEntered = false;
@@ -193,6 +194,7 @@ namespace ET.Server
             player.PositionZ = role.Position.z;
         }
 
+        // 绑定新会话，并记录账号版本用于后续撤销。
         private static void BindSession(Player player, Session session, long accountStateVersion)
         {
             player.AccountStateVersion = accountStateVersion;
@@ -212,6 +214,7 @@ namespace ET.Server
             }
         }
 
+        // 安全断开同账号的旧会话。
         private static void DetachOldSession(Player player)
         {
             PlayerSessionComponent playerSessionComponent = player.GetComponent<PlayerSessionComponent>();

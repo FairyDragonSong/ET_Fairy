@@ -1,4 +1,5 @@
 $script:GitHubGovernanceUtf8=[Text.UTF8Encoding]::new($false)
+# 校验 GitHub 生产发布治理证据。
 function Assert-GitHubProductionGovernance($Evidence,[DateTimeOffset]$Now,[bool]$AllowTestEvidence){
     if([int]$Evidence.SchemaVersion-ne1-or$Evidence.Product-cne'ET.Server'-or$Evidence.ArtifactType-cne'GitHubProductionGovernance'){throw 'GitHub governance evidence schema is invalid'}
     if([bool]$Evidence.TestOnly-and-not$AllowTestEvidence){throw 'Test-only GitHub governance evidence is not accepted for deployment'}

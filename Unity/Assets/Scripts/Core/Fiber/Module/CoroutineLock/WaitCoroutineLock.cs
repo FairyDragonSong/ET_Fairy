@@ -30,6 +30,7 @@ namespace ET
         private ETTask<CoroutineLock> tcs;
         private int tracking;
 
+        // 停止跟踪已失效的协程锁等待。
         public void AbandonTracking()
         {
             // Queue destruction stops observation; it does not complete the waiting task.
@@ -39,6 +40,7 @@ namespace ET
             }
         }
 
+        // 结束等待跟踪并记录成功或失败指标。
         private void FinishTracking(bool failed)
         {
             if (Interlocked.Exchange(ref this.tracking, 0) == 1)
@@ -91,12 +93,14 @@ namespace ET
         [StaticField] private static long failed;
         [StaticField] private static long abandoned;
 
+        // 标记一次操作开始。
         internal static void Start()
         {
             Interlocked.Increment(ref waiting);
             Interlocked.Increment(ref started);
         }
 
+        // 标记一次操作结束并记录结果。
         internal static void Finish(int outcome)
         {
             Interlocked.Decrement(ref waiting);
@@ -105,6 +109,7 @@ namespace ET
             else Interlocked.Increment(ref abandoned);
         }
 
+        // 原子读取协程锁等待指标，避免导出过程中看到互相不一致的计数。
         public static (long Waiting, long Started, long Acquired, long Failed, long Abandoned) GetSnapshot() =>
             (Interlocked.Read(ref waiting), Interlocked.Read(ref started), Interlocked.Read(ref acquired),
                 Interlocked.Read(ref failed), Interlocked.Read(ref abandoned));

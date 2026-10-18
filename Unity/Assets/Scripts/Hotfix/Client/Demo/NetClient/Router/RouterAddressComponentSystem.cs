@@ -18,7 +18,7 @@ namespace ET.Client
         
         public static async ETTask Init(this RouterAddressComponent self)
         {
-#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+#if ((UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR) || ET_MINIGAME_HOTFIX
             self.RouterManagerIPAddress = IPAddress.Loopback;
 #else
             self.RouterManagerIPAddress = NetworkHelper.GetHostAddress(self.RouterManagerHost);
@@ -28,7 +28,7 @@ namespace ET.Client
 
         private static async ETTask GetAllRouter(this RouterAddressComponent self)
         {
-#if (UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR
+#if ((UNITY_WEBGL || UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME) && !UNITY_EDITOR) || ET_MINIGAME_HOTFIX
             string url = MiniGameNetworkSettings.RouterHttpUrl;
 #else
             string url = $"http://{self.RouterManagerHost}:{self.RouterManagerPort}/get_router";

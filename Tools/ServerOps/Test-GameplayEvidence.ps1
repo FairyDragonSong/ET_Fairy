@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/GameplayEvidence.ps1"
 
+# 确认实际值与预期值一致。
 function Assert-Equal($Expected, $Actual, [string]$Message) {
     if ($Expected -ne $Actual) { throw "$Message; expected=$Expected actual=$Actual" }
 }

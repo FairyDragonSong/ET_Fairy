@@ -77,7 +77,8 @@ namespace ET.Server
                     context.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
                     HttpHelper.TextResponse(context, "busy\n", "text/plain; charset=utf-8");
                 }
-                else if (context.Request.HttpMethod != "GET" || context.Request.Url.Query.Length != 0 || context.Request.HasEntityBody)
+                // WebGL/小游戏请求可能自动追加缓存参数，路由仅按 AbsolutePath 分发。
+                else if (context.Request.HttpMethod != "GET" || context.Request.HasEntityBody)
                 {
                     context.Response.StatusCode = context.Request.HttpMethod != "GET" ?
                         (int)HttpStatusCode.MethodNotAllowed : (int)HttpStatusCode.BadRequest;

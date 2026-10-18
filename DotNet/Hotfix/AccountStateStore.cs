@@ -11,6 +11,7 @@ internal static class AccountStateStore
 {
     internal const string AuditCollection = "ET.Server.AccountStateAudit";
 
+    // 在账号版本匹配时执行状态变更。
     internal static async ETTask<bool> Change(DBComponent database, long accountId, long expectedVersion,
         AccountStatus target, string operatorId, string reasonCode, string operationId, Action beforeAudit = null)
     {
@@ -18,6 +19,7 @@ internal static class AccountStateStore
         return await Execute(database,accountId,expectedVersion,target==AccountStatus.Active?"enable":"disable",operatorId,reasonCode,operationId,beforeAudit);
     }
 
+    // 在事务中更新账号状态并写入审计记录。
     internal static async ETTask<bool> Execute(DBComponent database,long accountId,long expectedVersion,
         string action,string operatorId,string reasonCode,string operationId,Action beforeAudit=null,
         PasswordHashData? passwordHash=null,string credentialDigest=null)
@@ -75,6 +77,7 @@ internal static class AccountStateStore
         }, new TransactionOptions(ReadConcern.Snapshot, ReadPreference.Primary, WriteConcern.WMajority));
     }
 
+    // 校验审计标签只包含允许的字符。
     private static bool ValidLabel(string value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > 64) return false;

@@ -1,9 +1,11 @@
 $script:DeploymentStateUtf8=[Text.UTF8Encoding]::new($false)
 
+# 解析部署路径并统一为绝对路径。
 function Get-DeploymentFullPath([string]$Path){
     return [IO.Path]::GetFullPath($Path).TrimEnd('\','/')
 }
 
+# 确认部署路径位于源码仓库之外。
 function Assert-DeploymentPathOutsideRepository([string]$Path,[string]$Name){
     $full=Get-DeploymentFullPath $Path
     $repositoryRoot=Get-DeploymentFullPath (Join-Path $PSScriptRoot '../..')
@@ -15,6 +17,7 @@ function Assert-DeploymentPathOutsideRepository([string]$Path,[string]$Name){
     return $full
 }
 
+# 计算 RSA 公钥的稳定指纹。
 function Get-RsaPublicFingerprint([string]$KeyFile){
     $rsa=[Security.Cryptography.RSA]::Create()
     try{
@@ -26,6 +29,7 @@ function Get-RsaPublicFingerprint([string]$KeyFile){
     finally{$rsa.Dispose()}
 }
 
+# 验证部署状态文件的签名。
 function Test-DeploymentStateSignature([byte[]]$Bytes,[byte[]]$Signature,[string]$PublicKeyFile){
     $rsa=[Security.Cryptography.RSA]::Create()
     try{
@@ -37,6 +41,7 @@ function Test-DeploymentStateSignature([byte[]]$Bytes,[byte[]]$Signature,[string
     finally{$rsa.Dispose()}
 }
 
+# 校验部署状态结构、密钥与指纹绑定。
 function Assert-DeploymentStateShape($State,[string]$ExpectedKeyId,[string]$Fingerprint){
     $slotPattern='^[0-9A-Za-z.-]+-[a-f0-9]{12}$';$hashPattern='^[a-f0-9]{64}$'
     if($State.SchemaVersion -ne 1 -or $State.Product -ne 'ET.Server' -or
@@ -62,6 +67,7 @@ function Assert-DeploymentStateShape($State,[string]$ExpectedKeyId,[string]$Fing
     if($State.PreviousSlot -and $State.PreviousSlot -notmatch $slotPattern){throw 'Previous slot id is invalid'}
 }
 
+# 读取并验证当前部署状态。
 function Get-DeploymentState([string]$DeploymentRoot,[string]$PublicKeyFile,[string]$ExpectedKeyId){
     $stateRoot=Join-Path $DeploymentRoot 'state'
     $currentFile=Join-Path $stateRoot 'current.json'
@@ -108,6 +114,7 @@ function Get-DeploymentState([string]$DeploymentRoot,[string]$PublicKeyFile,[str
     return [pscustomobject]@{State=$state;Bytes=$bytes;Sha256=$hash;Root=$stateRoot}
 }
 
+# 签名并原子保存部署状态。
 function Save-DeploymentState([hashtable]$State,[string]$DeploymentRoot,[string]$PrivateKeyFile){
     $stateRoot=Join-Path $DeploymentRoot 'state';$auditRoot=Join-Path $stateRoot 'audit'
     New-Item -ItemType Directory -Path $auditRoot -Force|Out-Null

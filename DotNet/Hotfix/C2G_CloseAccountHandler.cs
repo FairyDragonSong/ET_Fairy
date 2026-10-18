@@ -7,6 +7,7 @@ namespace ET.Server;
 [MessageSessionHandler(SceneType.Gate)]
 public sealed class C2G_CloseAccountHandler:MessageSessionHandler<C2G_CloseAccount,G2C_CloseAccount>
 {
+    // 执行当前处理器的主流程。
     protected override async ETTask Run(Session session,C2G_CloseAccount request,G2C_CloseAccount response)
     {
         long started=System.Diagnostics.Stopwatch.GetTimestamp();
@@ -50,6 +51,7 @@ public sealed class C2G_CloseAccountHandler:MessageSessionHandler<C2G_CloseAccou
         }
     }
 
+    // 响应发送后再断开会话，避免客户端丢失结果。
     private static async ETTask DisconnectAfterResponse(Session session,long instanceId)
     {
         await session.Root().GetComponent<TimerComponent>().WaitAsync(100);

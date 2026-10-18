@@ -1,6 +1,7 @@
 $script:SecurityAssessmentUtf8=[Text.UTF8Encoding]::new($false)
 $script:RequiredSecurityAssessmentTypes=@('DependencyScan','SecretScan','PermissionAudit','PenetrationTest','FaultInjection')
 
+# 校验发布前安全评估及其有效期。
 function Assert-ServerSecurityAssessment($Report,[DateTimeOffset]$Now,[bool]$AllowTestReport){
     if([int]$Report.SchemaVersion-ne1-or$Report.Product-cne'ET.Server'-or$Report.ArtifactType-cne'ServerSecurityAssessment'){
         throw 'Security assessment schema is invalid'

@@ -25,6 +25,7 @@ namespace ET.Server
 
     public static class PasswordHasher
     {
+        // PBKDF2 参数与账号一同存储，便于将来平滑升级迭代次数。
         public const int DefaultIterations = 600_000;
         private const int SaltSize = 16;
         private const int HashSize = 32;
@@ -33,6 +34,7 @@ namespace ET.Server
 
         public static PasswordHashData Hash(string password)
         {
+            // 每个账号使用独立随机盐，数据库中不保存明文密码。
             byte[] salt = RandomNumberGenerator.GetBytes(SaltSize);
             byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
             try
@@ -111,6 +113,7 @@ namespace ET.Server
                     iterations,
                     HashAlgorithmName.SHA256,
                     expectedHash.Length);
+                // 固定时间比较，避免比较耗时泄露哈希匹配程度。
                 return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
             }
             finally
@@ -125,8 +128,10 @@ namespace ET.Server
             }
         }
 
+        // 执行等量密码计算，降低账号枚举的时序差异。
         public static void SimulateVerification(string password)
         {
+            // 对不存在或不可用账号执行等量计算，模糊账号是否存在的时序差异。
             byte[] passwordBytes = Encoding.UTF8.GetBytes(password ?? string.Empty);
             byte[] salt = new byte[SaltSize];
             byte[] hash = null;

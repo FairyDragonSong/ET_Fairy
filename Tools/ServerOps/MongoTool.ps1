@@ -1,3 +1,4 @@
+# 使用统一参数调用 MongoDB 命令行工具。
 function Invoke-MongoTool {
     param([string]$Tool, [string[]]$Arguments)
     $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('et-mongo-' + [Guid]::NewGuid().ToString('N'))

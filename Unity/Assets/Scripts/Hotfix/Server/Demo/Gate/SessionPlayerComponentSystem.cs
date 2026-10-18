@@ -39,6 +39,7 @@
             self.MetricsBound=false;
         }
 
+        // 记录当前会话绑定，供断线与替换流程判定。
         public static void TrackBinding(this SessionPlayerComponent self)
         {
             if(self.MetricsBound)return;
@@ -56,6 +57,7 @@
         [Invoke(TimerInvokeType.PlayerOffline)]
         public class PlayerOfflineTimer: ATimer<PlayerOfflineComponent>
         {
+            // 离线宽限期结束后触发角色保存与资源回收。
             protected override void Run(PlayerOfflineComponent self)
             {
                 self.RemoveOfflinePlayer().Coroutine();
@@ -63,6 +65,7 @@
         }
 
         [EntitySystem]
+        // 初始化当前组件的运行状态。
         private static void Awake(this PlayerOfflineComponent self)
         {
             self.Timer = self.Root().GetComponent<TimerComponent>().NewOnceTimer(
@@ -72,11 +75,13 @@
         }
 
         [EntitySystem]
+        // 释放当前组件持有的状态与未完成工作。
         private static void Destroy(this PlayerOfflineComponent self)
         {
             self.Root().GetComponent<TimerComponent>()?.Remove(ref self.Timer);
         }
 
+        // 宽限期结束后保存并释放离线玩家。
         private static async ETTask RemoveOfflinePlayer(this PlayerOfflineComponent self)
         {
             Player player = self.GetParent<Player>();
@@ -113,6 +118,7 @@
             }
         }
 
+        // 保存离线玩家，同时保留可恢复的地图状态。
         public static async ETTask SaveAndRetainOfflinePlayer(Scene root, Player player, long playerInstanceId)
         {
             using (await root.GetComponent<CoroutineLockComponent>().Wait(
@@ -144,6 +150,7 @@
             }
         }
 
+        // 仅在玩家仍离线时释放地图状态。
         public static async ETTask<bool> TryReleaseMapState(Scene root, long playerId)
         {
             RpcCallResult<M2G_SessionDisconnect> result = await root.CallEntity<M2G_SessionDisconnect>(

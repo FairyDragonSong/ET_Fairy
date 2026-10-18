@@ -7,6 +7,7 @@ namespace ET.Server;
 [FriendOf(typeof(DBComponent))]
 internal static class UserPasswordStore
 {
+    // 在版本匹配时更新密码并写入审计。
     internal static async ETTask Change(DBComponent db,SelfPasswordChange request,long expectedVersion,string digest,Action beforeAudit=null,
         Func<System.Threading.Tasks.Task> beforeUpdate=null)
     {

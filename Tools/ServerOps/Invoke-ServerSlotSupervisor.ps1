@@ -35,9 +35,11 @@ if(($resolvedRuntimeRoot+[IO.Path]::DirectorySeparatorChar).StartsWith($releaseP
 New-Item -ItemType Directory -Path $resolvedRuntimeRoot -Force|Out-Null
 $processes=[Collections.Generic.List[Diagnostics.Process]]::new()
 $readers=@{}
+# 检查是否收到全局停止信号。
 function Test-GlobalStop{
     return [bool]($EmergencyStopFile -and (Test-Path -LiteralPath ([IO.Path]::GetFullPath($EmergencyStopFile)) -PathType Leaf))
 }
+# 启动指定发布槽位中的服务进程。
 function Start-Slot([string]$SlotDirectory){
     if(Test-GlobalStop){throw 'Global emergency stop is present; refusing to start any slot'}
     $info=[Diagnostics.ProcessStartInfo]::new((Join-Path $SlotDirectory 'package/Bin/App.exe'))
@@ -65,6 +67,7 @@ function Start-Slot([string]$SlotDirectory){
     $processes.Add($process);$readers[$process.Id]=@($process.StandardOutput.ReadToEndAsync(),$process.StandardError.ReadToEndAsync())
     return $process
 }
+# 等待服务健康检查通过或进程提前退出。
 function Wait-Ready([Diagnostics.Process]$Process,[uri]$Uri,[int]$Seconds){
     $deadline=[DateTime]::UtcNow.AddSeconds($Seconds)
     while([DateTime]::UtcNow-lt$deadline){
@@ -75,11 +78,13 @@ function Wait-Ready([Diagnostics.Process]$Process,[uri]$Uri,[int]$Seconds){
     }
     return $false
 }
+# 在限定时间内优雅停止槽位进程。
 function Stop-Slot([Diagnostics.Process]$Process,[int]$Seconds){
     if($Process.HasExited){return $Process.ExitCode -eq 0}
     try{$Process.StandardInput.WriteLine('shutdown');$Process.StandardInput.Flush()}catch{return $false}
     return $Process.WaitForExit($Seconds*1000) -and $Process.ExitCode -eq 0
 }
+# 收集子进程退出时的诊断信息。
 function Get-ProcessFailure([Diagnostics.Process]$Process){
     if(-not $Process.HasExited){return 'process-running'}
     $tasks=$readers[$Process.Id];[Threading.Tasks.Task]::WaitAll($tasks,2000)|Out-Null

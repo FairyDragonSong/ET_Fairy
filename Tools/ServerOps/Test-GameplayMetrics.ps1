@@ -28,6 +28,7 @@ $notificationVerified=$false
 $queries=[Collections.Generic.List[object]]::new()
 $checks=[Collections.Generic.List[string]]::new()
 $passed=$false
+# 轮询查询，直到结果满足预期或超时。
 function Wait-Query([string]$Expression,[string]$Expected){
     for($attempt=0;$attempt -lt 40;$attempt++){
         if($app.HasExited -or $collector.HasExited){throw 'Test process exited during collection'}
@@ -43,6 +44,7 @@ function Wait-Query([string]$Expression,[string]$Expected){
     }
     throw "Query did not reach expected value: $Expression"
 }
+# 等待匹配状态与指纹的告警通知。
 function Wait-Notification([string]$Status,[string]$Fingerprint=''){
     for($attempt=0;$attempt -lt 40;$attempt++){
         if($manager.HasExited -or $receiver.HasExited){throw 'Notification process exited'}

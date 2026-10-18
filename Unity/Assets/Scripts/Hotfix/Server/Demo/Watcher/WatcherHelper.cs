@@ -41,6 +41,7 @@ namespace ET.Server
         {
             StartProcessConfig startProcessConfig = StartProcessConfigCategory.Instance.Get(processId);
             const string exe = "dotnet";
+            // 将父 Watcher 的安全与限流配置显式传给子进程，避免多进程使用不一致默认值。
             string arguments = $"App.dll" + 
                     $" --Process={startProcessConfig.Id}" +
                     $" --AppType=Server" +  

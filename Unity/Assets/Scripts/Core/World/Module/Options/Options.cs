@@ -46,7 +46,7 @@ namespace ET
 
         [Option("RouterWebSocketMaxConnections", Required = false, Default = 4096, HelpText = "maximum concurrent Router WebSocket connections")]
         public int RouterWebSocketMaxConnections { get; set; }
-
+        // 账号自动注册
         [Option("AccountAutoRegister", Required = false, Default = 0, HelpText = "allow password account creation on first login, 0 off 1 on")]
         public int AccountAutoRegister { get; set; }
 
@@ -55,13 +55,13 @@ namespace ET
 
         [Option("PasswordLoginTransportSecure", Required = false, Default = 0, HelpText = "operator assertion that the complete client login transport is encrypted")]
         public int PasswordLoginTransportSecure { get; set; }
-
+        // 单 IP 每个登录窗口最大请求数
         [Option("LoginIpLimit", Required = false, Default = 30, HelpText = "max login requests per IP in one login rate window")]
         public int LoginIpLimit { get; set; }
-
+        // 单账号每个登录窗口最大请求数
         [Option("LoginAccountLimit", Required = false, Default = 10, HelpText = "max login requests per account in one login rate window")]
         public int LoginAccountLimit { get; set; }
-
+        // 登录固定窗口秒数
         [Option("LoginRateWindowSeconds", Required = false, Default = 60, HelpText = "login rate limit fixed window in seconds")]
         public int LoginRateWindowSeconds { get; set; }
 
@@ -70,10 +70,10 @@ namespace ET
 
         [Option("GateKeyRpcTimeoutMilliseconds", Required = false, Default = 2000, HelpText = "per-Gate login key RPC timeout before trying another Gate")]
         public int GateKeyRpcTimeoutMilliseconds { get; set; }
-
+        // 单外网 Session 每秒最大消息数
         [Option("OuterMessageLimit", Required = false, Default = 100, HelpText = "max outer messages per session per second")]
         public int OuterMessageLimit { get; set; }
-
+        // 单外网 Session 每秒最大数据字节数
         [Option("OuterBytesLimit", Required = false, Default = 262144, HelpText = "max outer bytes per session per second")]
         public int OuterBytesLimit { get; set; }
 

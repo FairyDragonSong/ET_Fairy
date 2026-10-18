@@ -13,12 +13,14 @@ namespace ET.Server;
 public static partial class AccountSessionMonitorSystem
 {
     [EntitySystem]
+    // 初始化当前组件的运行状态。
     private static void Awake(this AccountSessionMonitor self)
     {
         self.Timer=self.Root().GetComponent<TimerComponent>().NewRepeatedTimer(5000,TimerInvokeType.AccountSessionCheck,self);
     }
 
     [EntitySystem]
+    // 释放当前组件持有的状态与未完成工作。
     private static void Destroy(this AccountSessionMonitor self)
     {
         self.Root().GetComponent<TimerComponent>()?.Remove(ref self.Timer);
@@ -27,9 +29,11 @@ public static partial class AccountSessionMonitorSystem
     [Invoke(TimerInvokeType.AccountSessionCheck)]
     public sealed class CheckTimer : ATimer<AccountSessionMonitor>
     {
+        // 执行当前处理器的主流程。
         protected override void Run(AccountSessionMonitor self) => self.Tick();
     }
 
+    // 触发一次在线账号状态巡检。
     private static void Tick(this AccountSessionMonitor self)
     {
         long now=TimeInfo.Instance.ServerNow();
@@ -53,6 +57,7 @@ public static partial class AccountSessionMonitorSystem
         self.Check(captured).Coroutine();
     }
 
+    // 检查停服指令文件是否发生有效变化。
     private static async ETTask Check(this AccountSessionMonitor self,
         List<(EntityRef<Player> Player,EntityRef<Session> Session,string Account)> captured)
     {

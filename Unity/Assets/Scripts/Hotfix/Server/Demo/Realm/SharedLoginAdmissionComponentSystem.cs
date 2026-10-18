@@ -5,6 +5,7 @@ namespace ET.Server
     public static partial class SharedLoginAdmissionComponentSystem
     {
         [EntitySystem]
+        // 初始化当前组件的运行状态。
         private static void Awake(this SharedLoginAdmissionComponent self)
         {
             self.Enabled = Options.Instance.SharedLoginAdmissionEnabled == 1;
@@ -15,6 +16,7 @@ namespace ET.Server
         }
 
         [EntitySystem]
+        // 释放当前组件持有的状态与未完成工作。
         private static void Destroy(this SharedLoginAdmissionComponent self)
         {
             if (self.HmacKey != null) System.Security.Cryptography.CryptographicOperations.ZeroMemory(self.HmacKey);

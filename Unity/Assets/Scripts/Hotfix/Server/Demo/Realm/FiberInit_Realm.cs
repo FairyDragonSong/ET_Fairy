@@ -11,6 +11,7 @@ namespace ET.Server
             root.AddComponent<MailBoxComponent, MailBoxType>(MailBoxType.UnOrderedMessage);
             root.AddComponent<TimerComponent>();
             root.AddComponent<CoroutineLockComponent>();
+            // Realm 认证需要直接读写账号数据。
             root.AddComponent<DBManagerComponent>();
             root.AddComponent<LoginRateLimiterComponent>();
             root.AddComponent<SharedLoginAdmissionComponent>();

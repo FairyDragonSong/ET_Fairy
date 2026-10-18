@@ -9,12 +9,14 @@ namespace ET.Server
     public static partial class GracefulShutdownComponentSystem
     {
         [EntitySystem]
+        // 初始化当前组件的运行状态。
         private static void Awake(this GracefulShutdownComponent self)
         {
             ShutdownCoordinator.Instance.RegisterParticipant();
         }
 
         [EntitySystem]
+        // 发现停机请求后只启动一次异步排空流程。
         private static void Update(this GracefulShutdownComponent self)
         {
             if (!ShutdownCoordinator.Instance.IsRequested || self.Started)
@@ -26,6 +28,7 @@ namespace ET.Server
         }
 
         [EntitySystem]
+        // 释放当前组件持有的状态与未完成工作。
         private static void Destroy(this GracefulShutdownComponent self)
         {
             if (!self.Reported)
@@ -35,6 +38,7 @@ namespace ET.Server
             }
         }
 
+        // 等待所有在途会话日志写入完成。
         private static async ETTask Drain(this GracefulShutdownComponent self)
         {
             bool success = true;
@@ -84,6 +88,7 @@ namespace ET.Server
             }
         }
 
+        // 在停机阶段保存单个角色并记录结果。
         private static async ETTask SaveForShutdown(Scene root, Unit unit, bool[] results, int index)
         {
             // WaitAll does not propagate child exceptions: record failures inside each task.

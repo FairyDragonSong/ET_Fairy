@@ -17,6 +17,7 @@ public static class SecretLeasePolicy
         "ET_SECRET_LEASE_SIGNING_KEY_ID", "ET_DEPLOYMENT_ID",
     ];
 
+    // 校验生产环境的密钥租约配置。
     public static void ValidateConfigured(bool production)
     {
         bool required = Environment.GetEnvironmentVariable("ET_SECRET_LEASE_REQUIRED") == "1";
@@ -32,6 +33,7 @@ public static class SecretLeasePolicy
         if (configured == Variables.Length) _ = ReadAndValidate();
     }
 
+    // 确认文件已包含在有效的密钥租约中。
     public static void AssertFileAuthorized(string file)
     {
         if (Environment.GetEnvironmentVariable("ET_SECRET_LEASE_REQUIRED") != "1" &&
@@ -42,6 +44,7 @@ public static class SecretLeasePolicy
             throw new InvalidOperationException("Secret file is not authorized by the active lease");
     }
 
+    // 读取并验证签名租约及授权文件清单。
     private static LeaseResult ReadAndValidate()
     {
         string rootValue = Environment.GetEnvironmentVariable("ET_SECRET_ROOT");
@@ -95,22 +98,26 @@ public static class SecretLeasePolicy
         return new LeaseResult(files);
     }
 
+    // 解析基础设施文件的受控路径。
     private static string ResolveInfrastructureFile(string root, string variable)
     {
         string value = Environment.GetEnvironmentVariable(variable);
         if (string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value)) throw new InvalidOperationException("Secret lease path is invalid");
         string path = Path.GetFullPath(value); EnsureWithin(root, path); RejectReparse(root, path); return path;
     }
+    // 在大小上限内读取数据，防止异常输入耗尽内存。
     private static byte[] ReadBounded(string path, int maximum)
     {
         FileInfo info = new(path); if (!info.Exists || info.Length <= 0 || info.Length > maximum) throw new InvalidOperationException("Secret lease file is missing or invalid");
         return File.ReadAllBytes(path);
     }
+    // 确认目标路径没有逃逸受管根目录。
     private static void EnsureWithin(string root, string path)
     {
         string prefix = root + Path.DirectorySeparatorChar; StringComparison comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (!path.StartsWith(prefix, comparison)) throw new InvalidOperationException("Secret lease path escapes managed root");
     }
+    // 判断值是否可安全用作标识符。
     private static bool IsIdentifier(string value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length is < 3 or > 128 || !char.IsLetterOrDigit(value[0])) return false;
@@ -120,6 +127,7 @@ public static class SecretLeasePolicy
         }
         return true;
     }
+    // 拒绝包含重解析点的路径，避免符号链接绕过。
     private static void RejectReparse(string root, string path)
     {
         if (!Directory.Exists(root) || (File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Secret lease root is unsafe");
@@ -128,5 +136,6 @@ public static class SecretLeasePolicy
         { if ((current.Attributes & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Secret lease path contains a reparse point"); current = current.Parent; }
         if (current == null || (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)) throw new InvalidOperationException("Secret lease path is unsafe");
     }
+    // 保存一次租约校验后允许访问的规范化文件集合。
     private sealed record LeaseResult(HashSet<string> Files);
 }

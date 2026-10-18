@@ -6,6 +6,7 @@ $fixture=Join-Path $env:ET_LOCAL_MONGO_ROOT ('account-export-test-'+[Guid]::NewG
 $exportRoot=Join-Path $fixture 'exports';New-Item -ItemType Directory -Path $exportRoot -Force|Out-Null
 $private=Join-Path $fixture 'operator-private.pem';$rsa=[Security.Cryptography.RSA]::Create(3072)
 $process=$null;$roleCreated=$false;$rootUri=$env:ET_MONGO_URI
+# 发送管理命令并校验预期结果。
 function Send-Command([string]$path,[string]$expected){
     $process.StandardInput.WriteLine("account-admin $path")
     while($true){

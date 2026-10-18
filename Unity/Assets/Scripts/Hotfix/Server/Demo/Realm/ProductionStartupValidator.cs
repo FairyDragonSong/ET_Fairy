@@ -5,6 +5,7 @@ namespace ET.Server
 {
     public static class ProductionStartupValidator
     {
+        // 校验 Realm 的生产认证与数据库配置。
         public static void ValidateRealm(Options options, DatabaseConnectionSettings database)
         {
             if (options.Develop != 0)

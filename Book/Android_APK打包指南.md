@@ -185,7 +185,7 @@ ET → Compile
 快捷键为 `F6`。Console 出现 `Compile Finish!` 后，确认以下目录包含最新文件：
 
 ```text
-Unity/Temp/Bin/Debug/
+Unity/BuildArtifacts/HotUpdateDlls/
 ├─ Unity.Model.dll
 ├─ Unity.ModelView.dll
 ├─ Unity.Hotfix.dll
@@ -456,7 +456,7 @@ BuildOptions = Development
 BuildFailedException: hot update assembly:Unity.Model doesn't exist
 ```
 
-表示 `Unity/Temp/Bin/Debug/Unity.Model.dll` 等热更新编译输出不存在。执行 `ET → Compile`，确认 Console 出现 `Compile Finish!` 且该目录中的四个热更新 DLL 均已生成，再继续 `Generate → All`。
+表示 `Unity/BuildArtifacts/HotUpdateDlls/Unity.Model.dll` 等热更新编译输出不存在。执行 `ET → Compile`，确认 Console 出现 `Compile Finish!` 且该目录中的四个热更新 DLL 均已生成，再继续 `Generate → All`。
 
 ## 7. 查看完整构建日志
 

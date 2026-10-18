@@ -23,8 +23,11 @@ namespace ET
         public int CompletedCount => Volatile.Read(ref this.completed);
         public ShutdownReason Reason => (ShutdownReason)Volatile.Read(ref this.reason);
 
+        // 初始化当前组件的运行状态。
         public void Awake() { }
+        // 登记一个需要参与优雅停机的组件。
         public void RegisterParticipant() => Interlocked.Increment(ref this.participants);
+        // 发起停机请求，并保留更高优先级的失败原因。
         public void Request(ShutdownReason shutdownReason = ShutdownReason.Normal)
         {
             Interlocked.Exchange(ref this.requested, 1);
@@ -34,6 +37,7 @@ namespace ET
             }
         }
 
+        // 登记参与者完成，并汇总停机结果。
         public void CompleteParticipant(bool success)
         {
             if (!success)

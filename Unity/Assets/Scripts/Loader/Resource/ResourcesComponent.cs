@@ -21,12 +21,21 @@ namespace ET
 
         string IRemoteServices.GetRemoteMainURL(string fileName)
         {
-            return $"{_defaultHostServer}/{fileName}";
+            return BuildRemoteURL(_defaultHostServer, fileName);
         }
 
         string IRemoteServices.GetRemoteFallbackURL(string fileName)
         {
-            return $"{_fallbackHostServer}/{fileName}";
+            return BuildRemoteURL(_fallbackHostServer, fileName);
+        }
+
+        private static string BuildRemoteURL(string hostServer, string fileName)
+        {
+            string url = $"{hostServer}/{fileName}";
+            // 版本入口禁止使用旧缓存，具体资源仍按文件哈希正常缓存。
+            return fileName.EndsWith(".version", StringComparison.OrdinalIgnoreCase)
+                    ? $"{url}?t={DateTime.UtcNow.Ticks}"
+                    : url;
         }
     }
 
@@ -39,7 +48,12 @@ namespace ET
 
         protected override void Destroy()
         {
+#if UNITY_WEBGL
+            // YooAsset 在 WebGL 平台不支持强制卸载全部资源。
+            return;
+#else
             YooAssets.Destroy();
+#endif
         }
 
         public async ETTask CreatePackageAsync(string packageName, bool isDefault = false)
@@ -101,6 +115,28 @@ namespace ET
             }
 
             Log.Info($"YooAsset package initialized: package={packageName}, playMode={ePlayMode}, version={initializationOperation.PackageVersion}");
+
+            if (ePlayMode == EPlayMode.HostPlayMode || ePlayMode == EPlayMode.WebPlayMode)
+            {
+                // 初始化只加载内置清单；热更代码加载前需切换到远端最新清单。
+                UpdatePackageVersionOperation versionOperation = package.UpdatePackageVersionAsync();
+                await versionOperation.Task;
+                if (versionOperation.Status != EOperationStatus.Succeed)
+                {
+                    Log.Warning($"YooAsset version update failed: package={packageName}, error={versionOperation.Error}");
+                    return;
+                }
+
+                UpdatePackageManifestOperation manifestOperation = package.UpdatePackageManifestAsync(versionOperation.PackageVersion);
+                await manifestOperation.Task;
+                if (manifestOperation.Status != EOperationStatus.Succeed)
+                {
+                    Log.Warning($"YooAsset manifest update failed: package={packageName}, version={versionOperation.PackageVersion}, error={manifestOperation.Error}");
+                    return;
+                }
+
+                Log.Info($"YooAsset package updated: package={packageName}, version={versionOperation.PackageVersion}");
+            }
         }
 
         private static string GetFallbackHostServer(GlobalConfig globalConfig)
@@ -140,7 +176,13 @@ namespace ET
                 platform = "PC";
             }
 #else
-            if (Application.platform == RuntimePlatform.Android)
+            string runtimePlatform = Application.platform.ToString();
+            // 团结引擎小游戏使用独立 RuntimePlatform，不能按 PC 资源目录处理。
+            if (runtimePlatform == "WeixinMiniGamePlayer" || runtimePlatform == "MiniGamePlayer")
+            {
+                platform = "MiniGame";
+            }
+            else if (Application.platform == RuntimePlatform.Android)
             {
                 platform = "Android";
             }
@@ -150,7 +192,8 @@ namespace ET
             }
             else if (Application.platform == RuntimePlatform.WebGLPlayer)
             {
-                #if UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME
+                // 兼容 Unity 转换方案与团结 MiniGame 平台提供的编译宏。
+                #if UNITY_WEIXINMINIGAME || TUANJIE_WEIXINMINIGAME || WEIXINMINIGAME || PLATFORM_WEIXINMINIGAME
                 platform = "MiniGame";
                 #else
                 platform = "WebGL";

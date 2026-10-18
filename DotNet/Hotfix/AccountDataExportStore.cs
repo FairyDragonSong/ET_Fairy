@@ -13,6 +13,7 @@ internal static class AccountDataExportStore
     internal const string AuditCollection="ET.Server.AccountDataRequestAudit";
     private const int MaximumRelatedRecords=10000;
 
+    // 导出账号数据，并确保输出目录和历史记录可信。
     internal static async ETTask<bool> Export(DBComponent database,AccountAdminCommand command,string configuredRoot,bool production)
     {
         string root=ProductionSecretPolicy.ValidateDataExportRoot(configuredRoot,production);
@@ -92,6 +93,7 @@ internal static class AccountDataExportStore
         }
     }
 
+    // 在大小上限内读取数据，防止异常输入耗尽内存。
     private static async ETTask<BsonArray> ReadBounded(DBComponent database,string collection,FilterDefinition<BsonDocument> filter,params string[] excluded)
     {
         var records=await database.database.GetCollection<BsonDocument>(collection).Find(filter).Limit(MaximumRelatedRecords+1).ToListAsync();
@@ -106,6 +108,7 @@ internal static class AccountDataExportStore
         return result;
     }
 
+    // 校验已有导出记录与当前请求是否一致。
     private static void ValidatePrior(BsonDocument prior,AccountAdminCommand command,string output)
     {
         if(prior.GetValue("Action","").AsString!="export"||prior.GetValue("AccountId",0L).ToInt64()!=command.AccountId||
@@ -117,6 +120,7 @@ internal static class AccountDataExportStore
             throw new InvalidOperationException("Existing account export integrity check failed");
     }
 
+    // 只删除经过精确解析的目标文件。
     private static void DeleteExact(string path)
     {
         try { if(File.Exists(path))File.Delete(path); }

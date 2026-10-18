@@ -8,9 +8,9 @@
         public const string CodeDir = "Assets/Bundles/Code";
 
         /// <summary>
-        /// VS或Rider工程生成dll的所在目录, 使用HybridCLR打包时需要使用
+        /// F6 和 HybridCLR 共用的持久化热更 DLL 输出目录。
         /// </summary>
-        public const string BuildOutputDir = "Temp/Bin/Debug";
+        public const string BuildOutputDir = "BuildArtifacts/HotUpdateDlls";
 
 #if DEBUG
         public static bool IsDebug = true;

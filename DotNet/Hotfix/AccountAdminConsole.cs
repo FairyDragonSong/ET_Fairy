@@ -6,6 +6,7 @@ namespace ET.Server;
 [ConsoleHandler("account-admin")]
 public sealed class AccountAdminConsole : IConsoleHandler
 {
+    // 执行当前处理器的主流程。
     public async ETTask Run(Fiber fiber,ModeContex context,string content)
     {
         Scene scope=null;
@@ -85,6 +86,7 @@ public sealed class AccountAdminConsole : IConsoleHandler
         finally { scope?.Dispose();context.Parent.RemoveComponent<ModeContex>(); }
     }
 
+    // 在大小上限内读取数据，防止异常输入耗尽内存。
     private static string ReadBounded(string path,int limit)
     {
         using var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);

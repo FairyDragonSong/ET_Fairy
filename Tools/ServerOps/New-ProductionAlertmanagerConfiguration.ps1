@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/BackupRestore.Common.ps1"
 
+# 拒绝路径链上的重解析点，防止符号链接逃逸。
 function Assert-NoReparsePath([string]$Path,[string]$Name) {
     $cursor = if (Test-Path -LiteralPath $Path) { Get-Item -LiteralPath $Path -Force } else { Get-Item -LiteralPath (Split-Path -Parent $Path) -Force }
     while ($null -ne $cursor) {
@@ -17,6 +18,7 @@ function Assert-NoReparsePath([string]$Path,[string]$Name) {
     }
 }
 
+# 解析并限制只能使用 HTTPS 的告警回调地址。
 function Resolve-HttpsWebhook([string]$Value,[string]$Name) {
     $path = Assert-BackupPathOutsideRepository $Value $Name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "$Name does not exist" }
@@ -34,6 +36,7 @@ function Resolve-HttpsWebhook([string]$Value,[string]$Name) {
     return $uri.AbsoluteUri
 }
 
+# 读取并校验告警回调使用的 Bearer Token。
 function Resolve-BearerToken([string]$Value,[string]$Name) {
     $path = Assert-BackupPathOutsideRepository $Value $Name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "$Name does not exist" }
@@ -64,6 +67,7 @@ if ([string]::IsNullOrWhiteSpace($parent)) { throw 'OutputFile must have a paren
 New-Item -ItemType Directory -Path $parent -Force | Out-Null
 Assert-NoReparsePath $parent 'OutputFile parent'
 
+# 生成带认证头的告警回调配置。
 function New-Webhook([string]$Url,[string]$Token) {
     return [ordered]@{
         url = $Url

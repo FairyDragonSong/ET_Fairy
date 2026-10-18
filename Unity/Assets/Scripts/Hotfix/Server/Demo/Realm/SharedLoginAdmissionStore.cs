@@ -12,6 +12,7 @@ namespace ET.Server
     {
         internal const string CollectionName = "ET.Server.LoginAdmissionWindow";
 
+        // 创建共享登录准入所需的唯一索引。
         public static async ETTask EnsureIndexes(DBComponent database)
         {
             IMongoCollection<BsonDocument> collection = database.database.GetCollection<BsonDocument>(CollectionName);
@@ -20,6 +21,7 @@ namespace ET.Server
                 new CreateIndexOptions { Name = "ttl_login_admission", ExpireAfter = TimeSpan.Zero }));
         }
 
+        // 尝试获取当前操作额度，并返回是否允许继续。
         public static async ETTask<SharedLoginAdmissionResult> TryAcquire(
             Scene root,
             SharedLoginAdmissionComponent component,
@@ -30,6 +32,7 @@ namespace ET.Server
             return await TryAcquire(database, root.Zone(), component, ipAddress, accountInput);
         }
 
+        // 尝试获取当前操作额度，并返回是否允许继续。
         public static async ETTask<SharedLoginAdmissionResult> TryAcquire(
             DBComponent database,
             int zone,
@@ -75,6 +78,7 @@ namespace ET.Server
             }
         }
 
+        // 用 HMAC 生成不可反推原始账号或 IP 的窗口键。
         public static string CreateDocumentId(int zone, string kind, string value, long windowStart, byte[] hmacKey)
         {
             if (zone <= 0 || kind is not ("ip" or "account") || string.IsNullOrEmpty(value) || hmacKey?.Length != 32)
@@ -86,6 +90,7 @@ namespace ET.Server
             return $"{zone}:{windowStart}:{kind}:{digest}";
         }
 
+        // 原子消费共享时间窗口中的一次额度。
         private static async ETTask<bool> Consume(IMongoCollection<BsonDocument> collection, int zone, string kind,
             string value, int limit, long windowStart, long windowMilliseconds, byte[] hmacKey)
         {
@@ -114,6 +119,7 @@ namespace ET.Server
             return false;
         }
 
+        // 计算当前限流窗口剩余的等待时间。
         private static long RetryAfter(long now, long start, long window) => Math.Max(1, start + window - now);
     }
 
@@ -125,6 +131,7 @@ namespace ET.Server
 
         public long RetryAfterMilliseconds { get; }
 
+        // 区分“超限拒绝”和“共享存储不可用”，便于调用方选择错误类型。
         private SharedLoginAdmissionResult(bool accepted, bool available, long retryAfterMilliseconds)
         {
             this.IsAccepted = accepted;
@@ -132,10 +139,13 @@ namespace ET.Server
             this.RetryAfterMilliseconds = retryAfterMilliseconds;
         }
 
+        // 构造准入成功结果。
         public static SharedLoginAdmissionResult Accepted() => new(true, true, 0);
 
+        // 构造共享准入存储不可用结果。
         public static SharedLoginAdmissionResult Unavailable() => new(false, false, 0);
 
+        // 构造超过共享限额的拒绝结果。
         public static SharedLoginAdmissionResult Rejected(long retryAfterMilliseconds) => new(false, true, retryAfterMilliseconds);
     }
 }

@@ -11,6 +11,7 @@ public static class ProductionSecretPolicy
 {
     private const string SecretRootVariable = "ET_SECRET_ROOT";
 
+    // 校验，不满足约束时拒绝继续。
     public static void Validate(Options options)
     {
         if (options == null)
@@ -105,6 +106,7 @@ public static class ProductionSecretPolicy
         }
     }
 
+    // 校验密码登录，不满足约束时拒绝继续。
     public static void ValidatePasswordLogin(Options options)
     {
         if (options?.Develop != 0 || options.PasswordLoginEnabled != 1)
@@ -115,6 +117,7 @@ public static class ProductionSecretPolicy
         ValidatePasswordSources(true);
     }
 
+    // 读取并校验密码Private密钥。
     public static string ReadPasswordPrivateKey(string keyId, bool requireManagedRoot)
     {
         bool legacy = HasValue("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
@@ -136,6 +139,7 @@ public static class ProductionSecretPolicy
         return ReadPasswordKeyRing(json, keyId, true);
     }
 
+    // 读取并校验指标Token。
     public static string ReadMetricsToken(string variable, bool requireManagedRoot)
     {
         string token = ReadManagedEnvironmentFile(variable, 128, requireManagedRoot).Trim();
@@ -146,6 +150,7 @@ public static class ProductionSecretPolicy
         return token;
     }
 
+    // 读取并校验共享登录准入密钥。
     public static byte[] ReadSharedLoginAdmissionKey(bool requireManagedRoot)
     {
         string value = ReadManagedEnvironmentFile("ET_LOGIN_ADMISSION_HMAC_KEY_FILE", 128, requireManagedRoot).Trim();
@@ -156,9 +161,11 @@ public static class ProductionSecretPolicy
         return Convert.FromHexString(value);
     }
 
+    // 限制密钥标识的长度和字符集，避免将其注入文件名或日志字段。
     public static bool IsSafeKeyId(string keyId) => !string.IsNullOrWhiteSpace(keyId) && keyId.Length is >= 3 and <= 64 &&
         keyId.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
 
+    // 从环境变量指定的受管文件读取秘密。
     public static string ReadManagedEnvironmentFile(string variable, int maximumBytes, bool requireManagedRoot)
     {
         string path = Environment.GetEnvironmentVariable(variable);
@@ -170,6 +177,7 @@ public static class ProductionSecretPolicy
         return ReadManagedFile(path, maximumBytes, requireManagedRoot);
     }
 
+    // 在路径与大小约束内读取受管文件。
     public static string ReadManagedFile(string path, int maximumBytes, bool requireManagedRoot)
     {
         if (string.IsNullOrWhiteSpace(path) || maximumBytes <= 0 || !Path.IsPathFullyQualified(path))
@@ -230,6 +238,7 @@ public static class ProductionSecretPolicy
         return reader.ReadToEnd();
     }
 
+    // 校验密码Private密钥，不满足约束时拒绝继续。
     private static void ValidatePasswordPrivateKey(string pem)
     {
         using RSA rsa = RSA.Create();
@@ -249,6 +258,7 @@ public static class ProductionSecretPolicy
         }
     }
 
+    // 校验密码Sources，不满足约束时拒绝继续。
     private static void ValidatePasswordSources(bool requireManagedRoot)
     {
         bool legacy = HasValue("ET_ACCOUNT_PASSWORD_PRIVATE_KEY_FILE");
@@ -263,6 +273,7 @@ public static class ProductionSecretPolicy
         _ = ReadPasswordKeyRing(json, null, false);
     }
 
+    // 读取并校验密码密钥Ring。
     private static string ReadPasswordKeyRing(string json, string requestedKeyId, bool select)
     {
         using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 6 });
@@ -297,6 +308,7 @@ public static class ProductionSecretPolicy
         return privateKey;
     }
 
+    // 校验数据导出Root，不满足约束时拒绝继续。
     public static string ValidateDataExportRoot(string value, bool production)
     {
         if (string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value))
@@ -319,6 +331,7 @@ public static class ProductionSecretPolicy
         return root;
     }
 
+    // 校验Administration信任配置，不满足约束时拒绝继续。
     private static bool ValidateAdministrationTrust(string json, string expectedDatabase, string expectedDeployment, int expectedZone)
     {
         using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 8 });
@@ -360,6 +373,7 @@ public static class ProductionSecretPolicy
         return exportEnabled;
     }
 
+    // 校验AdministrationUri，不满足约束时拒绝继续。
     private static void ValidateAdministrationUri(string connectionString)
     {
         MongoDB.Driver.MongoClientSettings settings;
@@ -378,8 +392,10 @@ public static class ProductionSecretPolicy
         }
     }
 
+    // 判断环境变量是否提供了非空配置。
     private static bool HasValue(string variable) => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(variable));
 
+    // 校验生产环境日志，不满足约束时拒绝继续。
     private static void ValidateProductionLogging()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("ET_LOG_PROFILE"), "bounded", StringComparison.Ordinal))
@@ -402,8 +418,10 @@ public static class ProductionSecretPolicy
         }
     }
 
+    // 识别可能跳出受管目录的重解析点。
     private static bool IsReparsePoint(string path) => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
+    // 确认规范化后的候选路径仍位于父目录内。
     private static bool IsWithin(string candidate, string parent)
     {
         string normalizedParent = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -412,6 +430,7 @@ public static class ProductionSecretPolicy
         return normalizedCandidate.StartsWith(normalizedParent, comparison);
     }
 
+    // 检查完整路径链，拒绝通过符号链接绕过目录边界。
     private static void RejectReparsePath(string root, string file)
     {
         DirectoryInfo current = new FileInfo(file).Directory;

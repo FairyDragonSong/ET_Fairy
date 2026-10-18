@@ -18,6 +18,7 @@ namespace ET
 
         public ThreadSynchronizationContext ThreadSynchronizationContext;
 
+        // 创建受路径和连接数上限约束的 WebSocket 服务。
         public WService(IEnumerable<string> prefixs, string expectedPath = null, int maxConnections = 4096)
         {
             if (maxConnections < 1 || maxConnections > 100000)
