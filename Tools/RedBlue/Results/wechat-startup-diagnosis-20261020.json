@@ -41,7 +41,8 @@
       "StreamingAssets/Bundles/DefaultPackage/PackageManifest_DefaultPackage.version HTTP 404",
       "Missing asset mappings Unity.Model.dll and mscorlib.dll"
     ],
-    "note": "Phone reaches ET startup. Editor wasm-instantiate stall is not reproduced on this phone."
+    "note": "Phone reaches ET startup. Editor wasm-instantiate stall is not reproduced on this phone.",
+    "fullDemoRunsConfirmedByUser": true
   },
   "streamingAssetsRepair": {
     "checkedUTC": "2026-10-19T16:29:05.383Z",
@@ -328,6 +329,35 @@
         "matches": true
       }
     ],
-    "phoneRetest": "Pending user restart"
+    "phoneRetest": "User confirmed phone can run after resources were published"
+  },
+  "devtoolsComputerUse": {
+    "checkedUTC": "2026-10-19T17:00:07.818Z",
+    "devtools": "2.01.2510290",
+    "network": "Network panel completed without observed failed/pending resource requests; later launches use local resource cache.",
+    "debugger": "Sources showed Not paused and No breakpoints.",
+    "allConsoleLevels": "No new root-cause error; plugin reports waiting for wasm-instantiate, sometimes also wasm-preloadAssets.",
+    "libraryTests": [
+      {
+        "version": "3.16.3",
+        "result": "Stalls during instantiate"
+      },
+      {
+        "version": "3.17.4",
+        "result": "Same stall after about 30 seconds; actual library confirmed in Console"
+      },
+      {
+        "version": "3.15.3",
+        "result": "Same stall after about 30 seconds; actual library confirmed in Console"
+      }
+    ],
+    "unusedFileFilteringTest": "Temporarily changed local option and recompiled; no improvement observed.",
+    "restored": {
+      "library": "3.16.3",
+      "ignoreDevUnusedFiles": true,
+      "editorAndSimulatorVisible": true,
+      "consoleLevels": "Default"
+    },
+    "conclusion": "No evidence that current stall is waiting for network. Desktop WeChat/SDK Wasm runtime path remains unresolved; do not claim a confirmed vendor bug."
   }
 }
