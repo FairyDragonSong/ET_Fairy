@@ -125,7 +125,34 @@ namespace ET
             }
 
             File.Copy(Path.Combine(sourceDir, versionFileName), Path.Combine(targetDir, versionFileName), true);
+            // WebPlayMode reads its built-in manifest and bundles via streamingAssetsPath.
+            // The SDK can recreate an empty StreamingAssets directory during conversion,
+            // so publishing only the hot-update CDN leaves a valid player unable to load DLLs.
+            string streamingSource = Path.Combine(Application.dataPath, "StreamingAssets");
+            string streamingVersion = Path.Combine(streamingSource, StreamingAssetsDefine.RootFolderName, PackageName, versionFileName);
+            if (!File.Exists(streamingVersion) || File.ReadAllText(streamingVersion).Trim() != packageVersion)
+            {
+                throw new BuildFailedException("StreamingAssets 与 MiniGame 资源版本不一致，请重新构建 YooAsset 后发布。");
+            }
+
+            string streamingTarget = Path.Combine(exportRoot, "webgl", "StreamingAssets");
+            int streamingCopied = 0;
+            foreach (string sourceFile in Directory.GetFiles(streamingSource, "*", SearchOption.AllDirectories))
+            {
+                if (sourceFile.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string relativePath = sourceFile.Substring(streamingSource.Length + 1);
+                string targetFile = Path.Combine(streamingTarget, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
+                File.Copy(sourceFile, targetFile, true);
+                ++streamingCopied;
+            }
+
             Debug.Log($"微信 YooAsset 已发布到本地 CDN: packageVersion={packageVersion}, appVersion={appVersion}, files={copied + 1}, target={targetDir}");
+            Debug.Log($"微信 StreamingAssets 已发布: files={streamingCopied}, target={streamingTarget}");
         }
 
         internal static void ValidateBuild(bool validateRemoteSettings)

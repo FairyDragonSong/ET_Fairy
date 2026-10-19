@@ -169,3 +169,10 @@ FPS 约提高 38%，CPU 渲染管线范围约下降 58%，GPU 游戏渲染范围
 实际数据文件、Wasm 压缩文件和资源版本入口均 HTTP 200，下载 SHA-256 与本地一致；资源清单入口同样 200。用户已在手机浏览器确认 lan-check.txt 显示 RED_BLUE_RESOURCE_OK。完整核验记录在 `Tools/RedBlue/Results/wechat-export-20261019.json`。这只验证导出和下载链路，尚未验证手机小游戏启动、Burst 后端和真机性能。
 
 本次保留用户当前 RedBlueDemo.cs：目标 60 FPS、默认 2,000 人，可切至 50,000 人。持续负载测试关闭 Damage，观察存活人数、FPS/P95、Simulation Hz 和后端名称。手机测试说明随导出目录交付。局域网 HTTP 用于当前开发测试，未发布公网。
+
+
+### 2026-10-20 真机启动资源目录修复
+
+用户手机能进入 Unity 场景，但 WebPlayMode 请求 `/StreamingAssets/build_info` 和 `/StreamingAssets/Bundles/DefaultPackage/PackageManifest_DefaultPackage.version` 返回 404，随后 Unity.Model.dll / mscorlib.dll 映射失败。检查发现转换后的 webgl/StreamingAssets 是空目录，原发布工具只复制热更新 CDN，遗漏 WebPlayMode 启动需要的内置清单与 Bundle。现已在 PublishYooAssetToLocalCDN 中补充同版本 StreamingAssets 发布，排除 .meta 文件；资源版本不匹配时拒绝发布。无需重编 Wasm。
+
+已通过 Unity MCP 实际调用修复后的发布方法，发布 39 个文件、35,734,769 字节；逐文件 HTTP 下载与本地哈希校验全部通过，build_info、版本入口、清单和 Bundle 均返回 200。已反序列化实际发布的清单，验证 Unity.Model.dll 和 mscorlib.dll 的地址映射存在。手机重启后的 ET/Demo 运行结果仍待用户复测。模拟器等待 wasm-instantiate 的问题尚未解决，用户手机未复现此卡点。诊断及核验记录：Tools/RedBlue/Results/wechat-startup-diagnosis-20261020.json。
