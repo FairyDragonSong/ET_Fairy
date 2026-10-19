@@ -158,3 +158,14 @@ FPS 约提高 38%，CPU 渲染管线范围约下降 58%，GPU 游戏渲染范围
 复现：Tools/RedBlue/CpuGpuProfile.csx 自动运行五组；调用前启用 CPU/GPU/Rendering Profiler 区域、关闭其他区域，测后恢复原值。相机 A/B 在脚本前设置 AppDomain.CurrentDomain.SetData("RedBlue.CpuGpuProfile.CameraComparison", true)。AnalyzeCpuGpuProfile.csx 离线读取各组记录；分析 A/B 同样在脚本前设置该标记。一次只运行一个采样任务，保持 Game 视图，不在采样期间查询或操作 Unity。
 
 完整本地原始记录：Temp/RedBlueProfile/*.data、Temp/RedBlueCameraAB/*.data，可从 Unity Profiler Load 打开。Git 保留采样脚本以及 Tools/RedBlue/Results/cpu-gpu-editor-20261018.json、cpu-gpu-passes-20261018.json、cpu-gpu-camera-ab-20261018.json、cpu-gpu-camera-passes-20261018.json、cpu-gpu-hardware-20261018.json。当前没有新增手机 GPU 测量。
+
+
+## 2026-10-19 微信小游戏局域网真机测试包
+
+本次工程导出到 `Unity/BuildArtifacts/RedBlue-WeChat-20261019/minigame`，开发者工具导入此目录。资源根目录为同级 `webgl`，SDK DATA_CDN 已改为 `http://192.168.1.8:8080`。使用 `Tools/RedBlue/Start-LanResourceServer.ps1 -Background` 启动限定 webgl 目录的局域网服务；同一端口已有服务时脚本拒绝重复启动。电脑 IP 改变时，需同步更新 SDK CDN 并重新转换工程，同时修改服务绑定地址。
+
+已完成 MiniGame 平台 ET 编译、HybridCLR GenerateAll、CopyAotDll、YooAsset 构建、微信 IL2CPP/Wasm 导出及导出后预检。首次导出更新了 Unity.Loader 补充元数据，随后同步最终 AOT、重建资源并再次构建；SDK 重复导出占用 slim/backup.txt 时释放终结器，再调用 DoExport(false) 转换现有 Player，不重建资源。最终结果 SUCCEED，导出后 ValidateBuild(true) 通过。资源版本为 2026-10-19-2332。
+
+实际数据文件、Wasm 压缩文件和资源版本入口均 HTTP 200，下载 SHA-256 与本地一致；资源清单入口同样 200。用户已在手机浏览器确认 lan-check.txt 显示 RED_BLUE_RESOURCE_OK。完整核验记录在 `Tools/RedBlue/Results/wechat-export-20261019.json`。这只验证导出和下载链路，尚未验证手机小游戏启动、Burst 后端和真机性能。
+
+本次保留用户当前 RedBlueDemo.cs：目标 60 FPS、默认 2,000 人，可切至 50,000 人。持续负载测试关闭 Damage，观察存活人数、FPS/P95、Simulation Hz 和后端名称。手机测试说明随导出目录交付。局域网 HTTP 用于当前开发测试，未发布公网。

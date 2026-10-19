@@ -15,7 +15,7 @@ MonoBehaviour:
   ProjectConf:
     projectName: WCTestMIniGame
     Appid: wxf15ab5190a932da3
-    CDN: http://127.0.0.1:8080
+    CDN: http://192.168.1.8:8080
     assetLoadType: 0
     compressDataPackage: 0
     VideoUrl: 

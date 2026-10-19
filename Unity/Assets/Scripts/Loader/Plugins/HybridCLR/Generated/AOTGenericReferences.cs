@@ -62,35 +62,17 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 	// ET.Client.IYIUIOpen<object,object,object>
 	// ET.Client.IYIUIOpen<object>
 	// ET.Client.YIUIBindSystem<object>
-	// ET.Client.YIUICloseTweenSystem.<ET-Client-IYIUICloseTweenSystem-Run>d__3<object>
 	// ET.Client.YIUICloseTweenSystem<object>
-	// ET.Client.YIUIEventSystem.<Run>d__3<object,ET.Client.EventPutTipsView>
-	// ET.Client.YIUIEventSystem.<Run>d__3<object,ET.Client.OnClickChildListEvent>
-	// ET.Client.YIUIEventSystem.<Run>d__3<object,ET.Client.OnClickItemEvent>
-	// ET.Client.YIUIEventSystem.<Run>d__3<object,ET.Client.OnClickParentListEvent>
-	// ET.Client.YIUIEventSystem.<Run>d__3<object,ET.Client.OnGMEventClose>
-	// ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickChildListEvent>
-	// ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickItemEvent>
-	// ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickParentListEvent>
-	// ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnGMEventClose>
 	// ET.Client.YIUIEventSystem<object,ET.Client.EventPutTipsView>
 	// ET.Client.YIUIEventSystem<object,ET.Client.OnClickChildListEvent>
 	// ET.Client.YIUIEventSystem<object,ET.Client.OnClickItemEvent>
 	// ET.Client.YIUIEventSystem<object,ET.Client.OnClickParentListEvent>
 	// ET.Client.YIUIEventSystem<object,ET.Client.OnGMEventClose>
 	// ET.Client.YIUIInitializeSystem<object>
-	// ET.Client.YIUIMgrComponentSystem.<ClosePanelAsync>d__16<object>
-	// ET.Client.YIUIOpenSystem.<ET-Client-IYIUIOpenSystem-Run>d__3<object>
-	// ET.Client.YIUIOpenSystem.<ET-Client-IYIUIOpenSystem<A,B,C>-Run>d__3<object,object,object,object>
-	// ET.Client.YIUIOpenSystem.<ET-Client-IYIUIOpenSystem<A>-Run>d__3<object,object>
 	// ET.Client.YIUIOpenSystem<object,object,object,object>
 	// ET.Client.YIUIOpenSystem<object,object>
 	// ET.Client.YIUIOpenSystem<object>
-	// ET.Client.YIUIOpenTweenSystem.<ET-Client-IYIUIOpenTweenSystem-Run>d__3<object>
 	// ET.Client.YIUIOpenTweenSystem<object>
-	// ET.Client.YIUIPanelComponentSystem.<OpenViewAsync>d__11<object>
-	// ET.Client.YIUIRootComponentSystem.<OpenPanelAsync>d__1<object>
-	// ET.Client.YIUIRootComponentSystem.<OpenPanelAsync>d__5<object,object,object,object>
 	// ET.ConfigSystem<object>
 	// ET.DestroySystem<object>
 	// ET.DoubleMap<object,long>
@@ -105,17 +87,6 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 	// ET.ETAsyncTaskMethodBuilder<long>
 	// ET.ETAsyncTaskMethodBuilder<object>
 	// ET.ETAsyncTaskMethodBuilder<uint>
-	// ET.ETTask.<InnerCoroutine>d__8<ET.Client.WaitType.Wait_Room2C_Start>
-	// ET.ETTask.<InnerCoroutine>d__8<ET.Client.Wait_CreateMyUnit>
-	// ET.ETTask.<InnerCoroutine>d__8<ET.Client.Wait_SceneChangeFinish>
-	// ET.ETTask.<InnerCoroutine>d__8<ET.Client.Wait_UnitStop>
-	// ET.ETTask.<InnerCoroutine>d__8<ET.EntityRef<object>>
-	// ET.ETTask.<InnerCoroutine>d__8<System.ValueTuple<uint,object>>
-	// ET.ETTask.<InnerCoroutine>d__8<byte>
-	// ET.ETTask.<InnerCoroutine>d__8<int>
-	// ET.ETTask.<InnerCoroutine>d__8<long>
-	// ET.ETTask.<InnerCoroutine>d__8<object>
-	// ET.ETTask.<InnerCoroutine>d__8<uint>
 	// ET.ETTask<ET.Client.WaitType.Wait_Room2C_Start>
 	// ET.ETTask<ET.Client.Wait_CreateMyUnit>
 	// ET.ETTask<ET.Client.Wait_SceneChangeFinish>
@@ -649,7 +620,6 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 	// UnityEngine.Events.UnityAction<object>
 	// YIUIFramework.LinkedListPool.<>c<object>
 	// YIUIFramework.LinkedListPool<object>
-	// YIUIFramework.ObjAsyncCache.<Get>d__3<ET.EntityRef<object>>
 	// YIUIFramework.ObjAsyncCache<ET.EntityRef<object>>
 	// YIUIFramework.ObjCache<object>
 	// YIUIFramework.ObjectPool<object>
@@ -702,6 +672,10 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 		// System.Void ET.ETAsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter,object>(System.Runtime.CompilerServices.TaskAwaiter&,object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<object,object>(object&,object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<uint>.AwaitUnsafeOnCompleted<object,object>(object&,object&)
+		// System.Void ET.ETAsyncTaskMethodBuilder.Start<ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickChildListEvent>>(ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickChildListEvent>&)
+		// System.Void ET.ETAsyncTaskMethodBuilder.Start<ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickItemEvent>>(ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickItemEvent>&)
+		// System.Void ET.ETAsyncTaskMethodBuilder.Start<ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickParentListEvent>>(ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnClickParentListEvent>&)
+		// System.Void ET.ETAsyncTaskMethodBuilder.Start<ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnGMEventClose>>(ET.Client.YIUIEventSystem.<UIEvent>d__20<ET.Client.OnGMEventClose>&)
 		// System.Void ET.ETAsyncTaskMethodBuilder.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<ET.Client.WaitType.Wait_Room2C_Start>.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<ET.Client.Wait_CreateMyUnit>.Start<object>(object&)
@@ -709,9 +683,13 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 		// System.Void ET.ETAsyncTaskMethodBuilder<ET.Client.Wait_UnitStop>.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<ET.EntityRef<object>>.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<System.ValueTuple<uint,object>>.Start<object>(object&)
+		// System.Void ET.ETAsyncTaskMethodBuilder<byte>.Start<ET.Client.YIUIMgrComponentSystem.<ClosePanelAsync>d__16<object>>(ET.Client.YIUIMgrComponentSystem.<ClosePanelAsync>d__16<object>&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<byte>.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<int>.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<long>.Start<object>(object&)
+		// System.Void ET.ETAsyncTaskMethodBuilder<object>.Start<ET.Client.YIUIPanelComponentSystem.<OpenViewAsync>d__11<object>>(ET.Client.YIUIPanelComponentSystem.<OpenViewAsync>d__11<object>&)
+		// System.Void ET.ETAsyncTaskMethodBuilder<object>.Start<ET.Client.YIUIRootComponentSystem.<OpenPanelAsync>d__1<object>>(ET.Client.YIUIRootComponentSystem.<OpenPanelAsync>d__1<object>&)
+		// System.Void ET.ETAsyncTaskMethodBuilder<object>.Start<ET.Client.YIUIRootComponentSystem.<OpenPanelAsync>d__5<object,object,object,object>>(ET.Client.YIUIRootComponentSystem.<OpenPanelAsync>d__5<object,object,object,object>&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<object>.Start<object>(object&)
 		// System.Void ET.ETAsyncTaskMethodBuilder<uint>.Start<object>(object&)
 		// object ET.Entity.AddChild<object,object,object>(object,object,bool)

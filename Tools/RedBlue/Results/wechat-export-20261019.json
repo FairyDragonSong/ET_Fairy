@@ -1,0 +1,44 @@
+{
+  "checkedUTC": "2026-10-19T15:40:46.657Z",
+  "output": "E:/github/ET/YIUI/Unity/BuildArtifacts/RedBlue-WeChat-20261019",
+  "result": "SUCCEED",
+  "postBuildValidation": "passed",
+  "cdn": "http://192.168.1.8:8080",
+  "packageVersion": "2026-10-19-2332",
+  "appid": "wxf15ab5190a932da3",
+  "httpChecks": [
+    {
+      "path": "6b8ce70b81ec2a8a.webgl.data.unityweb.bin.txt",
+      "status": 200,
+      "bytes": 45853479,
+      "sha256": "bbbd9eda4ae9277407afa55ffe2be37dc257e516e9afd1ecfd2ee616b70e9940",
+      "httpMatches": true
+    },
+    {
+      "path": "a5fd2c82a438d7ea.webgl.wasm.code.unityweb.wasm.br",
+      "status": 200,
+      "bytes": 16199585,
+      "sha256": "f3881039cd0d288e814ec1983e76333c3297e20e116bd7bd74c33035dd398b34",
+      "httpMatches": true
+    },
+    {
+      "path": "CDN/MiniGame/v1.0/PackageManifest_DefaultPackage.version",
+      "status": 200,
+      "bytes": 15,
+      "sha256": "f36f146a1734685c8a46f0f4095e56887c077a39f744d0c31a7edb28551bcf5b",
+      "httpMatches": true
+    }
+  ],
+  "manifestHttp": 200,
+  "loaderMetadataMatches": true,
+  "phoneLanHealth": "User confirmed RED_BLUE_RESOURCE_OK on phone",
+  "phoneGameRuntime": "Not tested yet",
+  "targetFPS": 60,
+  "initialPopulation": 2000,
+  "maxSelectablePopulation": 50000,
+  "sourceUnchanged": true,
+  "recovery": [
+    "Final export regenerated Unity.Loader metadata; copied final AOT DLL and rebuilt YooAsset before second player build.",
+    "SDK retained slim backup handle; released finalizers then converted existing player with DoExport(false), followed by preflight and local CDN publish."
+  ]
+}
