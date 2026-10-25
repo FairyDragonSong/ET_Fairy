@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "buildId": "20261024T053244Z-logic-deadline",
+  "sessionId": "14c495b462cb4cad935adc407e9c69b1",
+  "rawReport": "cpu-phone-latest-20261024.json",
+  "phonePeer": "192.168.1.7",
+  "gpu": "Maleoon 920",
+  "resolution": [2835, 1316],
+  "completeRuns": 6,
+  "executionOrder": ["A0", "B0", "B1", "A1", "A2", "B2"],
+  "baselineStepMs": [16.373333333333335, 22.883333333333333, 22.956666666666667],
+  "packedStepMs": [15.206666666666667, 15.433333333333334, 20.873333333333335],
+  "pairedReductionPercent": [7.125407166123788, 32.5564457392571, 9.07506897052417],
+  "medianReductionPercent": 32.5564457392571,
+  "stableGainPercentEstablished": null,
+  "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+  "allStateHashesMatch": true,
+  "burstVerified": true,
+  "development": false,
+  "profilerEnabled": false,
+  "jobWorkers": 0,
+  "separationThreadIndices": [0],
+  "timingDriftObserved": true,
+  "thermalOrClockCauseVerified": false,
+  "phoneFullFrameBenchmarkWindows": 0,
+  "phoneFull55FpsVerified": false,
+  "newUnityProfilerCapture": false,
+  "limitations": [
+    "Later baseline and packed runs slow across several stages; temperature and clock data are unavailable. Do not claim a stable 32.56 percent speedup from the median ratio.",
+    "Every paired packed result is faster, but the middle BA pair spans a large timing shift. Keep all six runs; no failed or slow samples were discarded.",
+    "No same-build comparison isolates the newly added active-cell traversal from the earlier packed implementation.",
+    "Frame-loop diagnostics do not identify population, damage, drawing mode, or benchmark completion. They cannot establish sustained 50000-unit full-render FPS."
+  ],
+  "optimizationPriorities": [
+    "Measure packed gather/scatter and duplicate resets separately, then reduce redundant memory work while preserving state and pair order.",
+    "Profile separation branch outcomes and budget exhaustion in a separate diagnostic run before restructuring its hot loop.",
+    "Inspect generated Wasm for repeated distance calculations in decision logic; validate any changes with same-platform state comparisons.",
+    "Capture explicit full-render windows and engine/render costs; stabilize and repeat phone timings before accepting a new gain percentage."
+  ]
+}

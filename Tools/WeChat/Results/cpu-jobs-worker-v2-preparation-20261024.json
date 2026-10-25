@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "buildId": "20261022T153657Z-threads",
+  "exportRoot": "Unity/BuildArtifacts/RedBlue-CPU-Jobs-Native-Final-20261022",
+  "sharedBufferCompatibility": {
+    "files": 3,
+    "replacements": 15,
+    "check": "buffer != null && buffer.constructor != null && buffer.constructor.name === 'SharedArrayBuffer'",
+    "rollbackAvailable": true,
+    "record": "shared-buffer-compatibility.json",
+    "mainFrameworkSha256": "2981da7efe10d64a1a8f33cbaeb5ef4591c24e1a215e4a5bcb709885028fb954",
+    "workerFrameworkSha256": "f2bfd841ffb6089819d617b98035757113db19a0f7047e205fd59f254b99d630",
+    "webglFrameworkSha256": "ff551ed64ea9c2763fb231314f78f852fbd63072d8bb32c72a2aac15da20a50e",
+    "packagingFinding": "DevTools rejects optional chaining in generated framework; equivalent explicit null guards passed preview packaging."
+  },
+  "diagnosticVersion": 5,
+  "resourceUrl": "http://192.168.1.8:8086",
+  "validation": {
+    "nodeTestsPassed": 4,
+    "frameworkSyntaxFilesPassed": 3,
+    "httpFilesVerified": 40,
+    "officialAutoPreviewSuccess": true,
+    "previewBytes": 14180157,
+    "devtoolsDiagnosticReceived": true,
+    "phoneDiagnosticReceived": false,
+    "phoneJobsVerified": false,
+    "profilerFramesCollected": false
+  },
+  "next": "Open the new preview on Android WeChat; inspect V5 platform/version/standardWorkerSupport and first startup error, then run CPU compare if launch succeeds. AppID rollout remains unverified."
+}

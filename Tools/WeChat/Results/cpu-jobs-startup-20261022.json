@@ -1,0 +1,32 @@
+[
+  {
+    "receivedUtc": "20261022T155748071233Z",
+    "peer": "192.168.1.8",
+    "result": {
+      "schema": 1,
+      "kind": "startup",
+      "buildId": "20261022T153657Z-threads",
+      "attempt": 1,
+      "message": "ReferenceError: SharedArrayBuffer is not defined",
+      "stack": "ReferenceError: SharedArrayBuffer is not defined\n    at http://127.0.0.1:49048/game/webgl.wasm.framework.unityweb.js:3056:38\n    at Object.GameGlobal.unityNamespace.UnityModule (http://127.0.0.1:49048/game/webgl.wasm.framework.unityweb.js:26179:17)\n    at http://127.0.0.1:49048/game/__context__/__plugin__/wxe5a48f1ed5f544b7/plugin.js:93:290520\n    at async Promise.all (index 0)",
+      "sharedArrayBuffer": "undefined",
+      "wasm": "object",
+      "wxWasm": "object"
+    }
+  },
+  {
+    "receivedUtc": "20261022T155749793490Z",
+    "peer": "192.168.1.8",
+    "result": {
+      "schema": 1,
+      "kind": "startup",
+      "buildId": "20261022T153657Z-threads",
+      "attempt": 2,
+      "message": "Error: WXUncaughtException",
+      "stack": "Error: WXUncaughtException\n    at currentStackTrace (http://127.0.0.1:49048/game/unity-sdk/util.js:58:17)\n    at Object.WXUncaughtException (http://127.0.0.1:49048/game/unity-sdk/util.js:61:15)\n    at abort (http://127.0.0.1:49048/game/webgl.wasm.framework.unityweb.js:1771:38)\n    at Object.get (http://127.0.0.1:49048/game/webgl.wasm.framework.unityweb.js:2550:5)\n    at http://127.0.0.1:49048/game/webgl.wasm.framework.unityweb.js:2345:11\n    at Object.GameGlobal.unityNamespace.UnityModule (http://127.0.0.1:49048/game/webgl.wasm.framework.unityweb.js:26179:17)\n    at http://127.0.0.1:49048/game/__context__/__plugin__/wxe5a48f1ed5f544b7/plugin.js:93:290520\n    at async Promise.all (index 0)",
+      "sharedArrayBuffer": "undefined",
+      "wasm": "object",
+      "wxWasm": "object"
+    }
+  }
+]

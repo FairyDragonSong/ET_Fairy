@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "appId": "wxf15ab5190a932da3",
+  "conclusion": "Conditional Android support; current DevTools cannot validate new multithreading. AppID gray rollout status remains unverified. Jobs simulation support is not established merely by rendering thread support.",
+  "requirements": {
+    "androidWechatMin": "8.0.74",
+    "baseLibraryMin": "3.17.0",
+    "grayRolloutRequired": true,
+    "iOS": "not yet supported per current document",
+    "devtools": "explicitly not supported",
+    "sdkMin": "0.1.33",
+    "runtimeDetection": "wx.env.isSupportStandardWorker"
+  },
+  "current": {
+    "engine": "Tuanjie 1.9.3 / 2022.3.62t11",
+    "sdkSourceChangelogThrough": "0.1.34 (package.json version remains 0.1.1; do not use manifest version as release label)",
+    "baseLibrary": "3.17.4",
+    "devtools": "2.02.2609231 RC",
+    "appIdRollout": "unknown; no authenticated management backend available",
+    "phoneWechatVersion": "8.0.79; actual Android 12 phone diagnostic, base library 3.17.5, wx.env.isSupportStandardWorker=false",
+    "frameworkCompatibilityFinding": "Fixed 15 generated instanceof SharedArrayBuffer checks across the native Final export main/worker/WebGL frameworks using null guards and constructor.name. Optional chaining itself was rejected by the DevTools preview packaging parser. Backup/hash-verified rollback is available. This does not establish thread/Jobs support.",
+    "frameworkCompatibilityRecord": "Unity/BuildArtifacts/RedBlue-CPU-Jobs-Native-Final-20261022/shared-buffer-compatibility.json",
+    "startupDiagnosticsVersion": 5,
+    "startupDiagnosticsCapability": "Reports wx.env.isSupportStandardWorker with platform and actual WeChat/base library versions; devtools reports must not be treated as phone evidence.",
+    "localValidation": "Four targeted Node tests passed; all three patched frameworks parse; 40 HTTP resource files match SHA-256. Phone validation remains pending."
+  },
+  "corrections": [
+    "DevTools failure must not be used to infer AppID denied or phone unsupported.",
+    "Older 8.0.66/3.16.0 announcement is superseded by current Worker V2 requirements.",
+    "wx.getSharedArrayBuffer/getAtomics results are not the official new Worker capability check; wx.env.isSupportStandardWorker is.",
+    "New Worker V2 supports multiple workers; older two-thread rendering manual cannot establish a universal current worker count limit."
+  ],
+  "sources": [
+    "https://developers.weixin.qq.com/minigame/dev/guide/base-ability/new-worker.html",
+    "https://developers.weixin.qq.com/minigame/dev/guide/game-engine/unity-webgl-transform/Design/Multithread.html",
+    "https://developers.weixin.qq.com/minigame/dev/guide/game-engine/unity-webgl-transform/Design/MultiPackage.html",
+    "https://github.com/wechat-miniprogram/minigame-tuanjie-transform-sdk/blob/main/CHANGELOG.md"
+  ],
+  "localSourceSnapshots": [
+    "Temp/WeChatCpuExperiments/wx-new-worker.md",
+    "Temp/WeChatCpuExperiments/wx-multithread.md",
+    "Temp/WeChatCpuExperiments/wx-multipackage.md"
+  ]
+}

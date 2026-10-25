@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "sessions": [
+    {
+      "buildId": "20261024T153314Z-packed-split",
+      "sessionId": "81071d8a1fc249cead5693b90dbcb51b",
+      "variant": "packed-split",
+      "execution": "BurstPackedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 15.026666666666667,
+        "p95StepMs": 17.0,
+        "maxStepMs": 19.0,
+        "gridMs": 2.276666666666667,
+        "separationMs": 9.106666666666667,
+        "decisionMs": 3.1566666666666667,
+        "commitMs": 0.4666666666666667
+      }
+    },
+    {
+      "buildId": "20261024T153314Z-packed-split",
+      "sessionId": "81071d8a1fc249cead5693b90dbcb51b",
+      "variant": "packed-split",
+      "execution": "BurstPackedSplitSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 15.173333333333334,
+        "p95StepMs": 17.0,
+        "maxStepMs": 34.0,
+        "gridMs": 2.15,
+        "separationMs": 9.186666666666667,
+        "decisionMs": 3.2133333333333334,
+        "commitMs": 0.53
+      }
+    }
+  ],
+  "packedComparisons": [
+    {
+      "buildId": "20261024T153314Z-packed-split",
+      "sessionId": "81071d8a1fc249cead5693b90dbcb51b",
+      "complete": true,
+      "baselineExecution": "BurstPackedSingleThread",
+      "candidateExecution": "BurstPackedSplitSingleThread",
+      "sameContext": true,
+      "validSingleThreadConditions": true,
+      "stateHashesMatch": true,
+      "validComparison": true,
+      "baselineMedian": {
+        "meanStepMs": 15.026666666666667,
+        "p95StepMs": 17.0,
+        "maxStepMs": 19.0,
+        "gridMs": 2.276666666666667,
+        "separationMs": 9.106666666666667,
+        "decisionMs": 3.1566666666666667,
+        "commitMs": 0.4666666666666667
+      },
+      "packedMedian": {
+        "meanStepMs": 15.173333333333334,
+        "p95StepMs": 17.0,
+        "maxStepMs": 34.0,
+        "gridMs": 2.15,
+        "separationMs": 9.186666666666667,
+        "decisionMs": 3.2133333333333334,
+        "commitMs": 0.53
+      },
+      "candidateMedian": {
+        "meanStepMs": 15.173333333333334,
+        "p95StepMs": 17.0,
+        "maxStepMs": 34.0,
+        "gridMs": 2.15,
+        "separationMs": 9.186666666666667,
+        "decisionMs": 3.2133333333333334,
+        "commitMs": 0.53
+      },
+      "medianChangePercent": {
+        "meanStepMs": 0.976042590949433,
+        "p95StepMs": 0.0,
+        "maxStepMs": 78.94736842105263,
+        "gridMs": -5.563689604685218,
+        "separationMs": 0.8784773060029227,
+        "decisionMs": 1.7951425554382228,
+        "commitMs": 13.571428571428568
+      },
+      "pairedStepChangePercent": [
+        2.7623078636667353,
+        0.976042590949433,
+        -0.7535460992907805
+      ]
+    }
+  ],
+  "note": "Only complete 3-run fixed-tick sessions are acceptance data. Match phone, profiler and thermal conditions. For pure parallel scaling, compare BurstColoredSingleThread with BurstParallel and verify stateHash equality; the original BurstSingleThread uses a different pair order. Packed comparisons use the same build/session and original pair order; negative change means faster. Total Step includes gather/scatter. A valid comparison alone does not establish a stable gain."
+}

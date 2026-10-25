@@ -53,11 +53,18 @@ namespace ET
         /// </summary>
         public static void DoCompile()
         {
+            DoCompile(null);
+        }
+
+        public static void DoCompile(BuildType? requestedBuildType)
+        {
             // 强制刷新一下，防止关闭auto refresh，编译出老代码
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
             RefreshCodeMode();
-            RefreshBuildType();
+            if (requestedBuildType.HasValue)
+                EditorUserBuildSettings.development = requestedBuildType.Value == BuildType.Debug;
+            else RefreshBuildType();
 
             bool isCompileOk = CompileDlls();
             if (!isCompileOk)

@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "buildId": "20261024T034830Z-packed-ab",
+  "symptom": "User reported an empty phone scene after opening the first packed-ab preview",
+  "phoneBeforeFix": {
+    "peer": "192.168.1.7",
+    "platform": "android",
+    "moduleReady": true,
+    "resourceRequestsAfterEngineStartup": false
+  },
+  "reproduction": {
+    "platform": "devtools",
+    "cachedManifestVersion": "2026-10-22-2325",
+    "expectedManifestVersion": "2026-10-24-1155",
+    "failedResource": "http://127.0.0.1:8080/CDN/MiniGame/v1.0/8b0fe3cfe4cd642c113323126373608e.bundle",
+    "mutableMetadataReadFromSdkCache": true,
+    "finding": "SDK reused StreamingAssets build_info/version metadata across exports sharing the same AppID and relative paths. Changing DATA_CDN host/port alone did not isolate this cache."
+  },
+  "fix": {
+    "script": "Tools/WeChat/Apply-ExperimentCacheGuard.cjs",
+    "sdkSetting": "streamingUrlPrefixPath",
+    "resourcePrefix": "/__redblue__/20261024T034830Z-packed-ab",
+    "mutableMetadataCacheDisabled": ["build_info", ".version"],
+    "startupCacheDeletion": false,
+    "simulationAndWasmChanged": false,
+    "rollbackRecord": "Unity/BuildArtifacts/RedBlue-CPU-Packed-AB-Final-20261024/resource-cache-isolation.json",
+    "server": "Only the configured build prefix aliases the current StreamingAssets directory; other build prefixes return 404"
+  },
+  "verification": {
+    "fixedPhoneLaunchVerified": true,
+    "nodeTestsPassed": 3,
+    "httpFilesSha256Verified": 40,
+    "exactBuildAliasServed": true,
+    "wrongBuildAliasRejected": true,
+    "devtoolsManifestVersion": "2026-10-24-1155",
+    "devtoolsBattleAndCpuCompareVisible": true,
+    "screenshot": "Temp/RedBluePackedChecks/simulator-cache-isolated-ready.jpg",
+    "phoneAfterFix": "Android fetched build-scoped manifest/bundles at 12:18 and uploaded six complete CPU benchmark runs by 12:19:48",
+    "phoneBenchmarkSession": "a62bda0d5799414d92b12e586bb48cee"
+  },
+  "note": "A cleanup-before-start experiment was tested only in DevTools, triggered SDK stale data-file paths, and was rolled back before phone preview. Final fix does not delete caches. No new phone CPU benchmark or standard Profiler frames are claimed."
+}

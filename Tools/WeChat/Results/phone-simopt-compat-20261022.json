@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "capture": "Temp/WeChatProfiler/20261022T140029397Z-phone-simopt-compat-islands-50k-sim",
+  "baseline": "Temp/WeChatProfiler/20261022T131014859Z-phone-burst-islands-50k-sim",
+  "valid": true,
+  "frames": 450,
+  "steps": 300,
+  "wallSeconds": 10.030464699999811,
+  "observedSimulationHz": 29.908883483733874,
+  "frameTimeMs": {
+    "count": 450,
+    "mean": 22.246666666666666,
+    "p50": 23.0,
+    "p95": 30.0,
+    "p99": 32.0,
+    "max": 42.0
+  },
+  "beforeFrameTimeMs": {
+    "count": 398,
+    "mean": 23.72613065326633,
+    "p50": 24.0,
+    "p95": 32.0,
+    "p99": 34.0,
+    "max": 41.0
+  },
+  "perStepComparison": [
+    {
+      "stage": "Step",
+      "beforeMsPerStep": 19.858657243816253,
+      "afterMsPerStep": 18.206666666666667,
+      "observedReductionPercent": 8.31874258600237,
+      "currentStepSharePercent": 100.0
+    },
+    {
+      "stage": "Separation",
+      "beforeMsPerStep": 12.911660777385158,
+      "afterMsPerStep": 11.403333333333334,
+      "observedReductionPercent": 11.681901112935588,
+      "currentStepSharePercent": 62.63273526180887
+    },
+    {
+      "stage": "Decision",
+      "beforeMsPerStep": 4.674911660777385,
+      "afterMsPerStep": 4.506666666666667,
+      "observedReductionPercent": 3.5988914084152057,
+      "currentStepSharePercent": 24.752837788355915
+    },
+    {
+      "stage": "Grid",
+      "beforeMsPerStep": 1.7314487632508833,
+      "afterMsPerStep": 1.76,
+      "observedReductionPercent": -1.6489795918367411,
+      "currentStepSharePercent": 9.666788722079824
+    },
+    {
+      "stage": "Commit",
+      "beforeMsPerStep": 0.4134275618374558,
+      "afterMsPerStep": 0.44,
+      "observedReductionPercent": -6.427350427350431,
+      "currentStepSharePercent": 2.416697180519956
+    }
+  ],
+  "burstExecutionEvidence": "BurstCrowdKernel:StageJob (Burst)",
+  "limitations": [
+    "Candidate also uses wasm-opt -Oz --strip-debug while baseline does not",
+    "Battle tick range/thermal conditions were not controlled",
+    "Development + Profiler capture; simulation-only; GPU unavailable"
+  ]
+}

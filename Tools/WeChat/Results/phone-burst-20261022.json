@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "capture": "Temp/WeChatProfiler/20261022T131014859Z-phone-burst-islands-50k-sim",
+  "buildId": "20261020T154440Z",
+  "valid": true,
+  "frames": 398,
+  "steps": 283,
+  "burstExecutionEvidence": "BurstCrowdKernel:StageJob (Burst)",
+  "runtimeBackend": "Burst single thread",
+  "frameTimeMs": {
+    "count": 398,
+    "mean": 23.72613065326633,
+    "p50": 24.0,
+    "p95": 32.0,
+    "p99": 34.0,
+    "max": 41.0
+  },
+  "msPerStep": {
+    "Step": 19.858657243816253,
+    "Grid": 1.7314487632508833,
+    "Separation": 12.911660777385158,
+    "Decision": 4.674911660777385,
+    "Commit": 0.4134275618374558
+  },
+  "limitations": [
+    "Development and profiler overhead included",
+    "Battle age not controlled against old baseline",
+    "Simulation only; unit drawing and GPU not assessed"
+  ]
+}

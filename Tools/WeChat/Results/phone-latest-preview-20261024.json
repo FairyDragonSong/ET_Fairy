@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "recordedLocal": "2026-10-24T15:02:34+08:00",
+  "buildId": "20261024T053244Z-logic-deadline",
+  "exportRoot": "Unity/BuildArtifacts/RedBlue-Logic-Deadline-Release-Final-20261024",
+  "resourceUrl": "http://192.168.1.8:8091",
+  "previewTool": "auto_preview",
+  "previewSucceeded": true,
+  "packageBytes": 13269777,
+  "httpFilesVerified": 40,
+  "httpValidation": "phone-latest-http-validation-20261024.json",
+  "phoneLaunchVerified": true,
+  "phoneBenchmarkVerified": true,
+  "phoneBenchmarkSession": "14c495b462cb4cad935adc407e9c69b1",
+  "phonePerformanceAnalysis": "cpu-phone-latest-analysis-20261024.json",
+  "development": false,
+  "threads": false,
+  "simd": false,
+  "simulatorSchedulerVersion": 3,
+  "phoneSchedulerModified": false,
+  "automaticBenchmarkLauncherInstalled": false,
+  "note": "Preview push succeeded. Subsequently all six phone CPU runs arrived from 192.168.1.7; Burst and state checks passed. Timing drift limits the stable speedup claim. No full-render frame benchmark or Unity Profiler capture is established."
+}

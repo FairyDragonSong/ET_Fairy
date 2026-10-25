@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "sessions": [
+    {
+      "buildId": "20261024T072438Z-packed-bounded",
+      "sessionId": "5cfa0873297048ce95af3a097f85f645",
+      "variant": "packed-bounded",
+      "execution": "BurstPackedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 15.176666666666666,
+        "p95StepMs": 17.0,
+        "maxStepMs": 22.0,
+        "gridMs": 2.203333333333333,
+        "separationMs": 9.42,
+        "decisionMs": 3.2,
+        "commitMs": 0.3933333333333333
+      }
+    },
+    {
+      "buildId": "20261024T072438Z-packed-bounded",
+      "sessionId": "5cfa0873297048ce95af3a097f85f645",
+      "variant": "packed-bounded",
+      "execution": "BurstPackedBoundedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 15.2,
+        "p95StepMs": 16.0,
+        "maxStepMs": 17.0,
+        "gridMs": 2.0233333333333334,
+        "separationMs": 9.593333333333334,
+        "decisionMs": 3.19,
+        "commitMs": 0.37333333333333335
+      }
+    }
+  ],
+  "packedComparisons": [
+    {
+      "buildId": "20261024T072438Z-packed-bounded",
+      "sessionId": "5cfa0873297048ce95af3a097f85f645",
+      "complete": true,
+      "baselineExecution": "BurstPackedSingleThread",
+      "candidateExecution": "BurstPackedBoundedSingleThread",
+      "sameContext": true,
+      "validSingleThreadConditions": true,
+      "stateHashesMatch": true,
+      "validComparison": true,
+      "baselineMedian": {
+        "meanStepMs": 15.176666666666666,
+        "p95StepMs": 17.0,
+        "maxStepMs": 22.0,
+        "gridMs": 2.203333333333333,
+        "separationMs": 9.42,
+        "decisionMs": 3.2,
+        "commitMs": 0.3933333333333333
+      },
+      "packedMedian": {
+        "meanStepMs": 15.2,
+        "p95StepMs": 16.0,
+        "maxStepMs": 17.0,
+        "gridMs": 2.0233333333333334,
+        "separationMs": 9.593333333333334,
+        "decisionMs": 3.19,
+        "commitMs": 0.37333333333333335
+      },
+      "candidateMedian": {
+        "meanStepMs": 15.2,
+        "p95StepMs": 16.0,
+        "maxStepMs": 17.0,
+        "gridMs": 2.0233333333333334,
+        "separationMs": 9.593333333333334,
+        "decisionMs": 3.19,
+        "commitMs": 0.37333333333333335
+      },
+      "medianChangePercent": {
+        "meanStepMs": 0.15374478365912658,
+        "p95StepMs": -5.882352941176472,
+        "maxStepMs": -22.72727272727273,
+        "gridMs": -8.16944024205748,
+        "separationMs": 1.8400566171266952,
+        "decisionMs": -0.31250000000000444,
+        "commitMs": -5.084745762711851
+      },
+      "pairedStepChangePercent": [
+        0.46123435097737975,
+        -3.1230082855321917,
+        -0.219780219780219
+      ]
+    }
+  ],
+  "note": "Only complete 3-run fixed-tick sessions are acceptance data. Match phone, profiler and thermal conditions. For pure parallel scaling, compare BurstColoredSingleThread with BurstParallel and verify stateHash equality; the original BurstSingleThread uses a different pair order. Packed comparisons use the same build/session and original pair order; negative change means faster. Total Step includes gather/scatter. A valid comparison alone does not establish a stable gain."
+}

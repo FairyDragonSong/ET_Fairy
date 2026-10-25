@@ -1,0 +1,28 @@
+{
+  "buildId": "20261022T133810Z",
+  "wasmCompatibility": {
+    "utc": "2026-10-22T13:55:55.454Z",
+    "command": "-Oz --strip-debug --enable-sign-ext --enable-nontrapping-float-to-int --enable-bulk-memory",
+    "originalBytes": 131901241,
+    "optimizedBytes": 65632370,
+    "compressedBytes": 12104005,
+    "originalSha256": "597059b096851036d1280ef130dd76b66aa1a415415a6d5ea2c6f89c211901ac",
+    "optimizedSha256": "fb07a207bb80716a31a5e0cfe35a313821b0b9cf14969b9717a096b5a541241d",
+    "compressedSha256": "0ef1198035ab4dda26ec7ae11d91952186100bb591ea53b3c9765aa7783ae987",
+    "originalCodeId": "28467f6df46f85d8",
+    "codeId": "407387d0c6bf5492",
+    "exportsNamesKindsMatch": true,
+    "addedImports": [],
+    "removedImports": [
+      {
+        "module": "env",
+        "name": "_mmap_js",
+        "kind": "function"
+      }
+    ],
+    "brotliRoundtrip": true,
+    "note": "Development + Autoconnect preserved; Wasm postprocessing changes timing and debug symbols. Phone Profiler and launch need verification."
+  },
+  "httpFilesVerified": 40,
+  "phoneVerified": false
+}

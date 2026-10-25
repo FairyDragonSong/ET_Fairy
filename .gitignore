@@ -55,6 +55,8 @@ Bin/
 /Log
 /Logs
 obj/
+__pycache__/
+*.pyc
 /Release
 /Temp
 /Tools/MongoDB

@@ -1,0 +1,217 @@
+{
+  "schema": 1,
+  "buildId": "20261024T053244Z-logic-deadline",
+  "resourceVersion": "2026-10-24-1344",
+  "resourceUrl": "http://192.168.1.8:8091",
+  "resourcePrefix": "/__redblue__/20261024T053244Z-logic-deadline",
+  "httpFilesVerified": 40,
+  "files": [
+    {
+      "path": "StreamingAssets/build_info",
+      "bytes": 49,
+      "sha256": "1cda792c0f31fa870add4627330c919573e401109ebd5f51d99e988f561ada9a"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/0203476086ad587d827223d0a0499660.bundle",
+      "bytes": 50640,
+      "sha256": "7bb9fba86f00139e900e97dd809cd369759fa0ad69471d46d4053f5526ed5555"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/04c5c1649d803463f3745258838ea9a8.bundle",
+      "bytes": 2792,
+      "sha256": "7189527e95d56e5761c9a73fcd7b504291c5a29ba897edcbebdd6e889bd40240"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/04e1273524a8c75eea782f465e3d643a.bundle",
+      "bytes": 4770,
+      "sha256": "96b5efc03c4fa8a46cf6461d029edba311ff3c97f29e638e05c8449b8d8fe582"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/075de406ca17139510335c8f3bfbf50e.bundle",
+      "bytes": 1445,
+      "sha256": "8dc369bc7c3fad7e24502def36bed3aabb799247bafe93f3729b92294cf201b2"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/0e453cd7b083e8312c08dd0170427f40.bundle",
+      "bytes": 1302,
+      "sha256": "dadb0ae664cbd8e409e3b1e52f016486bb240618a28f77619b8bfd04e322c29e"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/128293e89f1dada810408b4723fd0c47.bundle",
+      "bytes": 62540,
+      "sha256": "fc2b70882ac59fd06aded8042c9d1e8e4bec6a96813b7ac77e9a5d104c229d3b"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/20cdec055ad20ed54a91da0efa06f6b9.bundle",
+      "bytes": 14422,
+      "sha256": "43b670fedb246585da64c3c8902b7f4f85334eb49d1a42d59503b7bc867596ba"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/243c13fdd9c248b8705cd3a8c6936242.bundle",
+      "bytes": 203624,
+      "sha256": "f3f37559034f7301e087ac9aa3b3434badbb232dd978accaeb0229e539e4543d"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/25bd1f159b01bd4a4ec0ac287212ec38.bundle",
+      "bytes": 14280,
+      "sha256": "d285da49f16377a295eed38e294e6b4dc796da7eb3b1547841bd329a7d8273db"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/2cd156640e7c1a9ae771beb7deae1c8c.bundle",
+      "bytes": 11225,
+      "sha256": "84d0899caadbe418c29f6da8acff5aaaaa295d8334d9feab80ce8d004132aeda"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/3442e9c99bf95d8f7e5572083ea92663.bundle",
+      "bytes": 13423,
+      "sha256": "14059426235fef0733c2fa4354a9e0a90ace0430173a8875a591774117b3d7d8"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/3b122bde9d6f97a684647f07e35696a5.bundle",
+      "bytes": 2569,
+      "sha256": "82166efcd27b4a79d84ffe2c0fddad11e0d0eb2c4f21f6c5c55736834fc08ec4"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/3cdd5b31cc038c3e073c3c2b1a289ca5.bundle",
+      "bytes": 1222562,
+      "sha256": "e6027b59da42d9617be28ca02ddae764b6640c6b2df5bb214ac480c2d278a7d3"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/3dddb1c78e76e39d5183de0150c2ada0.bundle",
+      "bytes": 374054,
+      "sha256": "6c54c399d3edd6c99a626fb5ac4a3fd32df834438f29d20c0b393eb2c5763841"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/43be3c05eb4f54fd8ea55989c3f8c807.bundle",
+      "bytes": 8888,
+      "sha256": "3844b7725d2af44663ba755b37a9b06e63ab4897781f22a83962ca5271ff54ea"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/5bb2b0ab259011e9bf1c33db0985f85a.bundle",
+      "bytes": 1457,
+      "sha256": "334a517b02d3b337d73e107f802e190701b398b39be51b76803540b46739d4a9"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/5c3bd760ee4a80dcbfafee06f324b2f9.bundle",
+      "bytes": 19265,
+      "sha256": "9b23bd7c638a59a447b6a29f30c495cd199ac39ab28e90a04010f480970f78a5"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/6d725ecb0a9094b81722901cb35b6e3a.bundle",
+      "bytes": 10864,
+      "sha256": "ea630bdf460644e69df7b65b4eede45e24d1ef62e82e66c7798d19e500e0bb56"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/70c04b667f302ba987c32e4669d95105.bundle",
+      "bytes": 2920,
+      "sha256": "86287b26b55df17be860179b264640bb28bb588189f0c1690de1d7b78be6b8a6"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/73c4bed5601951561c7a8c4537aad59c.bundle",
+      "bytes": 51922,
+      "sha256": "67e4bd58c0a767734fb954283722798fbad0449bb527f1f2d7121bde8f59a22a"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/804a3cf40ccc5410e8672e8d35a368da.bundle",
+      "bytes": 450466,
+      "sha256": "1a30f37179c1ff6a86f4ef1967970156b8f80cff40fd7045a7a544c3d4c6eb37"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/8601d164712951871288fa806e91edfa.bundle",
+      "bytes": 17369,
+      "sha256": "aa37f2bf0221799f5c0e6711d97320006d090b0c063ac14d9f4f54c16158cc2e"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/8b603195d5cbc1f4063c77dbe0a61628.bundle",
+      "bytes": 5929,
+      "sha256": "de2920a2305b8f224f6aba20a4bd3d0567e68e8a8427e04ee4b04f7ec63f499a"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/8d6a2a3ceab7f4c820de0eece207091a.bundle",
+      "bytes": 2832,
+      "sha256": "8ff4af31932249209ac9d3b9b7446acb4756c9b65dfd89cd55810737956da31f"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/925e125369bc3f1acfe1a26159d70968.bundle",
+      "bytes": 14314,
+      "sha256": "e3faab6be0390cc62c4956724860b2f38576b89ff06af330c97f70bdb07e43be"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/9c38ef29277e71ba6a2819419d9c3e29.bundle",
+      "bytes": 15505,
+      "sha256": "4ee0928bbe34daa96ebf120dc2e41e65c0241d43968e8db6bc9a6f90534ee99f"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/a715310d53d68fa8a3a2490852b72980.bundle",
+      "bytes": 8681,
+      "sha256": "bb0125727b93c5236f166c8940b2cab4468788d849a8448d313db426022d8c6d"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/ad53c4d6e49c0d5e3f93b9220f15b7d9.bundle",
+      "bytes": 2662289,
+      "sha256": "66782be33bb3ea4e068cb3ea063f29f0116d8a230b222b94608c6f1a0a56e505"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/bcf45cbdd58d034f720f993b2c20c05a.bundle",
+      "bytes": 20457332,
+      "sha256": "b0f8ff892e7e8f306c6bc9d2534a7d22d71d408437d91b6db176399186a999eb"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/c70bd824733f0d77e5235081f01639e5.bundle",
+      "bytes": 604749,
+      "sha256": "1a3e75baa54dee1c28d2ba5bebc53e391253e3656b6b5ffc83deeddd12e08846"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/cde8971ce2f0c8674a36a5b0924e5062.bundle",
+      "bytes": 45808,
+      "sha256": "54c183d1c5a75bcab2583e82507e641e61e7512e07a26160c58e151dd5956d4d"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/da9c8dff85c6b6ad8d752d57f5f0191a.bundle",
+      "bytes": 227607,
+      "sha256": "a726eebeea0617789a0f50cb2f222853eb1b46c93f393c30c89e20b242b9358c"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/f92dadef412cc92aab492163be16a202.bundle",
+      "bytes": 6946,
+      "sha256": "be174cb7bccfd350f29e0c6ea9c6bd864d44ebb5a8dba08a493a32f9323495cb"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/fa2311ca3d564e3b2310c538940312f2.bundle",
+      "bytes": 7865655,
+      "sha256": "48c1392f5ef4a5ba268f2a7cf5ee5a37b0c5c5d1efe4f907581fe5d01117c396"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/fc1f9bfeacdea246888fd4d7306c56dc.bundle",
+      "bytes": 1242806,
+      "sha256": "96ff85423e5c3a4a1d1151cc975f919b19c0c21ed508cc25616d4d2ffe1e2f08"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/PackageManifest_DefaultPackage.version",
+      "bytes": 15,
+      "sha256": "48f4209d22376fb5d7534cb2fec345900a57d8415eb0d01aa87b8896d6ff8837"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/PackageManifest_DefaultPackage_2026-10-24-1344.bytes",
+      "bytes": 8297,
+      "sha256": "23eb73d601da4f3d147abac67366cee265bdc13a78df97f0e83d9175db59cb47"
+    },
+    {
+      "path": "StreamingAssets/Bundles/DefaultPackage/PackageManifest_DefaultPackage_2026-10-24-1344.hash",
+      "bytes": 32,
+      "sha256": "1b6560c857a44a26ff57a32410043e9b532e03ff48517dffb664ea0478ac747f"
+    },
+    {
+      "path": "99cc062638937c68.webgl.data.unityweb.bin.txt",
+      "bytes": 45864510,
+      "sha256": "41266a439029c341952af3f7f070f75abde7b209729aa635fb8a3d6dbbdfb06d"
+    }
+  ],
+  "wasmCode": {
+    "path": "E:\\github\\ET\\YIUI\\Unity\\BuildArtifacts\\RedBlue-Logic-Deadline-Release-Final-20261024\\minigame\\wasmcode\\13006c97804934c9.webgl.wasm.code.unityweb.wasm.br",
+    "bytes": 11810121,
+    "sha256": "ceb5a99e741716fd0542e6477034ad40dffb35994bc7078a01fcacbaa04187c2"
+  },
+  "phoneVerified": false,
+  "note": "Local HTTP integrity check; phone launch and remote Profiler frames are still required."
+}

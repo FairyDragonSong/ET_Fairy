@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "date": "2026-10-20",
+  "buildId": "20261020T150608Z",
+  "unity": "2022.3.62t11",
+  "export": "Unity/BuildArtifacts/WeChat-Profiler-20261020/minigame",
+  "development": true,
+  "autoConnect": true,
+  "deepProfiling": false,
+  "resourceVersion": "2026-10-20-2305",
+  "resourceUrl": "http://192.168.1.8:8081",
+  "httpFilesVerified": 40,
+  "wasmCodeBytes": 20367826,
+  "wasmCodeSha256": "d69916ea5061647f750b9d9c9699f1edfda3ac1293ed86344770772b26c57ecf",
+  "profilerWebSocket": "192.168.1.8:37100",
+  "buildPreflight": "passed after final stripped AOT synchronization",
+  "settingsRestored": true,
+  "offlineAnalysis": {
+    "report": "Temp/WeChatProfiler/desktop-offline-smoke/report.json",
+    "frames": 300,
+    "selfComparison": "zero deltas",
+    "source": "existing Editor recording, not phone"
+  },
+  "editorTargetRejected": true,
+  "editorMarkerSmoke": {
+    "source": "Editor marker visibility smoke only; not phone performance",
+    "burstVerified": true,
+    "markers": [
+      "RedBlue.FlowField",
+      "RedBlue.Step",
+      "RedBlue.Grid",
+      "RedBlue.Separation",
+      "RedBlue.Decision",
+      "RedBlue.Commit"
+    ]
+  },
+  "routeIsolationTests": "passed",
+  "resourceServerSmoke": "passed",
+  "simulationRegression": "passed: four formations, deterministic replay, combat and zero allocations",
+  "phoneLaunchVerified": true,
+  "phoneProfilerFramesVerified": true,
+  "phonePerformanceMeasured": true,
+  "note": "Remote full-battle and simulation-only captures completed. Both are dominated by Step. Player logs confirm Managed reference backend on this phone; Burst acceleration was not active. No optimization benefit measured yet.",
+  "firstPhoneCapture": "E:\\github\\ET\\YIUI\\Temp\\WeChatProfiler\\20261020T151803230Z-phone-islands-50k-full-first",
+  "simulationOnlyCapture": {
+    "frames": 7,
+    "scenarioMarker": "RedBlue.Frame.SimulationOnly",
+    "gpu": "Maleoon 920",
+    "backendFromPlayerLog": "Managed reference",
+    "scenarioMismatch": false,
+    "comparisonCaveat": "Different battle ages; sparse Development samples locate the dominant work but do not establish release FPS or a regression.",
+    "screen": "2835x1316",
+    "valid": true,
+    "directory": "Temp/WeChatProfiler/20261020T152824080Z-phone-islands-50k-sim-first"
+  }
+}

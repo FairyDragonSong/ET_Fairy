@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "sessions": [
+    {
+      "buildId": "20261024T053244Z-logic-deadline",
+      "sessionId": "46254a1746b6427e867c172366f3d7e6",
+      "variant": "logic-deadline",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Laptop GPU (0x000028E0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "resolution": [
+        2532,
+        1170
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 15.463333333333333,
+        "p95StepMs": 20.0,
+        "maxStepMs": 22.0,
+        "gridMs": 1.6633333333333333,
+        "separationMs": 10.516666666666667,
+        "decisionMs": 2.8033333333333332,
+        "commitMs": 0.32666666666666666
+      }
+    },
+    {
+      "buildId": "20261024T053244Z-logic-deadline",
+      "sessionId": "46254a1746b6427e867c172366f3d7e6",
+      "variant": "logic-deadline",
+      "execution": "BurstPackedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Laptop GPU (0x000028E0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "resolution": [
+        2532,
+        1170
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 14.466666666666667,
+        "p95StepMs": 17.0,
+        "maxStepMs": 22.0,
+        "gridMs": 1.8166666666666667,
+        "separationMs": 9.46,
+        "decisionMs": 2.87,
+        "commitMs": 0.32
+      }
+    }
+  ],
+  "packedComparisons": [
+    {
+      "buildId": "20261024T053244Z-logic-deadline",
+      "sessionId": "46254a1746b6427e867c172366f3d7e6",
+      "complete": true,
+      "sameContext": true,
+      "validSingleThreadConditions": true,
+      "stateHashesMatch": true,
+      "validComparison": true,
+      "baselineMedian": {
+        "meanStepMs": 15.463333333333333,
+        "p95StepMs": 20.0,
+        "maxStepMs": 22.0,
+        "gridMs": 1.6633333333333333,
+        "separationMs": 10.516666666666667,
+        "decisionMs": 2.8033333333333332,
+        "commitMs": 0.32666666666666666
+      },
+      "packedMedian": {
+        "meanStepMs": 14.466666666666667,
+        "p95StepMs": 17.0,
+        "maxStepMs": 22.0,
+        "gridMs": 1.8166666666666667,
+        "separationMs": 9.46,
+        "decisionMs": 2.87,
+        "commitMs": 0.32
+      },
+      "medianChangePercent": {
+        "meanStepMs": -6.4453546022849695,
+        "p95StepMs": -15.000000000000002,
+        "maxStepMs": 0.0,
+        "gridMs": 9.218436873747503,
+        "separationMs": -10.04754358161648,
+        "decisionMs": 2.378121284185508,
+        "commitMs": -2.0408163265306034
+      },
+      "pairedStepChangePercent": [
+        -3.211418376449604,
+        -16.231946540202625,
+        -8.465058236272881
+      ]
+    }
+  ],
+  "note": "Only complete 3-run fixed-tick sessions are acceptance data. Match phone, profiler and thermal conditions. For pure parallel scaling, compare BurstColoredSingleThread with BurstParallel and verify stateHash equality; the original BurstSingleThread uses a different pair order. Packed comparisons use the same build/session and original pair order; negative change means faster. Total Step includes gather/scatter. A valid comparison alone does not establish a stable gain."
+}

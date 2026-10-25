@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "variant": "packed-split-all",
+  "buildId": "20261024T164248Z-packed-split-all",
+  "resourceVersion": "2026-10-25-0042",
+  "exportRoot": "Unity/BuildArtifacts/RedBlue-Packed-Split-All-Release-Final-20261025",
+  "resourcePort": 8094,
+  "scope": "Remove formation restriction for the experimental packed kernel and split scheduler at 50000 units. Lower population behavior is unchanged.",
+  "formations": ["Front", "Islands", "Pincer", "Dense stress"],
+  "rules": {
+    "count": 50000,
+    "seed": 7241,
+    "simulationHz": 30,
+    "benchmarkZeroDamage": true,
+    "threads": false,
+    "simd": false,
+    "development": false
+  },
+  "cpuCompare": {
+    "control": "BurstPackedSingleThread",
+    "candidate": "BurstPackedSplitSingleThread",
+    "formations": 4,
+    "runsPerFormation": 6,
+    "orderPerFormation": "AB / BA / AB",
+    "warmupTicks": 300,
+    "measuredTicks": 300,
+    "note": "Both phases run within one display frame. Compares total tick cost and hashes per formation; cannot establish frame pacing."
+  },
+  "frameCompare": {
+    "formations": 4,
+    "scenariosPerFormation": ["sim-baseline", "sim-split-packed", "full-baseline", "full-split-packed"],
+    "secondsPerScenario": 30,
+    "totalSecondsApproximate": 480,
+    "expectedFiveSecondWindows": 96,
+    "control": "Original unpacked Burst single-thread whole tick",
+    "candidate": "Packed Burst single-thread with split display-frame scheduling",
+    "note": "Measures combined packed and split effect. Each formation has independent results and acceptance; no isolated attribution to split alone. One forward-order pair per mode needs follow-up if differences are marginal."
+  },
+  "localVerification": {
+    "replayEvidence": "Temp/RedBlueAllFormationChecks/formation-0.json through formation-3.json",
+    "formations": 4,
+    "damageModesPerFormation": 2,
+    "count": 50000,
+    "ticksPerCase": 180,
+    "includesDisplayStall": true,
+    "allArraysAndRandomMatch": true,
+    "note": "Front checked every committed tick; other formations at 30-tick checkpoints and end. Tick counts checked every display frame. Editor correctness only.",
+    "cpuRoutingEvidence": "Temp/RedBlueAllFormationChecks/benchmark-routing.json",
+    "cpuRoutingControlFlowOnly": true,
+    "routingTimingOrReplayEvidence": false,
+    "pythonAcceptanceTestsPassed": 13,
+    "historicalIslandsCpuAndFrameCompatibilityPassed": true
+  },
+  "exportVerification": {
+    "sdkBackupSharingViolationRecovered": true,
+    "recovery": "Initial prepare=true run regenerated ET/HybridCLR Release dependencies and compiled Wasm, then failed in SDK backup.txt replacement. Retried with prepare=false using those same generated Release dependencies; bridge Development=false verified. Added at most two conversion-only retries for that exact Windows sharing violation.",
+    "sourceArchiveHashesMatch": true,
+    "wasmCompatibilityInterfacesPreserved": true,
+    "brotliRoundtripPassed": true,
+    "httpFilesVerified": 40,
+    "resourceServerProcessId": 72896,
+    "phoneRafSchedulerModified": false,
+    "automaticBenchmarkLauncherInstalled": false
+  },
+  "phonePreviewSucceeded": true,
+  "previewTool": "wechatide auto_preview",
+  "previewPackageBytes": 13265890,
+  "phoneBenchmarkVerified": false,
+  "performanceAccepted": false,
+  "unityProfilerFramesCaptured": false,
+  "status": "Release build and official phone preview succeeded. Four-formation phone benchmarks pending; user should run Frame compare in foreground for approximately eight minutes."
+}

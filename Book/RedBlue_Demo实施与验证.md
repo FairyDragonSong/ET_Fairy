@@ -175,4 +175,140 @@ FPS 约提高 38%，CPU 渲染管线范围约下降 58%，GPU 游戏渲染范围
 
 用户手机能进入 Unity 场景，但 WebPlayMode 请求 `/StreamingAssets/build_info` 和 `/StreamingAssets/Bundles/DefaultPackage/PackageManifest_DefaultPackage.version` 返回 404，随后 Unity.Model.dll / mscorlib.dll 映射失败。检查发现转换后的 webgl/StreamingAssets 是空目录，原发布工具只复制热更新 CDN，遗漏 WebPlayMode 启动需要的内置清单与 Bundle。现已在 PublishYooAssetToLocalCDN 中补充同版本 StreamingAssets 发布，排除 .meta 文件；资源版本不匹配时拒绝发布。无需重编 Wasm。
 
-已通过 Unity MCP 实际调用修复后的发布方法，发布 39 个文件、35,734,769 字节；逐文件 HTTP 下载与本地哈希校验全部通过，build_info、版本入口、清单和 Bundle 均返回 200。已反序列化实际发布的清单，验证 Unity.Model.dll 和 mscorlib.dll 的地址映射存在。手机重启后的 ET/Demo 运行结果仍待用户复测。模拟器等待 wasm-instantiate 的问题尚未解决，用户手机未复现此卡点。诊断及核验记录：Tools/RedBlue/Results/wechat-startup-diagnosis-20261020.json。
+已通过 Unity MCP 实际调用修复后的发布方法，发布 39 个文件、35,734,769 字节；逐文件 HTTP 下载与本地哈希校验全部通过，build_info、版本入口、清单和 Bundle 均返回 200。已反序列化实际发布的清单，验证 Unity.Model.dll 和 mscorlib.dll 的地址映射存在。用户随后确认手机可以运行。模拟器等待 wasm-instantiate 的处理结果见下一节。资源诊断及核验记录：Tools/RedBlue/Results/wechat-startup-diagnosis-20261020.json。
+
+## 2026-10-20 开发者工具 Wasm 初始化卡住的排查与处理
+
+### 现象与结论边界
+
+Windows 微信开发者工具 Stable `2.01.2510290`、基础库 `3.16.3`，原工程停在 Unity 初始化界面，持续输出：
+
+```text
+still waiting runDependencies
+["wasm-instantiate", "wasm-preloadAssets"]
+```
+
+这是启动依赖尚未完成的提示，不是具体失败原因；两个依赖名称不能直接解释成两个独立故障。此时尚未进入红蓝 Demo，与五万人模拟或 60 FPS 上限无关。同一份原包在手机微信可以进入游戏；退出代理、重启电脑后，开发者工具仍复现。此前 Network 检查未发现对应的失败或持续等待资源请求，不能仅凭此提示认定为 VPN/网络问题。
+
+已验证的有效处理是：使用团结引擎自带 `wasm-opt`，对导出的原始 Wasm 执行 `-Oz --strip-debug`，压缩并替换到独立的完整小游戏测试工程。用户确认 `RedBlue-Optimized-Compatibility` 可以进入游戏。尚未取得开发者工具内部阻塞堆栈，不能将根因确定为某个引擎缺陷、固定大小限制、内存不足或单一 Wasm 特性。
+
+### 对照实验
+
+独立诊断工程不加载 Unity 插件、ET 启动流程或 CDN 游戏资源。以下微信结果由用户编译并提供运行日志：
+
+| 测试 | 结果 |
+| --- | --- |
+| 空 Wasm；256 MiB 内存；1027 个导入函数 | 均成功 |
+| 分包中的空 Wasm，原始格式及 Brotli 格式 | 均成功 |
+| 不存在的 Wasm 路径 | 正常返回文件不存在错误 |
+| 解压后 32、60、64、68 MiB 的空壳模块 | 均成功 |
+| 解压后 85 MiB 的空壳模块 | 超过 20 秒仍未返回 |
+| 原游戏 Wasm，空导入或桩导入 | 超过 20 秒仍未返回 |
+| 原游戏 Wasm 仅移除 `name` 段 | 超过 20 秒仍未返回 |
+| 完整游戏使用 `-Oz --strip-debug` 优化产物 | 用户确认可以进入游戏 |
+
+`PENDING > 20s` 只表示该次调用超过观察窗口未返回，不等于已经捕获了编译失败。68 MiB 空壳成功，而约 67.55 MiB 的去名称游戏模块仍等待，说明体积不是唯一判断依据；空壳与真实代码的编译负载也不等价。桩导入成功仅能验证实例化，不代表 Unity 逻辑运行正确。
+
+### 实际操作与产物变化
+
+操作位置是 Windows PowerShell，不是 Unity 编辑器面板。在本次安装及导出目录下执行：
+
+```powershell
+& 'D:\Program Files\TuanJieEdit\2022.3.62t11\Editor\Data\PlaybackEngines\WeixinMiniGameSupport\BuildTools\Emscripten\binaryen\bin\wasm-opt.exe' `
+  'E:\github\ET\YIUI\Unity\BuildArtifacts\RedBlue-WeChat-20261019\webgl\Build\webgl.wasm' `
+  -Oz --strip-debug `
+  -o 'E:\github\ET\YIUI\Temp\RedBlue-Wasm-Standalone\optimized.wasm'
+```
+
+输入为导出的原始、未压缩 `.wasm`，不要将 `.wasm.br` 直接当作此命令的输入。`-o` 写到独立文件，保留原始导出。安装版本或工程位置变化时相应调整路径。
+
+| 项目 | 原始版本 | 优化版本 |
+| --- | ---: | ---: |
+| Wasm 未压缩字节数 | 89,323,698 | 63,018,447 |
+| `name` 调试名称段负载字节数 | 18,490,518 | 无该段 |
+| 代码指令段负载字节数 | 59,198,311 | 51,382,394 |
+| 模块内定义的函数数 | 187,709 | 188,839 |
+| 导入项 / 导出项 | 1027 / 754 | 1027 / 754 |
+| 本次 Brotli 文件字节数 | 16,199,585 | 14,704,228 |
+
+表中的段负载不包含段头，未压缩大小与下载大小应分开记录。函数数量略有增加，不能把成功解释成“大量删除函数”；优化器重写了等价代码结构。优化前后导入、导出描述一致，优化模块通过本机 Wasm 校验和桩导入实例化；这些检查不替代完整运行回归。
+
+命令本身只产生 `optimized.wasm`，完整交付还需要：
+
+1. 对优化结果进行 Brotli 压缩，得到微信代码分包使用的 `.wasm.br`。
+2. 将压缩产物放入独立候选工程的 `minigame/wasmcode/`，使用新的文件标识。
+3. 同步修改候选工程 `game.js` 的 `CODE_FILE_MD5`，确保它与实际 Wasm 文件名匹配。本次候选使用压缩文件 MD5 的前 16 位 `d97f07b99204bc85`；这是本次候选的生成方式，不应假定所有 SDK 版本都采用同一规则。
+4. 编译完整小游戏，确认已进入场景，再做手机及玩法/性能回归。只运行优化命令、却没有替换分包和配置，微信仍会加载旧文件。
+
+本次验证工程：`Temp/RedBlue-WeChat-Optimized/minigame`，开发者工具显示 `RedBlue-Optimized-Compatibility`。代码文件为 `wasmcode/d97f07b99204bc85.webgl.wasm.code.unityweb.wasm.br`。原工程 `Unity/BuildArtifacts/RedBlue-WeChat-20261019/minigame` 未覆盖；资源 CDN 与资源版本沿用原包。局部工具、诊断脚本与候选产物保存在本机忽略目录 `Temp/RedBlue-Wasm-Standalone` 和 `Temp/RedBlue-WeChat-Optimized`，不是已提交的正式构建入口，可能随清理而丢失。上述操作尚未接入 `Tools/RedBlue/ExportWeChat.csx` 或一键导出流程。
+
+### 调试影响与待验证事项
+
+`--strip-debug` 本身就会移除调试信息，包括 `name` 段，不需要在命令之外重复删除一次。它不会关闭 `Debug.Log` / `Debug.LogError`，也不会取消异常处理；但 Wasm 调试、函数名调用栈及源码定位能力会减弱。保存原始 Wasm、构建记录和对应调试材料用于排查，不能保证任意优化后的地址都能直接用优化前文件还原调用栈。
+
+`-Oz` 以体积为优先目标，运行速度可能提高或降低，需要实际测量；它不主动降低人数、画质或修改玩法。本次只确认优化后的完整游戏在开发者工具可以进入场景，尚未证明优化包的手机回归、五万人性能或持续运行稳定性。
+
+仅删除名称已验证无效；`-Oz` 优化并保留调试信息的组合（例如 `-Oz -g`）尚未测试。因此，当前使用已验证可启动的 `-Oz --strip-debug` 包查看日志，并归档原始材料；不能把无法启动的原包推荐成可用的开发者工具调试包。用户本轮决定先保留当前结果，不继续扩展实验。
+
+## 2026-10-22：避让简化与数据布局探索
+
+根据真机 sim 中避让约占 Step 63% 的结果，对当前 kernel 的临时 Editor-only 副本完成 31 组探索试验。没有替换生产 kernel，也没有导出新的手机包。两种阵型为 Islands / Dense，50,000 单位、种子 7241、无伤害；预热 300 tick，测量 301..600 tick。每组均检查实际 Burst 执行与坐标范围，原始算法试验副本的状态 SHA-256 与生产版既有 600 tick 回放一致。
+
+### Islands 结果与取舍
+
+以下是邻近同轮基线的桌面 Burst 测量，百分比仅指 Separation 阶段，不能直接换算手机 FPS：
+
+| 试验 | 避让耗时观测变化 | 600 tick 平均最近邻重叠比例 | 说明 |
+| --- | ---: | ---: | --- |
+| 原版 48 候选 | 基线 | 0.443 | 既有算法 |
+| 上限 40 | 减少约 3% | 0.483 | 收益小，仍改变轨迹 |
+| 上限 32 | 减少约 17% | 0.507 | 重叠与速度变化增加 |
+| 上限 24 | 减少约 29% | 0.551 | 较明显的质量代价 |
+| 上限 16 | 减少约 45% | 0.617 | 重叠进一步加重 |
+| 避让 30 → 15 Hz，跳过帧复用力 | 减少约 55% | 0.458 | 四阶段合计约省 41%，但存在明显的动态与尾部重叠代价 |
+| 轻度重叠三次多项式近似，深度重叠保留 sqrt | 增加约 20% | 0.449 | 此实现没有收益 |
+| 有理式近似，极近距离保留原式 | 增加约 2% | 0.545 | 没有可靠收益且重叠变差 |
+| NoAlias 内存互不重叠标注 | 增加约 2% | 0.443 | 状态一致，收益不明确 |
+| 同格坐标连续存放 | 减少约 5% | 0.443 | 状态一致，但建索引成本增加，四阶段合计只省约 2%；Dense 合计几乎无收益 |
+
+质量指标在 tick 300 / 600，对固定均匀选取的 2000 个单位查询精确最近邻。重叠比例为 `max(0, 1 - 最近邻距离 / 碰撞直径)`，越大代表几何重叠越严重；它不是美术遮挡像素，也不是视觉验收。原版本身在拥挤战斗中已有较多重叠，因此不能将“50% 以上重叠单位占比下降”单独视作质量提高，还必须检查平均值和 P95。
+
+15 Hz 方案在 Islands 的 P95 重叠从 0.684 增至 0.796，采样速度每 tick 变化的 RMS 从 7.41 增至 10.35（约 +40%）；这是抖动风险代理指标，不是已经完成的手机观感验收。Dense 原版接近静态，而降频版 RMS 明显增加，P95 重叠也从 0.588 增至 0.804，因此不建议把全场统一 15 Hz 直接作为默认替换。上限 24 的 Islands RMS 从 7.41 增至 13.62，降低预算同样存在明显运动代价。
+
+当前预算消耗包括未重叠候选及对方预算耗尽时的尝试，不是有效接触数。Islands tick 600 原版平均预算消耗约 25.4、约 6.2% 单位达到 48；改成 24 后约 56.4% 达到上限。削减候选会影响配对、后续空间分布及决策成本，不是纯粹同比减少算术。15 Hz 试验最后 tick 跳过分离且预算刚清零，末帧预算为零，不能解释为整个窗口没有避让工作。
+
+### 后续建议与复现
+
+高收益路线需要接受行为近似。优先考虑按镜头缩放／区域分配避让精度，并将低频更新错开，近景或质量要求高的区域保持 30 Hz；这尚未实现或验证，不能提前承诺收益。本例后期接敌比例很高，单纯只降低未接敌单位频率可能收益有限。若用户选择性能优先，先在可切换候选中比较 full 模式的拥挤、运动稳定性和手机耗时，再决定质量预算。纯密度压力场可作为更大规模的算法候选，但无法直接保证逐单位防重叠，属于后续独立设计。
+
+计时受到桌面 CPU 状态影响，较小差异不作收益验收；各轮原始结果已保留，未将所有跨轮计时合并成同条件均值。只有一个种子、无伤害场景、两个固定时间点的几何指标，不能替代长期、有伤害玩法回归和手机视觉检查。
+
+工具：`Tools/RedBlue/Prepare-AvoidanceTrials.py` 根据当前 kernel 与 `AvoidanceTrialsRunner.cs.txt` 生成临时 `AvoidanceTrials.EditorOnly.cs`，刷新 Unity 后可通过 execute_code 调用 `ET.RedBlue.AvoidanceTrialsRunner.Run(variant, formation, round)`。variant 包括 baseline、budget16/24/32/40、half-rate、polynomial、rational、noalias、packed。全部运行结束后本轮已移除临时脚本与其 meta，刷新并确认无编译错误；生产 kernel SHA-256 仍为 `468b97ef693905131d4d9854e8932294b5b98df177c0a613df0b79712a9dd0ef`。试验代码副本与逐组 JSON 位于 `Temp/RedBlueAvoidanceTrials`；结构化归档为 `Tools/WeChat/Results/avoidance-trials-20261022.json`。
+
+## 客户端模拟方向与 GPU 可行性重评
+
+用户明确暂不要求服务器精确复算，只需客户端模拟；跨端确定性与定点数学改造暂缓。优化可以改变旧算法轨迹，但仍须评估拥挤、抖动和战斗表现。镜头是否允许影响逻辑此前有过顾虑，默认方案继续按单位状态／固定模拟 tick 调度，镜头仅影响显示；若要改变这一点再明确选择。
+
+查阅团结引擎官方[性能优化指引](https://docs.unity.cn/cn/tuanjiemanual/Manual/Optimization.html)及[GPU Skinning 支持](https://docs.unity.cn/cn/tuanjiemanual/Manual/GpuSkinning.html)：当前微信小游戏/WebGL 路径不支持 Compute Shader；Transform Feedback 蒙皮可用不等于引擎提供通用人群避让计算接口。因此现阶段不能以普通 `.compute` 文件直接迁移 CPU kernel，也没有验证当前工程可使用 WebGPU。
+
+普通 Shader 渲染到纹理仍是可研究路径：位置、速度等状态写入前后两张纹理，GPU 更新后直接给绘制采样。当前 `StateTextureCrowdRenderer` 已经使用静态网格和状态纹理并在 GPU 插值，但状态仍由 CPU 模拟及上传；这不是现有避让已经在 GPU 执行。浮点纹理可采样也不代表同格式可以渲染写入；应按真机实际格式与混合能力检查。[WebGL 浮点渲染目标规范](https://registry.khronos.org/webgl/extensions/EXT_color_buffer_float/)说明相关可渲染格式的扩展条件。
+
+GPU 方案主要难点是构造邻居数据和状态同步。现有对两个单位同时累加分离力、维护预算的循环不适合直接转换为每像素独立输出。可用格级密度／压力场替代部分精确配对，再由每单位采样场计算局部运动，但会改变避让模型，需视觉与玩法验收。另一种保留邻居列表的纹理查询方案也需要解决列表更新，不能仅把每步所有 50k 单位互相遍历作为可扩展方案。
+
+若 GPU 只算分离力然后每 tick 同步读回给 CPU 决策，数据同步可能抵消收益。更有希望的是让位置／速度／局部运动状态常驻 GPU，绘制直接使用；战斗判定若需要精确位置，必须同时设计 CPU/GPU 数据交换、低频统计或延迟容忍，不能默认 CPU 可以无成本读取最新 GPU 状态。客户端模拟需求放宽了跨端同步约束，并未自动授权取消精确战斗规则。
+
+建议后续顺序：先补 50k Islands full 的整机基线与 GPU 负载判断；再用独立小原型验证当前手机的渲染纹理、状态反馈和 50k 局部运动净成本；结果有优势再扩展到密度场避让与战斗逻辑衔接。CPU Burst 保留为对照与兼容路径，自适应／错峰更新作为可独立验证的近期候选。GPU 原型、本机与真机兼容测试、收益测量均尚未实施，不能承诺帧率或可节省的具体毫秒数。
+
+## GPU 迁移前的 CPU 技术路线复核
+
+用户要求先重新判断 CPU 空间。实际通过 Editor 反射读取 `PlayerSettings.MiniGame / WeixinMiniGame`：`simdSupport=false`、`threadsSupport=false`；`ProjectSettings.asset` 中 `weixinMiniGameSIMDSupport: 0`、`weixinMiniGameThreadsSupport: 0` 与之相符。当前引擎版本号为 2022.3.62t11，编译定义含 `TUANJIE_1_9_3` 和 `TUANJIE_1_9_OR_NEWER`。此轮没有更改开关或重新构建。
+
+本机 Burst 1.8.30-t2 的 `Editor/BurstAotCompiler.cs` 在当前有效编译条件下读取 `PlayerSettings.MiniGame.simdSupport`，并在编译 Wasm bitcode 时选择是否添加 `-msimd128`。因此 SIMD 有真实的本地编译路径，不只是依据新版本文档推断。官方[Math 库 Wasm SIMD 支持](https://docs.unity.cn/cn/tuanjiemanual/Manual/SIMD-support.html)也介绍 SIMD 构建和代码分包要求；不过该页版本较新，其引擎 Math/Skinning 案例不能直接当作本项目避让收益。必须检查候选的热循环是否生成有效向量指令，再测手机。
+
+SIMD 优先级高于立即改写 GPU 模拟：先独立开启构建能力并保留相同源码和兼容后处理做对照；若热循环未自动向量化，再试批处理／显式向量化。当前随机读取邻居、分支、同时写 i/j 的分离力与预算，均会影响向量化；仅打开开关或使用 float4 不能预先承诺加速。后处理若输入包含 SIMD 指令，wasm-opt 及校验工具也必须正确接受对应特性，不能跳过校验或将启动失败误归因于算法。
+
+多核属于独立验证路线。当前 `CrowdSimulation` 将 colored Jobs 限定为桌面路径，手机实际执行 Burst single thread；构建助手也关闭了渲染线程选项。SDK 将多线程选项与 `PlayerSettings` 的 threadsSupport 关联，但[官方线程 API 文档](https://docs.unity.cn/cn/tuanjiemanual/ScriptReference/PlayerSettings.WeixinMiniGame-threadsSupport.html)说明了原生线程和 C# 多线程限制，不能等同于 C# Task 可并行，或断言现有 Burst Jobs 已有可用 worker。需先在真机验证原生 worker、Job 的并行执行与总时间，再考虑放开平台限制；现有 9 色依赖调度也有同步成本，不是线性核数加速。
+
+若平台允许并行或向量化收益受共享写限制，可以试每单位独立查询并只累加自己的避让力，减少对其他单位数组的写入与同步。该方案可能重复计算一部分邻居，且改变有限预算下的配对与轨迹，必须用既有质量指标验证。另可研究邻居列表复用／空间查询失效规则、活动格遍历，以及 CPU 格级密度压力近似；缓存不能只看本单位是否移动，还要处理周围单位移动、出生死亡和跨格失效。
+
+后续建议调整为先做 CPU 专项能力验证：SIMD 对照优先，原生 worker / Jobs 能力单独探测，再根据结果选择向量化或避让写入模型改造；自适应更新和密度场属于有行为取舍的算法候选。已有坐标打包／NoAlias 探索收益较小或不明确，不再据此宣称缓存布局可以轻松大幅提速。主目标仍是避让约 11.4 ms 和决策约 4.5 ms，而不是仅约 0.44 ms 的 Commit。以上尚无新真机候选性能结果。

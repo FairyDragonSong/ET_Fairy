@@ -4,5 +4,6 @@
     <Compile Include="../../Unity/Assets/Scripts/Loader/RedBlue/CrowdSimulation.cs" Link="CrowdSimulation.cs" />
     <Compile Include="../../Unity/Assets/Scripts/Loader/RedBlue/FlowField.cs" Link="FlowField.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="../../Unity/Assets/Scripts/Loader/RedBlue/RedBlueProfiler.cs" Link="RedBlueProfiler.cs" />
   </ItemGroup>
 </Project>

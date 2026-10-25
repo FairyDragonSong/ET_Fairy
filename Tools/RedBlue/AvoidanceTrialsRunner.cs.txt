@@ -1,0 +1,132 @@
+namespace ET.RedBlue
+{
+    internal interface IAvoidanceTrial : IDisposable
+    {
+        bool IsBurstCompiled { get; }
+        void Step(CrowdSimulation s, int tick, bool zeroDamage);
+    }
+    // Generated into the Loader assembly only for isolated Editor trials.
+    public static class AvoidanceTrialsRunner
+    {
+        public static object Run(string variant, int formation, int round)
+        {
+            if (UnityEditor.EditorApplication.isPlaying) throw new InvalidOperationException("Stop Editor Play mode");
+            AvoidanceTrialKernel.PairLimit = variant == "budget16" ? 16 : variant == "budget24" ? 24 : variant == "budget32" ? 32 : variant == "budget40" ? 40 : 48;
+            AvoidanceTrialKernel.Interval = variant == "half-rate" ? 2 : 1;
+            AvoidanceTrialKernel.Approximate = variant == "polynomial" ? 1 : variant == "rational" ? 2 : 0;
+            if (variant != "baseline" && variant != "budget16" && variant != "budget24" && variant != "budget32" && variant != "budget40" && variant != "half-rate" && variant != "polynomial" && variant != "rational" && variant != "noalias" && variant != "packed")
+                throw new ArgumentException("Unknown variant");
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var tickField = typeof(CrowdSimulation).GetField("<Tick>k__BackingField", flags);
+            var randomField = typeof(CrowdSimulation).GetField("random", flags);
+            using (var s = new CrowdSimulation(50000, formation, 7241, CrowdExecution.ManagedReference))
+            using (IAvoidanceTrial kernel = variant == "noalias" ? (IAvoidanceTrial)new NoAliasTrialKernel(s, (uint)randomField.GetValue(s), false)
+                : variant == "packed" ? (IAvoidanceTrial)new PackedTrialKernel(s, (uint)randomField.GetValue(s), false)
+                : new AvoidanceTrialKernel(s, (uint)randomField.GetValue(s), false))
+            {
+                s.ZeroDamage = true;
+                double grid = 0, separation = 0, decision = 0, commit = 0;
+                object warmQuality = null;
+                var previousVx = new float[2000]; var previousVy = new float[2000];
+                double velocityDeltaSquared = 0;
+                for (int tick = 1; tick <= 600; tick++)
+                {
+                    tickField.SetValue(s, tick);
+                    if (tick % 6 == 0) s.flow.Update(s);
+                    kernel.Step(s, tick, true);
+                    for (int sample = 0; sample < previousVx.Length; sample++)
+                    {
+                        int i = sample * s.Count / previousVx.Length;
+                        double dx = s.Vx[i] - previousVx[sample], dy = s.Vy[i] - previousVy[sample];
+                        if (tick > 300) velocityDeltaSquared += dx * dx + dy * dy;
+                        previousVx[sample] = s.Vx[i]; previousVy[sample] = s.Vy[i];
+                    }
+                    if (tick == 300) warmQuality = Quality(s);
+                    if (tick <= 300) continue;
+                    grid += s.GridMs; separation += s.SeparationMs; decision += s.DecisionMs; commit += s.CommitMs;
+                }
+                if (!kernel.IsBurstCompiled) throw new InvalidOperationException("Trial did not execute Burst");
+                int saturated = 0, used = 0, max = 0;
+                for (int i = 0; i < s.Count; i++)
+                {
+                    used += s.budget[i]; max = Math.Max(max, s.budget[i]);
+                    if (s.budget[i] >= AvoidanceTrialKernel.PairLimit) saturated++;
+                    if (float.IsNaN(s.X[i]) || float.IsNaN(s.Y[i]) || s.X[i] < 8 || s.X[i] > 1792 || s.Y[i] < 8 || s.Y[i] > 1092)
+                        throw new InvalidOperationException("Invalid state");
+                }
+                var result = new {
+                    variant, formation, round, count = s.Count, seed = 7241, zeroDamage = true, tick = s.Tick,
+                    pairLimit = AvoidanceTrialKernel.PairLimit, interval = AvoidanceTrialKernel.Interval,
+                    burstVerified = kernel.IsBurstCompiled,
+                    gridMs = grid / 300, separationMs = separation / 300, decisionMs = decision / 300, commitMs = commit / 300,
+                    stageTotalMs = (grid + separation + decision + commit) / 300,
+                    rmsVelocityChangePerTick = Math.Sqrt(velocityDeltaSquared / (2000 * 300)),
+                    budgetMean = used / (double)s.Count, budgetMax = max, budgetSaturatedPercent = saturated * 100.0 / s.Count,
+                    state = Hash(s), warmQuality, quality = Quality(s),
+                    note = "Editor Burst single thread, tick 301..600; temporary clone with runtime variant branches; not phone timing; nearest-neighbor quality proxies do not establish visual/gameplay equivalence"
+                };
+                string folder = System.IO.Path.GetFullPath("../Temp/RedBlueAvoidanceTrials");
+                System.IO.Directory.CreateDirectory(folder);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(folder, variant + "-f" + formation + "-r" + round + ".json"),
+                    Newtonsoft.Json.JsonConvert.SerializeObject(result, Newtonsoft.Json.Formatting.Indented));
+                return result;
+            }
+        }
+        private static string Hash(CrowdSimulation s)
+        {
+            var fields = typeof(CrowdSimulation).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Array.Sort(fields, (a, b) => string.CompareOrdinal(a.Name, b.Name));
+            using (var stream = new System.IO.MemoryStream())
+            {
+                foreach (var field in fields)
+                {
+                    var array = field.GetValue(s) as Array;
+                    if (array == null) continue;
+                    var bytes = new byte[Buffer.ByteLength(array)]; Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length); stream.Write(bytes, 0, bytes.Length);
+                }
+                using (var sha = System.Security.Cryptography.SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(stream.ToArray())).Replace("-", "");
+            }
+        }
+        private static object Quality(CrowdSimulation s)
+        {
+            float diameter = s.Radius * 2;
+            int cols = (int)Math.Ceiling(CrowdSimulation.Width / diameter), rows = (int)Math.Ceiling(CrowdSimulation.Height / diameter);
+            var heads = new int[cols * rows]; var next = new int[s.Count]; var counts = new int[heads.Length];
+            for (int i = 0; i < heads.Length; i++) heads[i] = -1;
+            int occupied = 0, occupancyMax = 0, targetCount = 0; double leftX = 0, rightX = 0;
+            for (int i = 0; i < s.Count; i++)
+            {
+                int c = (int)(s.Y[i] / diameter) * cols + (int)(s.X[i] / diameter);
+                next[i] = heads[c]; heads[c] = i; if (counts[c]++ == 0) occupied++;
+                occupancyMax = Math.Max(occupancyMax, counts[c]);
+                if (s.Target[i] >= 0) targetCount++;
+                if (s.Team[i] == 0) leftX += s.X[i]; else rightX += s.X[i];
+            }
+            var overlaps = new double[2000]; double sum = 0; int deep = 0, touching = 0;
+            // Fixed evenly spaced soldier IDs, identical across every trial.
+            for (int sample = 0; sample < overlaps.Length; sample++)
+            {
+                int i = sample * s.Count / overlaps.Length, cx = (int)(s.X[i] / diameter), cy = (int)(s.Y[i] / diameter);
+                float nearest2 = diameter * diameter;
+                for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++)
+                {
+                    int x = cx + ox, y = cy + oy; if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+                    for (int j = heads[y * cols + x]; j >= 0; j = next[j])
+                    {
+                        if (j == i) continue;
+                        float dx = s.X[i] - s.X[j], dy = s.Y[i] - s.Y[j], d2 = dx * dx + dy * dy;
+                        if (d2 < nearest2) nearest2 = d2;
+                    }
+                }
+                double overlap = 1 - Math.Sqrt(nearest2) / diameter;
+                overlaps[sample] = overlap; sum += overlap;
+                if (overlap > .5) deep++; if (overlap > .01) touching++;
+            }
+            Array.Sort(overlaps);
+            return new { samples = overlaps.Length, meanOverlapFraction = sum / overlaps.Length, p95OverlapFraction = overlaps[(int)(overlaps.Length * .95) - 1],
+                deepOverlapPercent = deep * 100.0 / overlaps.Length, overlapOverOnePercent = touching * 100.0 / overlaps.Length,
+                occupiedBins = occupied, occupancyMax, targetPercent = targetCount * 100.0 / s.Count,
+                teamCenterDistanceX = rightX / s.Alive[1] - leftX / s.Alive[0] };
+        }
+    }
+}

@@ -1,0 +1,396 @@
+{
+  "schema": 1,
+  "sessions": [
+    {
+      "buildId": "20261022T151844Z-scalar",
+      "sessionId": "324326922cbe49e5a81ecdd2aaaec7df",
+      "variant": "scalar",
+      "execution": "BurstSingleThread",
+      "runs": 2,
+      "complete": false,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.625,
+        "p95StepMs": 18.0,
+        "maxStepMs": 19.0,
+        "gridMs": 1.6533333333333333,
+        "separationMs": 11.356666666666666,
+        "decisionMs": 3.1799999999999997,
+        "commitMs": 0.41833333333333333
+      }
+    },
+    {
+      "buildId": "20261022T151844Z-scalar",
+      "sessionId": "5bbc2f83bd16437dab516e36bb6ffd05",
+      "variant": "scalar",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.6,
+        "p95StepMs": 18.0,
+        "maxStepMs": 25.0,
+        "gridMs": 1.67,
+        "separationMs": 11.38,
+        "decisionMs": 3.16,
+        "commitMs": 0.3933333333333333
+      }
+    },
+    {
+      "buildId": "20261022T152709Z-simd",
+      "sessionId": "9df8c7df8b51498f99ff86af1103496f",
+      "variant": "simd",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.513333333333332,
+        "p95StepMs": 18.0,
+        "maxStepMs": 19.0,
+        "gridMs": 1.6966666666666668,
+        "separationMs": 11.176666666666666,
+        "decisionMs": 3.1566666666666667,
+        "commitMs": 0.43
+      }
+    },
+    {
+      "buildId": "20261022T151844Z-scalar",
+      "sessionId": "77ea42c4bf44453b81ddfcb7f7d5ceb2",
+      "variant": "scalar",
+      "execution": "BurstSingleThread",
+      "runs": 1,
+      "complete": false,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        true
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.473333333333333,
+        "p95StepMs": 19.0,
+        "maxStepMs": 24.0,
+        "gridMs": 1.7433333333333334,
+        "separationMs": 11.16,
+        "decisionMs": 3.1766666666666667,
+        "commitMs": 0.38
+      }
+    },
+    {
+      "buildId": "20261022T151844Z-scalar",
+      "sessionId": "b658b4410060471abadf06e1a4217567",
+      "variant": "scalar",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        true
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.37,
+        "p95StepMs": 18.0,
+        "maxStepMs": 22.0,
+        "gridMs": 1.66,
+        "separationMs": 11.21,
+        "decisionMs": 3.1466666666666665,
+        "commitMs": 0.4033333333333333
+      }
+    },
+    {
+      "buildId": "20261024T034830Z-packed-ab",
+      "sessionId": "a62bda0d5799414d92b12e586bb48cee",
+      "variant": "packed-ab",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.36,
+        "p95StepMs": 18.0,
+        "maxStepMs": 20.0,
+        "gridMs": 1.6733333333333333,
+        "separationMs": 11.173333333333334,
+        "decisionMs": 3.1033333333333335,
+        "commitMs": 0.42
+      }
+    },
+    {
+      "buildId": "20261024T034830Z-packed-ab",
+      "sessionId": "a62bda0d5799414d92b12e586bb48cee",
+      "variant": "packed-ab",
+      "execution": "BurstPackedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 15.276666666666667,
+        "p95StepMs": 17.0,
+        "maxStepMs": 18.0,
+        "gridMs": 1.9433333333333334,
+        "separationMs": 9.75,
+        "decisionMs": 3.23,
+        "commitMs": 0.4266666666666667
+      }
+    },
+    {
+      "buildId": "20261024T034830Z-packed-ab",
+      "sessionId": "49deddc496994c2d9ea11b911f6c87f3",
+      "variant": "packed-ab",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.333333333333332,
+        "p95StepMs": 18.0,
+        "maxStepMs": 19.0,
+        "gridMs": 1.6466666666666667,
+        "separationMs": 11.153333333333334,
+        "decisionMs": 3.1533333333333333,
+        "commitMs": 0.37666666666666665
+      }
+    },
+    {
+      "buildId": "20261024T034830Z-packed-ab",
+      "sessionId": "49deddc496994c2d9ea11b911f6c87f3",
+      "variant": "packed-ab",
+      "execution": "BurstPackedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 15.273333333333333,
+        "p95StepMs": 17.0,
+        "maxStepMs": 18.0,
+        "gridMs": 1.94,
+        "separationMs": 9.73,
+        "decisionMs": 3.2333333333333334,
+        "commitMs": 0.43333333333333335
+      }
+    }
+  ],
+  "packedComparisons": [
+    {
+      "buildId": "20261024T034830Z-packed-ab",
+      "sessionId": "a62bda0d5799414d92b12e586bb48cee",
+      "complete": true,
+      "sameContext": true,
+      "validSingleThreadConditions": true,
+      "stateHashesMatch": true,
+      "validComparison": true,
+      "baselineMedian": {
+        "meanStepMs": 16.36,
+        "p95StepMs": 18.0,
+        "maxStepMs": 20.0,
+        "gridMs": 1.6733333333333333,
+        "separationMs": 11.173333333333334,
+        "decisionMs": 3.1033333333333335,
+        "commitMs": 0.42
+      },
+      "packedMedian": {
+        "meanStepMs": 15.276666666666667,
+        "p95StepMs": 17.0,
+        "maxStepMs": 18.0,
+        "gridMs": 1.9433333333333334,
+        "separationMs": 9.75,
+        "decisionMs": 3.23,
+        "commitMs": 0.4266666666666667
+      },
+      "medianChangePercent": {
+        "meanStepMs": -6.621841890790536,
+        "p95StepMs": -5.555555555555558,
+        "maxStepMs": -9.999999999999998,
+        "gridMs": 16.135458167330686,
+        "separationMs": -12.738663484486878,
+        "decisionMs": 4.081632653061229,
+        "commitMs": 1.5873015873016039
+      },
+      "pairedStepChangePercent": [
+        -5.722519555372562,
+        11.870376893272283,
+        -6.621841890790536
+      ]
+    },
+    {
+      "buildId": "20261024T034830Z-packed-ab",
+      "sessionId": "49deddc496994c2d9ea11b911f6c87f3",
+      "complete": true,
+      "sameContext": true,
+      "validSingleThreadConditions": true,
+      "stateHashesMatch": true,
+      "validComparison": true,
+      "baselineMedian": {
+        "meanStepMs": 16.333333333333332,
+        "p95StepMs": 18.0,
+        "maxStepMs": 19.0,
+        "gridMs": 1.6466666666666667,
+        "separationMs": 11.153333333333334,
+        "decisionMs": 3.1533333333333333,
+        "commitMs": 0.37666666666666665
+      },
+      "packedMedian": {
+        "meanStepMs": 15.273333333333333,
+        "p95StepMs": 17.0,
+        "maxStepMs": 18.0,
+        "gridMs": 1.94,
+        "separationMs": 9.73,
+        "decisionMs": 3.2333333333333334,
+        "commitMs": 0.43333333333333335
+      },
+      "medianChangePercent": {
+        "meanStepMs": -6.489795918367336,
+        "p95StepMs": -5.555555555555558,
+        "maxStepMs": -5.263157894736848,
+        "gridMs": 17.813765182186224,
+        "separationMs": -12.761506276150635,
+        "decisionMs": 2.5369978858351017,
+        "commitMs": 15.04424778761062
+      },
+      "pairedStepChangePercent": [
+        -6.489795918367336,
+        -5.943627450980394,
+        -6.571428571428561
+      ]
+    }
+  ],
+  "note": "Only complete 3-run fixed-tick sessions are acceptance data. Match phone, profiler and thermal conditions. For pure parallel scaling, compare BurstColoredSingleThread with BurstParallel and verify stateHash equality; the original BurstSingleThread uses a different pair order. Packed comparisons use the same build/session and original pair order; negative change means faster. Total Step includes gather/scatter. A valid comparison alone does not establish a stable gain."
+}

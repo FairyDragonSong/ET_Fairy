@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "buildId": "20261022T153657Z-threads",
+  "source": "Actual Android phone startup diagnostic POSTs, not simulator",
+  "peer": "192.168.1.7",
+  "sessionsUtc": ["2026-10-24T02:52:43Z", "2026-10-24T03:15:42Z"],
+  "environment": {
+    "platform": "android",
+    "system": "Android 12",
+    "wechatVersion": "8.0.79",
+    "baseLibrary": "3.17.5",
+    "versionRequirementsMet": true,
+    "standardWorkerSupport": false,
+    "globalSharedArrayBuffer": "function",
+    "wxGetSharedArrayBufferResult": "undefined",
+    "wxGetAtomicsResult": "undefined",
+    "appIdGrayRollout": "unverified; runtime capability false does not identify which rollout requirement is unmet"
+  },
+  "startup": {
+    "frameworkLoaded": true,
+    "unityPluginDefaultType": "function",
+    "unityModuleInvoked": true,
+    "firstReportedError": "Assertion failed: WebAssembly Module should have been loaded by now!",
+    "assertionLocation": "minigame/webgl.wasm.framework.unityweb.js:3829, PThread.loadWasmModuleToWorker",
+    "assertionCondition": "wasmModule instanceof WebAssembly.Module",
+    "modulePendingAfter10Seconds": true,
+    "moduleReadyObserved": false,
+    "oldSharedArrayBufferReferenceErrorObserved": false
+  },
+  "conclusion": "The phone meets version minimums but the official Worker V2 capability check is false. The threads-only experimental package is therefore not eligible for this context. The immediate failure is the Wasm module assertion while loading a pthread worker; existing diagnostics do not establish whether the module was missing or failed a cross-context instanceof check. Do not bypass this assertion or infer that all failures are solely caused by gray rollout.",
+  "next": "Verify Worker V2 gray rollout with WeChat using AppID wxf15ab5190a932da3; use the existing single-thread Final package on unsupported contexts. Revalidate worker module transfer/instantiation and actual Jobs execution after capability becomes true.",
+  "evidence": {
+    "latestErrorReceivedUtc": "20261024T031543527884Z",
+    "latestPendingReceivedUtc": "20261024T031552545404Z",
+    "diagnosticDirectory": "Temp/WeChatCpuExperiments/uploads/diagnostics",
+    "httpLog": "Temp/WeChatProfiler/servers/8086/stderr.log"
+  },
+  "phoneJobsVerified": false,
+  "benchmarkCollected": false,
+  "profilerFramesCollected": false
+}

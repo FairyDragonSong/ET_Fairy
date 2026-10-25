@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "sessions": [
+    {
+      "buildId": "20261024T053244Z-logic-deadline",
+      "sessionId": "14c495b462cb4cad935adc407e9c69b1",
+      "variant": "logic-deadline",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 22.883333333333333,
+        "p95StepMs": 25.0,
+        "maxStepMs": 27.0,
+        "gridMs": 2.79,
+        "separationMs": 14.823333333333334,
+        "decisionMs": 4.636666666666667,
+        "commitMs": 0.6266666666666667
+      }
+    },
+    {
+      "buildId": "20261024T053244Z-logic-deadline",
+      "sessionId": "14c495b462cb4cad935adc407e9c69b1",
+      "variant": "logic-deadline",
+      "execution": "BurstPackedSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "development": false,
+      "median": {
+        "meanStepMs": 15.433333333333334,
+        "p95StepMs": 18.0,
+        "maxStepMs": 22.0,
+        "gridMs": 2.2533333333333334,
+        "separationMs": 9.48,
+        "decisionMs": 3.276666666666667,
+        "commitMs": 0.41333333333333333
+      }
+    }
+  ],
+  "packedComparisons": [
+    {
+      "buildId": "20261024T053244Z-logic-deadline",
+      "sessionId": "14c495b462cb4cad935adc407e9c69b1",
+      "complete": true,
+      "sameContext": true,
+      "validSingleThreadConditions": true,
+      "stateHashesMatch": true,
+      "validComparison": true,
+      "baselineMedian": {
+        "meanStepMs": 22.883333333333333,
+        "p95StepMs": 25.0,
+        "maxStepMs": 27.0,
+        "gridMs": 2.79,
+        "separationMs": 14.823333333333334,
+        "decisionMs": 4.636666666666667,
+        "commitMs": 0.6266666666666667
+      },
+      "packedMedian": {
+        "meanStepMs": 15.433333333333334,
+        "p95StepMs": 18.0,
+        "maxStepMs": 22.0,
+        "gridMs": 2.2533333333333334,
+        "separationMs": 9.48,
+        "decisionMs": 3.276666666666667,
+        "commitMs": 0.41333333333333333
+      },
+      "medianChangePercent": {
+        "meanStepMs": -32.5564457392571,
+        "p95StepMs": -28.000000000000004,
+        "maxStepMs": -18.518518518518523,
+        "gridMs": -19.23536439665472,
+        "separationMs": -36.04677310546436,
+        "decisionMs": -29.331416247304098,
+        "commitMs": -34.04255319148937
+      },
+      "pairedStepChangePercent": [
+        -7.125407166123788,
+        -32.5564457392571,
+        -9.07506897052417
+      ]
+    }
+  ],
+  "note": "Only complete 3-run fixed-tick sessions are acceptance data. Match phone, profiler and thermal conditions. For pure parallel scaling, compare BurstColoredSingleThread with BurstParallel and verify stateHash equality; the original BurstSingleThread uses a different pair order. Packed comparisons use the same build/session and original pair order; negative change means faster. Total Step includes gather/scatter. A valid comparison alone does not establish a stable gain."
+}

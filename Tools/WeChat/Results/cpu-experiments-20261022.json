@@ -1,0 +1,271 @@
+{
+  "schema": 1,
+  "status": "phone scalar and SIMD completed; native Jobs phone failed to start; first phone exception pending diagnostic rescan",
+  "fixedScene": {
+    "count": 50000,
+    "formation": 1,
+    "seed": 7241,
+    "warmupTicks": 300,
+    "measuredTicks": 300,
+    "runsPerMode": 3
+  },
+  "exports": [
+    {
+      "buildId": "20261022T151844Z-scalar",
+      "cpuVariant": "scalar",
+      "resourceVersion": "2026-10-22-2325",
+      "simd": false,
+      "threads": false,
+      "kernelSourceSha256": "d396cfeb71a05d122785493d1492abb3b8d3fe565797a0d508910dc8a5c46bf8",
+      "benchmarkSourceSha256": "566f1aade628e5d2a7de2958d5d3a7653fcff1b054b425a6b1ed4a1860afd9f3",
+      "exportRoot": "E:\\github\\ET\\YIUI\\Unity\\BuildArtifacts\\RedBlue-CPU-Scalar-Final-20261022",
+      "jobVectorOpcodes": [
+        0,
+        0,
+        0
+      ],
+      "outlinedVectorOpcodes": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wasmCompatibility": {
+        "utc": "2026-10-22T15:30:20.655Z",
+        "command": "-Oz --strip-debug --enable-sign-ext --enable-nontrapping-float-to-int --enable-bulk-memory",
+        "originalBytes": 132022224,
+        "optimizedBytes": 65710646,
+        "compressedBytes": 12078724,
+        "originalSha256": "9d35d69f6c7d7274350e673d5ebfc5b9f39227128600f5f4d2bcdf246c1ce4ad",
+        "optimizedSha256": "3919b8c2ba4fb3e18b9d5a83ca6f0246d09258fa125a0eb31023e048fde953a2",
+        "compressedSha256": "c41f5b55ef9f613270f99c90ab84f2a20655f61f9e5a163b78029a858fc97563",
+        "originalCodeId": "3b5ecba53175170c",
+        "codeId": "1421d4adc200ecfd",
+        "exportsNamesKindsMatch": true,
+        "addedImports": [],
+        "removedImports": [
+          {
+            "module": "env",
+            "name": "_mmap_js",
+            "kind": "function"
+          }
+        ],
+        "brotliRoundtrip": true,
+        "note": "Development + Autoconnect preserved; Wasm postprocessing changes timing and debug symbols. Phone Profiler and launch need verification."
+      },
+      "httpFilesVerified": 40,
+      "resourceUrl": "http://192.168.1.8:8084"
+    },
+    {
+      "buildId": "20261022T152709Z-simd",
+      "cpuVariant": "simd",
+      "resourceVersion": "2026-10-22-2327",
+      "simd": true,
+      "threads": false,
+      "kernelSourceSha256": "d396cfeb71a05d122785493d1492abb3b8d3fe565797a0d508910dc8a5c46bf8",
+      "benchmarkSourceSha256": "566f1aade628e5d2a7de2958d5d3a7653fcff1b054b425a6b1ed4a1860afd9f3",
+      "exportRoot": "E:\\github\\ET\\YIUI\\Unity\\BuildArtifacts\\RedBlue-CPU-SIMD-Final-20261022",
+      "jobVectorOpcodes": [
+        0,
+        0,
+        0
+      ],
+      "outlinedVectorOpcodes": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wasmCompatibility": {
+        "utc": "2026-10-22T15:35:05.851Z",
+        "command": "-Oz --strip-debug --enable-sign-ext --enable-nontrapping-float-to-int --enable-bulk-memory --enable-simd",
+        "originalBytes": 132025414,
+        "optimizedBytes": 65715153,
+        "compressedBytes": 12157256,
+        "originalSha256": "dff4d7d5979640c15a7d3bc4aa743d4c98ea9919741b47144edb730a6ca5fe48",
+        "optimizedSha256": "2670aeab11702bf5611162f6caf6bf31b9066123cc937e9b836a032f4f56c33c",
+        "compressedSha256": "71a6b0f9486ba2fa5a2325f4a8760447e94721ee01785123df249c92f076338f",
+        "originalCodeId": "1266361ce1eedfb6",
+        "codeId": "291fa1adb17fc904",
+        "exportsNamesKindsMatch": true,
+        "addedImports": [],
+        "removedImports": [
+          {
+            "module": "env",
+            "name": "_mmap_js",
+            "kind": "function"
+          }
+        ],
+        "brotliRoundtrip": true,
+        "note": "Development + Autoconnect preserved; Wasm postprocessing changes timing and debug symbols. Phone Profiler and launch need verification."
+      },
+      "httpFilesVerified": 40,
+      "resourceUrl": "http://192.168.1.8:8085"
+    },
+    {
+      "buildId": "20261022T153657Z-threads",
+      "cpuVariant": "threads",
+      "resourceVersion": "2026-10-22-2343",
+      "simd": false,
+      "threads": true,
+      "kernelSourceSha256": "d396cfeb71a05d122785493d1492abb3b8d3fe565797a0d508910dc8a5c46bf8",
+      "benchmarkSourceSha256": "566f1aade628e5d2a7de2958d5d3a7653fcff1b054b425a6b1ed4a1860afd9f3",
+      "exportRoot": "E:\\github\\ET\\YIUI\\Unity\\BuildArtifacts\\RedBlue-CPU-Jobs-Native-Final-20261022",
+      "jobVectorOpcodes": [
+        0,
+        0,
+        0
+      ],
+      "outlinedVectorOpcodes": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wasmCompatibility": {
+        "utc": "2026-10-22T15:48:32.514Z",
+        "command": "-Oz --strip-debug --enable-sign-ext --enable-nontrapping-float-to-int --enable-bulk-memory --enable-threads",
+        "originalBytes": 133993311,
+        "optimizedBytes": 66236227,
+        "compressedBytes": 12372579,
+        "originalSha256": "0d5cc9c424777464021037b78a2a195da9a7e1bbea6e5b65c2962e289c03ddad",
+        "optimizedSha256": "e669b4527da530433806696475a4fdbf1f9125b7f5c248edfdd2e25c3d6629b2",
+        "compressedSha256": "beb9116be42bed6771797f6d51672efaff64a86dcef3cb649dc17e241aaec182",
+        "originalCodeId": "340d0e88d73d7b8e",
+        "codeId": "1ecf1defde52c616",
+        "exportsNamesKindsMatch": true,
+        "addedImports": [],
+        "removedImports": [
+          {
+            "module": "env",
+            "name": "_mmap_js",
+            "kind": "function"
+          }
+        ],
+        "brotliRoundtrip": true,
+        "note": "Development + Autoconnect preserved; Wasm postprocessing changes timing and debug symbols. Phone Profiler and launch need verification."
+      },
+      "httpFilesVerified": 40,
+      "resourceUrl": "http://192.168.1.8:8086"
+    }
+  ],
+  "editorValidation": "cpu-editor-matched-control-20261022.json",
+  "editorMatchedOrder": {
+    "singleMs": 6.705500666666663,
+    "jobsMs": 3.0602719999999968,
+    "stateHashesEqual": true,
+    "observedAvoidanceThreads": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "note": "One Editor run per mode. Not phone acceptance."
+  },
+  "phoneResults": [
+    {
+      "buildId": "20261022T151844Z-scalar",
+      "sessionId": "5bbc2f83bd16437dab516e36bb6ffd05",
+      "variant": "scalar",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.6,
+        "p95StepMs": 18.0,
+        "maxStepMs": 25.0,
+        "gridMs": 1.67,
+        "separationMs": 11.38,
+        "decisionMs": 3.16,
+        "commitMs": 0.3933333333333333
+      }
+    },
+    {
+      "buildId": "20261022T152709Z-simd",
+      "sessionId": "9df8c7df8b51498f99ff86af1103496f",
+      "variant": "simd",
+      "execution": "BurstSingleThread",
+      "runs": 3,
+      "complete": true,
+      "validFixedTickBurst": true,
+      "device": "wx 0.0",
+      "gpu": "Maleoon 920",
+      "resolution": [
+        2835,
+        1316
+      ],
+      "profilerStates": [
+        false
+      ],
+      "stateReplayConsistent": true,
+      "stateHash": "D258122B36EEC5041311061242223858B0A56B03BAEFE623E94569D71902983E",
+      "separationWorkersObserved": false,
+      "separationThreadIndices": [
+        0
+      ],
+      "jobWorkers": 0,
+      "median": {
+        "meanStepMs": 16.513333333333332,
+        "p95StepMs": 18.0,
+        "maxStepMs": 19.0,
+        "gridMs": 1.6966666666666668,
+        "separationMs": 11.176666666666666,
+        "decisionMs": 3.1566666666666667,
+        "commitMs": 0.43
+      }
+    }
+  ],
+  "note": "SIMD enable did not vectorize the mapped current simulation functions. Native Jobs phone support/performance must be observed.",
+  "nativeJobsPhoneStatus": "user confirmed startup failure; no valid Jobs timing",
+  "startupDiagnostics": "cpu-jobs-startup-20261022.json",
+  "observedSimulatorFirstError": "ReferenceError: SharedArrayBuffer is not defined",
+  "phoneFirstError": "not yet captured"
+}

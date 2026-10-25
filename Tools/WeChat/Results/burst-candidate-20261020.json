@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-20",
+  "buildId": "20261020T154440Z",
+  "variant": "Development + Autoconnect + MiniGame Burst AOT",
+  "baselineBuildId": "20261020T150608Z",
+  "onlyRuntimeConfigurationChange": "EnableBurstCompilation for MiniGame",
+  "burstSettings": "Unity/ProjectSettings/BurstAotSettings_MiniGame.json",
+  "nativeArchiveBytes": 297334,
+  "nativeArchiveSha256": "452C2ABCEDE3D593026F6A44381C17B10362CB7829E5B07C30EB8AB43AB81CFE",
+  "preflight": "passed",
+  "httpFilesVerified": 40,
+  "wasmCodeBytes": 20312377,
+  "wasmCodeSha256": "a7b52732ef8c015df6e5748a329401f33810c84167ca6396d8941d6681547a47",
+  "export": "Unity/BuildArtifacts/RedBlue-WeChat-Burst-20261020/minigame",
+  "resourceUrl": "http://192.168.1.8:8082",
+  "phoneBackendVerified": false,
+  "phonePerformanceBenefitMeasured": false,
+  "note": "Native archive is compiled and packaged; verify phone backend and compiled sentinel before accepting acceleration. Baseline sparse captures have uncontrolled battle age, so do not claim exact improvement percentages."
+}

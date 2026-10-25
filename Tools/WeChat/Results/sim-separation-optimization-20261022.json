@@ -1,0 +1,426 @@
+{
+  "schema": 1,
+  "date": "2026-10-22",
+  "environment": "Intel(R) Core(TM) i9-14900HX / Editor Burst 2022.3.62t11",
+  "scenario": {
+    "population": 50000,
+    "formation": "Islands",
+    "seed": 7241,
+    "zeroDamage": true,
+    "warmupTicks": 300,
+    "measuredTicks": [
+      301,
+      600
+    ],
+    "runsPerVersion": 3
+  },
+  "metrics": {
+    "gridMs": {
+      "baselineMedianMs": 0.4767796666666672,
+      "candidateMedianMs": 0.4909863333333325,
+      "reductionPercent": -2.979713200856282
+    },
+    "separationMs": {
+      "baselineMedianMs": 4.905687666666675,
+      "candidateMedianMs": 4.486108666666672,
+      "reductionPercent": 8.552908960164185
+    },
+    "decisionMs": {
+      "baselineMedianMs": 1.1840323333333336,
+      "candidateMedianMs": 1.219568000000001,
+      "reductionPercent": -3.001241238626151
+    },
+    "commitMs": {
+      "baselineMedianMs": 0.08507633333333327,
+      "candidateMedianMs": 0.0853903333333333,
+      "reductionPercent": -0.3690803161083167
+    }
+  },
+  "checkedStateHashes": 19,
+  "allStateHashesEqual": true,
+  "baselineSourceSha256": "5faaaa76d15b32fe939cf25f4cb4ee372f6e4baca6a01e0537b120c7a5704a78",
+  "candidateSourceSha256": "468b97ef693905131d4d9854e8932294b5b98df177c0a613df0b79712a9dd0ef",
+  "limitations": [
+    "Phone candidate not exported or measured",
+    "Initial baseline-first run excluded: unchanged stages were also slower; retained under Temp for audit",
+    "Desktop CPU ISA and memory behavior differ from MiniGame wasm; no phone speedup claim"
+  ],
+  "baseline": {
+    "label": "baseline",
+    "unity": "2022.3.62t11",
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "note": "Editor Burst; 50k Islands tick 301..600; state hashes cover all simulation arrays, including budgets/forces/targets; phone not measured",
+    "parityPassed": false,
+    "results": [
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 0,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "3408E38078DD280BB5F726CFB80012A3277253AC27ED754E8AD54D14C841BF40"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 0,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "0124AA84E4538FA165466EA13D66049D2789760DD9C73A3907E12867317C8743"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 1,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "65187D5CA65688F67DFEBBFB18E86BE678D5F22F13679623A62AAD5CAFB706BF"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 1,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "55B6B5675EC33FC2227EF4DA66F69F6B6A2F83348E9DC2729D3CE77A8E05CC8F"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 2,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "0F75295C533C95E0B3E43C90185D67174AED536ECB16B953FC517C169F09E9C2"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 2,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "D9A08675272AA95BBA7740828D8C6E99AAE307AFB2048AEF18C081F89B6F2BE1"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 3,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "238D999818A1A43E865CABD6F7853EE722BD144F25755FFED4F8350984F7D8D6"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 3,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "705610665F6579534EC1E6D348690EE2CE11CECDC144D7A37028ABB8636983C6"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 0,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "3408E38078DD280BB5F726CFB80012A3277253AC27ED754E8AD54D14C841BF40"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 0,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "0124AA84E4538FA165466EA13D66049D2789760DD9C73A3907E12867317C8743"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 1,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "DE634A0D2738C2D7A5CC3E4450A82D59CF9E30004CAF58A577F23C9629501A24"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 1,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "EE60535148C420EE3BAF48A0BACCD33EA0CD53FDB958A0AF1EB82FB405C92657"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 2,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "6393A9409DDDCED9A4855F70E9BEF3F753A9DE26EC690BDCDB3B72762764E145"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 2,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "C022102F1BAE30F3C865EDC9D70750A68AAD6A7A3E0CDAA39B4DB68B910306C1"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 3,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "7AC53F29D05B30E3540E82A5A2D50A10ABF9FBA904E929615888F3BECE1FA55F"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 3,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "A5DFA98A45B5159BA128D3EB3E3BD14B896F475D02EE7061DD5DA4DA678C11E5"
+      },
+      {
+        "kind": "50k-islands",
+        "execution": "Burst single thread",
+        "count": 50000,
+        "tick": 600,
+        "run": 0,
+        "state": "1404E2E5057E93658229140BFD8D15EB5B2A6AD5A708864016E146461D9E3377",
+        "gridMs": 0.4767796666666672,
+        "separationMs": 4.905687666666675,
+        "decisionMs": 1.1840323333333336,
+        "commitMs": 0.09009000000000021
+      },
+      {
+        "kind": "50k-islands",
+        "execution": "Burst single thread",
+        "count": 50000,
+        "tick": 600,
+        "run": 1,
+        "state": "1404E2E5057E93658229140BFD8D15EB5B2A6AD5A708864016E146461D9E3377",
+        "gridMs": 0.5001683333333334,
+        "separationMs": 5.0244746666666655,
+        "decisionMs": 1.2140283333333335,
+        "commitMs": 0.08507633333333327
+      },
+      {
+        "kind": "50k-islands",
+        "execution": "Burst single thread",
+        "count": 50000,
+        "tick": 600,
+        "run": 2,
+        "state": "1404E2E5057E93658229140BFD8D15EB5B2A6AD5A708864016E146461D9E3377",
+        "gridMs": 0.4730446666666655,
+        "separationMs": 4.888608666666666,
+        "decisionMs": 1.1775573333333351,
+        "commitMs": 0.08337499999999999
+      }
+    ]
+  },
+  "candidate": {
+    "label": "candidate",
+    "unity": "2022.3.62t11",
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "note": "Editor Burst; 50k Islands tick 301..600; state hashes cover all simulation arrays, including budgets/forces/targets; phone not measured",
+    "parityPassed": true,
+    "results": [
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 0,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "3408E38078DD280BB5F726CFB80012A3277253AC27ED754E8AD54D14C841BF40"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 0,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "0124AA84E4538FA165466EA13D66049D2789760DD9C73A3907E12867317C8743"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 1,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "65187D5CA65688F67DFEBBFB18E86BE678D5F22F13679623A62AAD5CAFB706BF"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 1,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "55B6B5675EC33FC2227EF4DA66F69F6B6A2F83348E9DC2729D3CE77A8E05CC8F"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 2,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "0F75295C533C95E0B3E43C90185D67174AED536ECB16B953FC517C169F09E9C2"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 2,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "D9A08675272AA95BBA7740828D8C6E99AAE307AFB2048AEF18C081F89B6F2BE1"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 3,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "238D999818A1A43E865CABD6F7853EE722BD144F25755FFED4F8350984F7D8D6"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstSingleThread",
+        "formation": 3,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "705610665F6579534EC1E6D348690EE2CE11CECDC144D7A37028ABB8636983C6"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 0,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "3408E38078DD280BB5F726CFB80012A3277253AC27ED754E8AD54D14C841BF40"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 0,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "0124AA84E4538FA165466EA13D66049D2789760DD9C73A3907E12867317C8743"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 1,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "DE634A0D2738C2D7A5CC3E4450A82D59CF9E30004CAF58A577F23C9629501A24"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 1,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "EE60535148C420EE3BAF48A0BACCD33EA0CD53FDB958A0AF1EB82FB405C92657"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 2,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "6393A9409DDDCED9A4855F70E9BEF3F753A9DE26EC690BDCDB3B72762764E145"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 2,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "C022102F1BAE30F3C865EDC9D70750A68AAD6A7A3E0CDAA39B4DB68B910306C1"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 3,
+        "zeroDamage": false,
+        "count": 2000,
+        "tick": 120,
+        "state": "7AC53F29D05B30E3540E82A5A2D50A10ABF9FBA904E929615888F3BECE1FA55F"
+      },
+      {
+        "kind": "replay",
+        "execution": "BurstParallel",
+        "formation": 3,
+        "zeroDamage": true,
+        "count": 2000,
+        "tick": 120,
+        "state": "A5DFA98A45B5159BA128D3EB3E3BD14B896F475D02EE7061DD5DA4DA678C11E5"
+      },
+      {
+        "kind": "50k-islands",
+        "execution": "Burst single thread",
+        "count": 50000,
+        "tick": 600,
+        "run": 0,
+        "state": "1404E2E5057E93658229140BFD8D15EB5B2A6AD5A708864016E146461D9E3377",
+        "gridMs": 0.4909863333333325,
+        "separationMs": 4.486108666666672,
+        "decisionMs": 1.219568000000001,
+        "commitMs": 0.0853903333333333
+      },
+      {
+        "kind": "50k-islands",
+        "execution": "Burst single thread",
+        "count": 50000,
+        "tick": 600,
+        "run": 1,
+        "state": "1404E2E5057E93658229140BFD8D15EB5B2A6AD5A708864016E146461D9E3377",
+        "gridMs": 0.48327033333333436,
+        "separationMs": 4.466879999999996,
+        "decisionMs": 1.2160800000000014,
+        "commitMs": 0.08509133333333307
+      },
+      {
+        "kind": "50k-islands",
+        "execution": "Burst single thread",
+        "count": 50000,
+        "tick": 600,
+        "run": 2,
+        "state": "1404E2E5057E93658229140BFD8D15EB5B2A6AD5A708864016E146461D9E3377",
+        "gridMs": 0.518728666666666,
+        "separationMs": 4.593858666666662,
+        "decisionMs": 1.2521273333333347,
+        "commitMs": 0.08788066666666673
+      }
+    ]
+  }
+}

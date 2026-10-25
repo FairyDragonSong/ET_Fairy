@@ -1,0 +1,387 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "buildId": "20261022T153657Z-threads",
+  "devtoolsVersion": "2.02.2609231 RC",
+  "sdkVersion": "3.17.4",
+  "loginRecovered": true,
+  "pluginRecovered": true,
+  "pluginDefaultType": "function",
+  "status": "blocked-shared-memory-unavailable-in-current-devtools-context",
+  "firstError": "ReferenceError: SharedArrayBuffer is not defined",
+  "secondaryError": "Module.arguments after SDK retries a mutated Module",
+  "publicApiResults": {
+    "wx.getSharedArrayBuffer()": "undefined",
+    "wx.getAtomics()": "undefined"
+  },
+  "probe": {
+    "sharedWasmMemoryCreation": "succeeded",
+    "bufferTag": "[object SharedArrayBuffer]",
+    "bufferIsArrayBuffer": false
+  },
+  "interpretation": "Current context does not expose shared memory APIs. Bundled runtime gates these public APIs on useSharedArrayBuffer and enableWebWorkerSAB. This is evidence of unavailable capability in this context, not proof of the remote AppID permission state or phone behavior. No constructor extraction, fake shared buffer, or permission bypass applied.",
+  "nextAction": "Confirm AppID shared-memory/WebWorker permission and supported DevTools runtime with WeChat/Tuanjie support; keep scalar build available for profiling.",
+  "evidence": [
+    {
+      "receivedUtc": "20261024T022845291033Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "framework-loaded",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "framework loaded",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022845314885Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "game-entry",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "game entry",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022845728737Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "plugin-export",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "{\"moduleType\":\"object\",\"keys\":[\"default\"],\"defaultType\":\"function\"}",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022846328248Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "launch-0",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "launch progress 0",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022847227096Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "launch-1",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "launch progress 1",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022847239042Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 1,
+        "diagnosticVersion": 4,
+        "phase": "module-invoked",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "UnityModule invoked",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022847249847Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 1,
+        "diagnosticVersion": 4,
+        "phase": "module-error",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "ReferenceError: SharedArrayBuffer is not defined",
+        "stack": "ReferenceError: SharedArrayBuffer is not defined\n    at http://127.0.0.1:26756/game/webgl.wasm.framework.unityweb.js:3056:38\n    at GameGlobal.unityNamespace.UnityModule (http://127.0.0.1:26756/game/webgl.wasm.framework.unityweb.js:26204:17)\n    at http://127.0.0.1:26756/game/__context__/__plugin__/wxe5a48f1ed5f544b7/plugin.js:93:290520\n    at async Promise.all (index 0)",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022850203806Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "launch-5",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "launch progress 5",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022850400417Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "launch-1",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "launch progress 1",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022850410292Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 2,
+        "diagnosticVersion": 4,
+        "phase": "module-invoked",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "UnityModule invoked",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022850449503Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 0,
+        "diagnosticVersion": 4,
+        "phase": "manager-error",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "Module.arguments has been replaced with plain arguments_ (the initial value can be provided on Module, but after startup the value is only looked for on a local variable of that name)",
+        "stack": "",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    },
+    {
+      "receivedUtc": "20261024T022850463477Z",
+      "peer": "192.168.1.8",
+      "result": {
+        "schema": 1,
+        "kind": "startup",
+        "buildId": "20261022T153657Z-threads",
+        "attempt": 2,
+        "diagnosticVersion": 4,
+        "phase": "module-error",
+        "platform": "devtools",
+        "wechatVersion": "8.0.5",
+        "sdkVersion": "3.17.4",
+        "message": "Error: WXUncaughtException",
+        "stack": "Error: WXUncaughtException\n    at currentStackTrace (http://127.0.0.1:26756/game/unity-sdk/util.js:58:17)\n    at Object.WXUncaughtException (http://127.0.0.1:26756/game/unity-sdk/util.js:61:15)\n    at abort (http://127.0.0.1:26756/game/webgl.wasm.framework.unityweb.js:1771:38)\n    at Object.get (http://127.0.0.1:26756/game/webgl.wasm.framework.unityweb.js:2550:5)\n    at http://127.0.0.1:26756/game/webgl.wasm.framework.unityweb.js:2345:11\n    at GameGlobal.unityNamespace.UnityModule (http://127.0.0.1:26756/game/webgl.wasm.framework.unityweb.js:26204:17)\n    at http://127.0.0.1:26756/game/__context__/__plugin__/wxe5a48f1ed5f544b7/plugin.js:93:290520\n    at async Promise.all (index 0)",
+        "sharedMemory": {
+          "getSharedArrayBufferApi": "function",
+          "getSharedArrayBufferResult": "undefined",
+          "getAtomicsApi": "function",
+          "getAtomicsResult": "undefined",
+          "bufferTag": "[object SharedArrayBuffer]",
+          "bufferConstructor": "SharedArrayBuffer",
+          "bufferIsArrayBuffer": false
+        },
+        "sharedArrayBuffer": "undefined",
+        "atomics": "object",
+        "wasm": "object",
+        "wxWasm": "object"
+      }
+    }
+  ],
+  "supersededInterpretation": "See wechat-thread-support-review-20261024.json: official docs explicitly exclude DevTools, so this simulator failure cannot establish AppID gray rollout state. Public API probe is not official Worker V2 capability check."
+}

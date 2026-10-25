@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "buildId": "20261022T133810Z",
+  "exportRoot": "Unity/BuildArtifacts/RedBlue-WeChat-SimOpt-20261022",
+  "resourceVersion": "2026-10-22-2130",
+  "resourceUrl": "http://192.168.1.8:8083",
+  "httpFilesVerified": 40,
+  "wasmCode": {
+    "path": "E:\\github\\ET\\YIUI\\Unity\\BuildArtifacts\\RedBlue-WeChat-SimOpt-20261022\\minigame\\wasmcode\\28467f6df46f85d8.webgl.wasm.code.unityweb.wasm.br",
+    "bytes": 20352381,
+    "sha256": "9437c73de94e02a3f85b31a45a90ff2762c8115345b03adadb8269578e1e6d62"
+  },
+  "kernelSourceSha256": "468b97ef693905131d4d9854e8932294b5b98df177c0a613df0b79712a9dd0ef",
+  "burstNativeArchiveSha256": "08a5f83f93a97a302ce8481213f6b94336cb8113c6cfbdc6dadc3824e8f5220b",
+  "development": true,
+  "autoConnect": true,
+  "deepProfiling": false,
+  "profilerWebSocket": "ws://192.168.1.8:37100",
+  "capture": {
+    "label": "phone-simopt-islands-50k-sim",
+    "seconds": 10,
+    "requiredMarker": "RedBlue.Frame.SimulationOnly",
+    "armed": true,
+    "waitTimeoutSeconds": 1800
+  },
+  "wechatIdeOpened": true,
+  "phoneCandidateVerified": false
+}
