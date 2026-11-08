@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: GlobalConfig
   m_EditorClassIdentifier: 
   CodeMode: 1
-  EnableDll: 1
+  EnableDll: 0
   BuildType: 0
   AppType: 7
-  EPlayMode: 3
+  EPlayMode: 0
   ResourceHostServer: http://127.0.0.1:8080
   ResourceFallbackHostServer: 
   ResourceAppVersion: v1.0

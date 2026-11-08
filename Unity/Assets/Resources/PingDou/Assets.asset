@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73f5322d560e3b04eaa3f4c0d9bfcc8a, type: 3}
+  m_Name: Assets
+  m_EditorClassIdentifier: 
+  catalog: {fileID: 4900000, guid: 23ffb29ad1978e64a950589dc75ba3e4, type: 3}
+  font: {fileID: 12800000, guid: ce3333a726c85e24c976cdd1a9eabde2, type: 3}
+  plastic: {fileID: 2100000, guid: 1c9c3806c56252c4d98927724a6af04c, type: 2}
+  flat: {fileID: 2100000, guid: bbf1594d573f6cc439208387e6552ed8, type: 2}
+  translucent: {fileID: 2100000, guid: b18fd78418e88b7438bfe581861ea782, type: 2}
+  beadHeatStages:
+  - {fileID: 4300000, guid: 5d88738d2701dec448df5a28f5460d35, type: 2}
+  - {fileID: 4300000, guid: 614277365f81e204ca0eeb92b13c1e96, type: 2}
+  - {fileID: 4300000, guid: 2cdaa0ffe9896c74dba2756db4f4cdcc, type: 2}
+  - {fileID: 4300000, guid: 29f3191c1c2265b4f84ff5557f2878f7, type: 2}
+  - {fileID: 4300000, guid: 23c5c4d732f6f734baf3092bcd2515a8, type: 2}
+  - {fileID: 4300000, guid: 950c8c8880e009a408f888f527ed091b, type: 2}
+  - {fileID: 4300000, guid: 97bcedb0d2ffd75449523387b7143729, type: 2}
+  - {fileID: 4300000, guid: 945ce5ecd3c11314c9a9f03c8cbbba22, type: 2}
+  - {fileID: 4300000, guid: 9f3bf1e4fb1737b49a66d84eab8d4786, type: 2}
+  - {fileID: 4300000, guid: 9b6f2e5586abeb5459cb4d3556101dbc, type: 2}
+  - {fileID: 4300000, guid: efb4dda5877089840b2f3464a32b474b, type: 2}
+  - {fileID: 4300000, guid: 0e7b0b9bd72534f4b9217a52907d8ec8, type: 2}
+  - {fileID: 4300000, guid: 7f098a3cd7fe8e84fbf8626ccc00c4ab, type: 2}
+  - {fileID: 4300000, guid: 0a1d2d6b29f46444a8a71149f343db45, type: 2}
+  - {fileID: 4300000, guid: 96b18bdd4d36ed3479e43754fe4d2425, type: 2}
+  - {fileID: 4300000, guid: 922e699a0aa12e948b11ba81b12cee7e, type: 2}
+  - {fileID: 4300000, guid: 265c12d592cf7b843a1843a54a757e3c, type: 2}
+  peg: {fileID: 4300000, guid: 1f3cafd93ec12ae498af8f04ce194336, type: 2}
+  ring: {fileID: 4300000, guid: 06f6add065891a54290583ccd51af4a9, type: 2}
+  targetFill: {fileID: 4300000, guid: 13651b0c1d043754e92233570e4482ca, type: 2}
+  pen: {fileID: 4300000, guid: c0d44bd9a6b44fb4ba10d7cff17e6db1, type: 2}
+  iron: {fileID: 4300000, guid: 3bcddba0a78c2b14bbc11c3b29788872, type: 2}
+  tap: {fileID: 8300000, guid: 0b776b944acf56f48b6325576546cc7d, type: 3}
+  complete: {fileID: 8300000, guid: 180f16109c37582418bbc2f3516950e4, type: 3}
+  roundedPanel: {fileID: 21300000, guid: 47a251ba08d241c41866904f65626470, type: 3}
+  softCircle: {fileID: 21300000, guid: 298923e3ab2e4a84db1b257943fbb59d, type: 3}

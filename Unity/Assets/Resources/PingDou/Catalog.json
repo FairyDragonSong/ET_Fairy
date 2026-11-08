@@ -1,0 +1,232 @@
+{
+  "patterns": [
+    {
+      "id": "berry",
+      "name": "草莓甜心",
+      "desc": "留住一颗草莓的甜，今天也要开心。",
+      "size": 24,
+      "colors": [
+        {
+          "key": "R",
+          "name": "草莓红",
+          "hex": "#ee6369"
+        },
+        {
+          "key": "G",
+          "name": "薄荷绿",
+          "hex": "#7dad71"
+        },
+        {
+          "key": "Y",
+          "name": "奶油黄",
+          "hex": "#ffdf8c"
+        },
+        {
+          "key": "D",
+          "name": "可可棕",
+          "hex": "#553329"
+        }
+      ],
+      "rows": [
+        "........................",
+        "........................",
+        "...........GG...........",
+        "..........GGGG..........",
+        "......GG.GGGGGG.GG......",
+        ".....GGGGGGGGGGGGGG.....",
+        ".....GGGGGGGGGGGGGG.....",
+        "......GGGGGGGGGGGG......",
+        "......RRRRRRRRRRRR......",
+        ".....RRRRRRRRRRRRRR.....",
+        "....RRRRRRRRRRRRRRRR....",
+        "....RRRRRRRRRRRRRRRRR...",
+        "....RRRRDDRRRRDDRRRRR...",
+        "....RRRDDDRRRRDDDRRRR...",
+        "....RRRRRRRRDRRRRRRR....",
+        "....RRRRRRRRRRRRRRRR....",
+        ".....RRRYRRRRRRYRRR.....",
+        "......RRRRRRRRRRRR......",
+        ".......RRRRRRRRRR.......",
+        "........RRRRRRRR........",
+        ".........RRRRRR.........",
+        "...........RRR..........",
+        "............R...........",
+        "........................"
+      ],
+      "source": "assets/berry-source.png",
+      "theme": "水果甜心"
+    },
+    {
+      "id": "cherry",
+      "name": "小樱桃",
+      "theme": "水果甜心",
+      "desc": "把下一份甜，留给一对小樱桃。",
+      "size": 24,
+      "colors": [
+        {
+          "key": "R",
+          "name": "樱桃红",
+          "hex": "#e34d62"
+        },
+        {
+          "key": "G",
+          "name": "叶芽绿",
+          "hex": "#75a747"
+        },
+        {
+          "key": "C",
+          "name": "奶油白",
+          "hex": "#ffe8bf"
+        },
+        {
+          "key": "D",
+          "name": "可可棕",
+          "hex": "#60362b"
+        }
+      ],
+      "rows": [
+        "........................",
+        "........................",
+        "........................",
+        "...........GGG..........",
+        "..........GGGGGGGGG.....",
+        "..........GG.GGGGGG.....",
+        "..........GG.GG.........",
+        ".........GGG.GGG........",
+        ".........GG...GG........",
+        "........GGG...GG........",
+        "........GG....GGG.......",
+        "........GG.....GG.......",
+        ".....DDDDD.....GG.......",
+        "....DDRRRDD...DDDDD.....",
+        "...DDRCRRRDD.DDRRRDD....",
+        "...DRCRRRRRDDDRCRRRDD...",
+        "...DRRRRRRRDDRCRRRRRD...",
+        "...DRRRRRRRDDRRRRRRRD...",
+        "...DDRRRRRDDDRRRRRRRD...",
+        "....DDRRRDD.DDRRRRRDD...",
+        ".....DDDDD...DDRRRDD....",
+        "..............DDDDD.....",
+        "........................",
+        "........................"
+      ]
+    },
+    {
+      "id": "cat",
+      "name": "橘猫团团",
+      "desc": "把一只暖暖的小猫，拼进今天。",
+      "size": 24,
+      "colors": [
+        {
+          "key": "O",
+          "name": "橘子汽水",
+          "hex": "#ef8e28"
+        },
+        {
+          "key": "B",
+          "name": "焦糖条纹",
+          "hex": "#ad591c"
+        },
+        {
+          "key": "D",
+          "name": "可可眼睛",
+          "hex": "#47271a"
+        },
+        {
+          "key": "C",
+          "name": "奶油白",
+          "hex": "#ffe8bf"
+        },
+        {
+          "key": "P",
+          "name": "蜜桃粉",
+          "hex": "#f49d9f"
+        }
+      ],
+      "rows": [
+        "........................",
+        "........................",
+        ".....OO..........OO.....",
+        ".....POO........OPP.....",
+        "....OPPOO......OOPPO....",
+        "....OPPPOBOBBOBOPPPO....",
+        "....OPPOOBOBBOBOOPPO....",
+        "....OPOOOOOBBOOOOOPO....",
+        ".....OOOOOOOOOOOOOO.....",
+        "....OOOOOOOOOOOOOOOO....",
+        "....BBOODDOOOODDOBBB....",
+        "....OOOODDCPPCDDOOOO....",
+        "....OBOCCCCPPCCCCOB.....",
+        ".....OOCCCCCCCCCCO......",
+        ".......OCCCCCCCCO.......",
+        "........OOOCCOOO..OOO...",
+        ".......OOOCCCCOOO.OOOO..",
+        ".......OOOCCCCOOO...OO..",
+        "......OOBOOCCOOBOO.OOO..",
+        ".....POOBOOCCOOBOOOOO...",
+        ".....PCCBOOOOOOBCOOO....",
+        "......CCBCCOOCCBCP......",
+        ".......OOOO.OOOOO.......",
+        "........................"
+      ],
+      "source": "assets/cat-source.png",
+      "theme": "猫咪日常"
+    },
+    {
+      "id": "flower",
+      "name": "一朵好心情",
+      "desc": "不用等春天，现在就开一朵花。",
+      "size": 24,
+      "colors": [
+        {
+          "key": "W",
+          "name": "牛奶白",
+          "hex": "#fff8eb"
+        },
+        {
+          "key": "Y",
+          "name": "阳光黄",
+          "hex": "#f6c638"
+        },
+        {
+          "key": "G",
+          "name": "叶子绿",
+          "hex": "#8ebf57"
+        },
+        {
+          "key": "D",
+          "name": "可可轮廓",
+          "hex": "#51392e"
+        }
+      ],
+      "rows": [
+        "........................",
+        "........................",
+        "..........WWWW..........",
+        ".........DWWWWD.........",
+        "........DWWWWWWD........",
+        "........DWWWWWWD........",
+        ".....DD.DWWWWWWDDDD.....",
+        "...DWWWWDDWDDWDDWWWWD...",
+        "..DWWWWWWWYYYYWWWWWWWD..",
+        "..DWWWWWWDYYYYDWWWWWWD..",
+        "...WWWWWDYYYYYYDWWWWW...",
+        "....DWWWDYDYYDYDWWWD....",
+        ".....DDDDYYYYYYDDDD.....",
+        "......DWWDYYYYDWWD......",
+        ".....DWWWWYYYYWWWWD.....",
+        ".....WWWWWWDDWWWWWW.....",
+        ".....WWWWWWDDWWWWWW.....",
+        ".....DWWWWDDDDWWWWD.....",
+        "......DDDD.DD.DDDD......",
+        "...........DD...........",
+        ".......DGGDDDDGGD.......",
+        ".......DGGGDDGGGD.......",
+        ".........DDDDDDD........",
+        "...........DD..........."
+      ],
+      "source": "assets/flower-source.png",
+      "theme": "今日好心情"
+    }
+  ]
+}
